@@ -1817,6 +1817,7 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
      * RELEASED case during the session), so turning startup_volume_fixed_enabled
      * back off later resumes from wherever the slider was really last left,
      * not from stale fixed-mode state. */
+    audio_set_max_volume_percent(current_settings.max_volume_percent);
     if (current_settings.car_mode_enabled) {
         audio_set_volume((float) current_settings.car_mode_volume_percent / 100.0f);
     } else {

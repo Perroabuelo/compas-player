@@ -108,6 +108,7 @@ static lv_obj_t * screen_dimming_slider_card;
 static lv_obj_t * screen_dimming_slider;
 static lv_obj_t * screen_dimming_value_label;
 static lv_obj_t * startup_volume_screen;
+static lv_obj_t * max_volume_screen;
 static lv_obj_t * sleep_timer_screen;
 static lv_obj_t * idle_shutdown_screen;
 static lv_obj_t * clock_screen;
@@ -221,6 +222,8 @@ static lv_obj_t * startup_volume_switch;
 static lv_obj_t * startup_volume_slider_card;
 static lv_obj_t * startup_volume_value_label;
 static lv_obj_t * startup_volume_slider;
+static lv_obj_t * max_volume_value_label;
+static lv_obj_t * max_volume_slider;
 static lv_obj_t * car_mode_volume_value_label;
 static lv_obj_t * car_mode_volume_slider;
 static lv_obj_t * car_mode_hint_label;
@@ -1790,6 +1793,74 @@ static void startup_volume_row_cb(lv_event_t * e) {
     nav_push(startup_volume_screen);
 }
 
+/* Unlike startup_volume_slider_event_cb, this DOES apply live: the whole
+ * point is an audible ceiling, so dragging it below the current volume
+ * must bring playback down immediately rather than waiting for the next
+ * volume change to reveal the cap. audio_set_max_volume_percent() itself
+ * only clamps future audio_set_volume()/audio_request_volume() calls (see
+ * its own doc comment in audio.h) -- it does not retroactively lower an
+ * already-louder current volume, hence the explicit reapply below. */
+static void max_volume_slider_event_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    int32_t percent = lv_slider_get_value(lv_event_get_target(e));
+
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        current_settings.max_volume_percent = (int) percent;
+        lv_label_set_text_fmt(max_volume_value_label, "%d%%", (int) percent);
+        audio_set_max_volume_percent((int) percent);
+        int32_t current_percent = (int32_t) (audio_get_volume() * 100.0f + 0.5f);
+        if (current_percent > percent) {
+            audio_set_volume((float) percent / 100.0f);
+            gui_player_set_volume_percent(percent);
+            gui_player_remember_volume_percent(percent);
+            refresh_volume_topbar(percent);
+        }
+    } else if (code == LV_EVENT_RELEASED) {
+        settings_save(&current_settings);
+    }
+}
+
+/* Simpler than build_startup_volume_screen(): no enable toggle, since 100%
+ * (the default) already means "uncapped" with no separate off state to
+ * track. */
+static lv_obj_t * build_max_volume_screen(void) {
+    lv_obj_t * scr = lv_obj_create(NULL);
+    lv_obj_add_style(scr, &style_theme_screen_bg, 0);
+
+    build_screen_header(scr, TR("Max Volume"), generic_back_cb, NULL, NULL);
+
+    lv_obj_t * row = lv_obj_create(scr);
+    lv_obj_set_width(row, lv_pct(90));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, STATUS_BAR_CLEARANCE + TITLE_ROW_HEIGHT + 20);
+    lv_obj_set_style_bg_opa(row, 0, 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_gap(row, 12, 0);
+
+    lv_obj_t * label = lv_label_create(row);
+    lv_label_set_text(label, TR("Caps how loud playback can get, whatever changes the volume (buttons, slider, remote, plugins)."));
+    lv_obj_add_style(label, &style_theme_text_primary, 0);
+    lv_obj_set_style_text_font(label, gui_theme_font(GUI_FONT_ROLE_BODY), 0);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_flex_grow(label, 1);
+
+    build_setting_slider_card(scr, row, BOARD_SCALE_PX(170), BOARD_SCALE_PX(18),
+        1, 100, current_settings.max_volume_percent,
+        max_volume_slider_event_cb, &max_volume_slider, &max_volume_value_label);
+    lv_label_set_text_fmt(max_volume_value_label, "%d%%", current_settings.max_volume_percent);
+
+    finalize_screen_navigation(scr);
+    return scr;
+}
+
+static void max_volume_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    nav_push(max_volume_screen);
+}
+
 static void car_mode_volume_slider_event_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     int32_t percent = lv_slider_get_value(lv_event_get_target(e));
@@ -2624,7 +2695,7 @@ static lv_obj_t * build_music_playback_screen(void) {
 }
 
 static lv_obj_t * build_music_audio_screen(void) {
-    static pill_list_item_t items[4 + PLUGIN_MAX_MUSIC_AUDIO_LIST_ITEMS];
+    static pill_list_item_t items[5 + PLUGIN_MAX_MUSIC_AUDIO_LIST_ITEMS];
     lv_obj_t * eq_row = NULL;
     items[0] = (pill_list_item_t){ TR("Equalizer"), PILL_ACCESSORY_CHEVRON, false, eq_screen_btn_event_cb, NULL, NULL };
     items[0].out_row = &eq_row;
@@ -2635,6 +2706,7 @@ static lv_obj_t * build_music_audio_screen(void) {
                                        plugin_manager_get_music_audio_list_item_options,
                                        plugin_music_audio_list_item_click_cb);
     items[count++] = (pill_list_item_t){ TR("Startup Volume"), PILL_ACCESSORY_CHEVRON, false, startup_volume_row_cb, NULL, NULL };
+    items[count++] = (pill_list_item_t){ TR("Max Volume"), PILL_ACCESSORY_CHEVRON, false, max_volume_row_cb, NULL, NULL };
     items[count++] = (pill_list_item_t){ TR("ReplayGain"), PILL_ACCESSORY_CHEVRON, false, replaygain_mode_settings_row_cb, NULL, NULL };
     if (count_plugin_rows_in_group("music_audio", plugin_manager_get_music_audio_list_item_count(), "effects") > 0)
         items[count++] = (pill_list_item_t){ TR("Sound Effects"), PILL_ACCESSORY_CHEVRON, false, music_effects_menu_cb, NULL, NULL };
@@ -5222,6 +5294,7 @@ void gui_settings_init(void) {
     screen_timeout_screen = build_screen_timeout_screen();
     screen_dimming_screen = build_screen_dimming_screen();
     startup_volume_screen = build_startup_volume_screen();
+    max_volume_screen = build_max_volume_screen();
     sleep_timer_screen = build_sleep_timer_screen();
     idle_shutdown_screen = build_idle_shutdown_screen();
     timezone_region_screen = build_timezone_region_screen();
@@ -5286,6 +5359,7 @@ void gui_settings_teardown(void) {
     if (screen_timeout_screen) { lv_obj_delete(screen_timeout_screen); screen_timeout_screen = NULL; }
     if (screen_dimming_screen) { lv_obj_delete(screen_dimming_screen); screen_dimming_screen = NULL; }
     if (startup_volume_screen) { lv_obj_delete(startup_volume_screen); startup_volume_screen = NULL; }
+    if (max_volume_screen) { lv_obj_delete(max_volume_screen); max_volume_screen = NULL; }
     if (sleep_timer_screen) { lv_obj_delete(sleep_timer_screen); sleep_timer_screen = NULL; }
     if (idle_shutdown_screen) { lv_obj_delete(idle_shutdown_screen); idle_shutdown_screen = NULL; }
     if (timezone_region_screen) { lv_obj_delete(timezone_region_screen); timezone_region_screen = NULL; }

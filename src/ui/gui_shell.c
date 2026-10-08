@@ -654,10 +654,11 @@ static void quick_drawer_volume_event_cb(lv_event_t * e) {
     }
     if (code == LV_EVENT_VALUE_CHANGED) {
         hw_volume_coalesce_drag_update(&quick_drawer_volume_hv, percent);
+        percent = (int)(audio_get_volume() * 100.0f); // read back the actual volume in case it got capped
         if (quick_drawer_volume_label) lv_label_set_text_fmt(quick_drawer_volume_label, "%d", percent);
         refresh_volume_topbar(percent);
     } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        hw_volume_coalesce_drag_end(&quick_drawer_volume_hv, percent);
+        percent = hw_volume_coalesce_drag_end(&quick_drawer_volume_hv, percent);
         /* Authoritative settled value -- sync the Player screen's own
          * volume_slider mirror now, same as the popup's own release
          * handler does, instead of on every drag tick (its previous spot)

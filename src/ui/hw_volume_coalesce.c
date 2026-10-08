@@ -38,13 +38,15 @@ void hw_volume_coalesce_drag_update(hw_volume_coalesce_t * hv, int percent) {
     hv->pending = hw_volume_coalesce_clamp(percent);
 }
 
-void hw_volume_coalesce_drag_end(hw_volume_coalesce_t * hv, int percent) {
+int hw_volume_coalesce_drag_end(hw_volume_coalesce_t * hv, int percent) {
     percent = hw_volume_coalesce_clamp(percent);
     hv->pending = -1;
     hv->drag_active = false;
     audio_set_volume((float) percent / 100.0f);
+    percent = (int)(audio_get_volume() * 100.0f); // read back the actual volume in case it got capped
     refresh_volume_topbar(percent);
     if (hv->timer) lv_timer_pause(hv->timer);
+    return percent;
 }
 
 void hw_volume_coalesce_cancel(hw_volume_coalesce_t * hv) {

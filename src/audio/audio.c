@@ -1203,6 +1203,7 @@ static double speed_for_decoder_locked(const char * path, const decoder_t * dec)
 static float volume = 1.0f;      /* UI-facing 0.0-1.0 percent, what audio_get_volume() returns */
 static float volume_gain = 1.0f; /* actual linear PCM multiplier the playback thread applies -- see audio_set_volume() */
 static atomic_uint volume_set_generation = 0;
+static atomic_int max_volume_cap_percent = 100;
 static pthread_once_t volume_request_once = PTHREAD_ONCE_INIT;
 static pthread_mutex_t volume_request_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t volume_request_cond = PTHREAD_COND_INITIALIZER;
@@ -5520,6 +5521,8 @@ static int compute_hw_raw(float vol) {
 static void audio_apply_volume(float new_volume, unsigned int generation) {
     if (new_volume < 0.0f) new_volume = 0.0f;
     if (new_volume > 1.0f) new_volume = 1.0f;
+    float cap = (float) atomic_load(&max_volume_cap_percent) / 100.0f;
+    if (new_volume > cap) new_volume = cap;
     pthread_mutex_lock(&audio_mutex);
     if (atomic_load(&volume_set_generation) != generation) {
         pthread_mutex_unlock(&audio_mutex);
@@ -5540,6 +5543,12 @@ static void audio_apply_volume(float new_volume, unsigned int generation) {
 void audio_set_volume(float new_volume) {
     unsigned int generation = atomic_fetch_add(&volume_set_generation, 1) + 1;
     audio_apply_volume(new_volume, generation);
+}
+
+void audio_set_max_volume_percent(int percent) {
+    if (percent < 1) percent = 1;
+    if (percent > 100) percent = 100;
+    atomic_store(&max_volume_cap_percent, percent);
 }
 
 void audio_stage_custom_hw_volume_curve(bool active, const uint8_t * curve) {

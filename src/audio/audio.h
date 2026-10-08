@@ -251,6 +251,10 @@ void audio_set_volume(float volume);
 void audio_request_volume(float volume);
 float audio_get_volume(void);
 
+/* Set the maximum allowed volume in percent. Use 100 for uncapped volume
+ * Note that a call to this function does not modify the current volume. */
+void audio_set_max_volume_percent(int percent);
+
 /* Shared with plugin_manager.c's own array-length validation for
  * plugin.set_hw_volume_curve() -- defined once here, rather than as a
  * separate local #define in each .c file, so the two can't drift apart. */
