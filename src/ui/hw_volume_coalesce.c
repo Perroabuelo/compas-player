@@ -60,6 +60,7 @@ void hw_volume_coalesce_teardown(hw_volume_coalesce_t * hv) {
         int pending = hv->pending;
         hv->pending = -1;
         audio_set_volume((float) pending / 100.0f);
+        pending = (int)(audio_get_volume() * 100.0f); // read back the actual volume in case it got capped
         refresh_volume_topbar(pending);
     }
     hv->drag_active = false;
