@@ -128,13 +128,13 @@ def make_provenance(temp: Path, modules: Path, base: Path) -> Path:
 
 
 class StagePinnedRadioTests(unittest.TestCase):
-    def test_exact_ap6212a_loader_is_repository_pinned(self):
+    def test_auto_ap6212a_loader_is_repository_pinned(self):
         stage = load_stager()
         power = stage.checked_power_init(REPO)
         self.assertEqual(stage.EXPECTED_POWER_INIT_SHA256, sha(power))
         self.assertEqual(
             "insmod bcm_wlbt_power.ko wl_reg_on=PB03 wl_host_wake=PA08 wl_mmc=0 "
-            "bt_reg_on=PB04 host_wake_bt=PB05 profile=ap6212a\n",
+            "bt_reg_on=PB04 host_wake_bt=PB05 profile=auto-ap6212a\n",
             power.read_text(),
         )
 
@@ -172,7 +172,7 @@ class StagePinnedRadioTests(unittest.TestCase):
             assembly = json.loads((output / "CANDIDATE-ASSEMBLY.json").read_text())
             self.assertEqual("host-only candidate; not validated on device; not a flash/package artifact",
                              assembly["status"])
-            self.assertEqual("ap6212a", assembly["wifi_profile"])
+            self.assertEqual("auto-ap6212a", assembly["wifi_profile"])
             self.assertEqual(sha(REPO / "firmware/kernel/wifi-experimental/rootfs/usr/bin/compas-radio"),
                              assembly["radio_control"]["sha256"])
             self.assertEqual(assembly["radio_control"]["sha256"], sha(output / "usr/bin/compas-radio"))

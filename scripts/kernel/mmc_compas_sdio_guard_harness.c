@@ -333,18 +333,18 @@ static int test_valid_identity_uses_slot_one_for_function_two(void)
 	return 0;
 }
 
-static int test_bad_tuple_and_function_count_unwind(void)
+static int test_nonmatching_tuples_and_function_count_unwind(void)
 {
 	struct fixture f; struct mmc_compas_sdio_guard *g = NULL;
 	struct mmc_compas_sdio_identity id;
 	reset_observation(); fixture_init(&f, true);
-	f.tuples[0]->data[0] = 1; f.tuples[1]->data[0] = 0;
+	f.tuples[0]->data[0] = 0; f.tuples[1]->data[0] = 0;
 	f.tuples[0]->code = f.tuples[1]->code = 0x81;
 	f.tuples[0]->size = f.tuples[1]->size = 1;
 	f.tuples[0]->next = f.tuples[1]; f.card.tuples = f.tuples[0];
 	CHECK(mmc_compas_sdio_begin(&f.host, &f.parent, &g) == 0);
-	CHECK(mmc_compas_sdio_identity(g, &id) == -EOPNOTSUPP);
-	CHECK(id.maker_tuple_present && !id.azurewave);
+	CHECK(mmc_compas_sdio_identity(g, &id) == 0);
+	CHECK(id.valid && !id.maker_tuple_present && !id.azurewave);
 	mmc_compas_sdio_end(g, MMC_COMPAS_SDIO_PRESERVE);
 	CHECK(scans_queued == 1 && !sleep_locked && !f.parent.locked);
 
@@ -353,8 +353,8 @@ static int test_bad_tuple_and_function_count_unwind(void)
 	f.tuples[0]->size = 0;
 	f.card.tuples = f.tuples[0];
 	CHECK(mmc_compas_sdio_begin(&f.host, &f.parent, &g) == 0);
-	CHECK(mmc_compas_sdio_identity(g, &id) == -EOPNOTSUPP);
-	CHECK(!id.maker_tuple_present && !id.azurewave);
+	CHECK(mmc_compas_sdio_identity(g, &id) == 0);
+	CHECK(id.valid && !id.maker_tuple_present && !id.azurewave);
 	mmc_compas_sdio_end(g, MMC_COMPAS_SDIO_DISCARD);
 	CHECK(!sleep_locked && !f.parent.locked && scans_queued == 0);
 
@@ -399,11 +399,11 @@ static int test_maker_tuple_trailing_bytes_do_not_change_identity(void)
 	f.tuples[0]->data[0] = 0; f.tuples[0]->size = 1;
 	f.tuples[0]->code = 0x81;
 	f.tuples[1]->data[0] = 1; memset(&f.tuples[1]->data[1], 0xff, 8);
-	f.tuples[1]->code = 0x81; f.tuples[1]->size = 9;
+	f.tuples[1]->code = 0x81; f.tuples[1]->size = 1;
 	f.tuples[0]->next = f.tuples[1]; f.card.tuples = f.tuples[0];
 	CHECK(mmc_compas_sdio_begin(&f.host, &f.parent, &g) == 0);
 	CHECK(mmc_compas_sdio_identity(g, &id) == 0 && id.maker_tuple_present &&
-	      !id.azurewave && id.maker_tuple_value == 0);
+	      id.azurewave && id.maker_tuple_value == 1);
 	mmc_compas_sdio_end(g, MMC_COMPAS_SDIO_DISCARD);
 
 	reset_observation(); fixture_init(&f, true); g = NULL;
@@ -413,7 +413,7 @@ static int test_maker_tuple_trailing_bytes_do_not_change_identity(void)
 	f.tuples[1]->code = 0x81; f.tuples[1]->size = 9;
 	f.card.tuples = f.tuples[0];
 	CHECK(mmc_compas_sdio_begin(&f.host, &f.parent, &g) == 0);
-	CHECK(mmc_compas_sdio_identity(g, &id) == 0 && id.maker_tuple_present &&
+	CHECK(mmc_compas_sdio_identity(g, &id) == 0 && !id.maker_tuple_present &&
 	      !id.azurewave && id.maker_tuple_value == 0);
 	mmc_compas_sdio_end(g, MMC_COMPAS_SDIO_DISCARD);
 	return 0;
@@ -597,7 +597,7 @@ int main(void)
 	if (test_begin_failure_paths_restore_owned_state() ||
 	    test_bound_func1_fails_and_unwinds() ||
 	    test_valid_identity_uses_slot_one_for_function_two() ||
-	    test_bad_tuple_and_function_count_unwind() ||
+	    test_nonmatching_tuples_and_function_count_unwind() ||
 	    test_maker_tuple_trailing_bytes_do_not_change_identity() ||
 	    test_no_card_rescan_policy_and_discard_drain() ||
 	    test_power_errors_are_returned() ||

@@ -86,6 +86,25 @@ static void identity_and_bt(void) {
  suspending=true; assert(bt_set_block(NULL,false)==-EBUSY); assert(!bt_set_block(NULL,true) && !lpo_refs);
  reset(); assert(!publish_identity(&mock_id)); mock_id.azurewave=false; mock_id.maker_tuple_value=2;
  assert(publish_identity(&mock_id)==-ENODEV);
+ reset(); profile="ap6212a"; assert(publish_identity(&mock_id)==-ENODEV); /* forced AP must reject AzureWave */
+ reset(); profile="auto-ap6212a"; assert(!publish_identity(&mock_id));
+ assert(identity_state==ID_READY && chipvendor==0x81 && !strcmp(identity_profile,"azurewave") && !strcmp(identity_source,"cis"));
+ reset(); profile="auto-ap6212a"; mock_id.azurewave=false; mock_id.maker_tuple_present=false;
+ assert(!publish_identity(&mock_id));
+ assert(identity_state==ID_READY && chipvendor==0 && !strcmp(identity_profile,"ap6212a") && !strcmp(identity_source,"profile"));
+ reset(); profile="auto-ap6212a"; mock_id.azurewave=false; mock_id.maker_tuple_present=true; mock_id.maker_tuple_value=0;
+ assert(!publish_identity(&mock_id));
+ reset(); profile="auto-ap6212a"; mock_id.azurewave=false; mock_id.maker_tuple_present=true; mock_id.maker_tuple_value=2;
+ assert(publish_identity(&mock_id)==-ENODEV);
+ reset(); profile="ap6212a"; mock_id.azurewave=false; mock_id.maker_tuple_present=true; mock_id.maker_tuple_value=2;
+ assert(publish_identity(&mock_id)==-ENODEV);
+ reset(); profile="auto-ap6212a"; mock_id.function2_vendor=0x1234;
+ assert(publish_identity(&mock_id)==-ENODEV);
+ reset(); profile="auto-ap6212a"; mock_id.function2_device=0x1234;
+ assert(publish_identity(&mock_id)==-ENODEV);
+ reset(); profile="auto-ap6212a"; assert(!publish_identity(&mock_id));
+ mock_id.azurewave=false; mock_id.maker_tuple_present=false;
+ assert(publish_identity(&mock_id)==-ENODEV); /* identity consistency remains enforced */
  reset(); profile="ap6212a"; mock_id.azurewave=false; mock_id.maker_tuple_value=0;
  assert(mock_id.maker_tuple_present && !publish_identity(&mock_id));
  assert(identity_state==ID_READY && chipvendor==0 && !strcmp(identity_source,"profile"));
@@ -178,5 +197,10 @@ def main():
 class ProviderLifecycleChecks(unittest.TestCase):
     def test_current_patch_transition_functions(self):
         subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve())], check=True)
+
+    def test_module_init_rejects_unknown_profiles(self):
+        patch = pathlib.Path(__file__).resolve().parents[2]/'firmware/kernel/module-patches/compas-radio-lifecycle.patch'
+        source = '\n'.join(line[1:] for line in patch.read_text().splitlines() if (line.startswith('+') and not line.startswith('+++')) or line.startswith(' '))
+        self.assertRegex(source, r'strcmp\(profile, "auto-ap6212a"\)\)\s*\n\s*return -EINVAL;')
 
 if __name__=='__main__':main()

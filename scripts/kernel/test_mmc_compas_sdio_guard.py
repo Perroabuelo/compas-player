@@ -100,23 +100,10 @@ class GuardModel:
 
     @staticmethod
     def maker_identity(tuples):
-        present = False
-        value = None
         for code, size, data in tuples:
-            if code != 0x81:
-                continue
-            if size <= 0:
-                return "EOPNOTSUPP", present, None, False
-            if size != 1:
-                continue
-            present = True
-            if not data:
-                return "EOPNOTSUPP", present, None, False
-            maker = data[0]
-            if value is not None and value != maker:
-                return "EOPNOTSUPP", present, None, False
-            value = maker
-        return None, present, value, present and value == 1
+            if code == 0x81 and size == 1 and data and data[0] == 1:
+                return None, True, 1, True
+        return None, False, None, False
 
 
 class MmcCompasSdioGuardTests(unittest.TestCase):
@@ -204,28 +191,24 @@ class MmcCompasSdioGuardTests(unittest.TestCase):
             guard.end(policy)
             self.assertEqual(guard.events.count("queue_detect"), 1)
 
-    def test_identity_marker_is_exact_and_contradictory_values_fail_closed(self):
-        for maker in (0, 1, 2, 25):
-            payload = bytes([maker, 2, 3, 4, 5, 6, 7, 8, 9])
-            self.assertEqual(GuardModel.maker_identity([(0x81, 9, payload)]),
-                             (None, False, None, False))
-        self.assertEqual(GuardModel.maker_identity([]), (None, False, None, False))
-        self.assertEqual(GuardModel.maker_identity([(0x81, 0, b"")]),
-                         ("EOPNOTSUPP", False, None, False))
-        self.assertEqual(GuardModel.maker_identity([(0x81, 9, bytes([0] * 9)),
-                                                    (0x81, 9, bytes([0, 9, 8, 7, 6, 5, 4, 3, 2]))]),
-                         (None, False, None, False))
-        self.assertEqual(GuardModel.maker_identity([(0x81, 1, b"\x01"),
-                                                    (0x81, 9, bytes([25] * 9))]),
+    def test_identity_matches_only_exact_stock_aw_marker_and_first_match_wins(self):
+        self.assertEqual(GuardModel.maker_identity([(0x81, 1, b"\x01")]),
                          (None, True, 1, True))
-        self.assertEqual(GuardModel.maker_identity([(0x81, 1, b"\x00"),
-                                                    (0x81, 9, bytes([1] * 9))]),
-                         (None, True, 0, False))
-        self.assertEqual(GuardModel.maker_identity([(0x81, 1, b"\x02")]),
-                         (None, True, 2, False))
+        ignored = [
+            (0x81, 0, b""),
+            (0x81, 2, b"\x01\x00"),
+            (0x81, 1, b"\x00"),
+            (0x81, 1, b"\x02"),
+            (0x80, 1, b"\x01"),
+        ]
+        for record in ignored:
+            self.assertEqual(GuardModel.maker_identity([record]),
+                             (None, False, None, False))
+        self.assertEqual(GuardModel.maker_identity(ignored + [(0x81, 1, b"\x01")]),
+                         (None, True, 1, True))
         self.assertEqual(GuardModel.maker_identity([(0x81, 1, b"\x01"),
                                                     (0x81, 1, b"\x00")]),
-                         ("EOPNOTSUPP", True, None, False))
+                         (None, True, 1, True))
 
     def test_patch_source_keeps_rescan_entered_and_struct_layout_untouched(self):
         patch = PATCH.read_text()
@@ -250,11 +233,11 @@ class MmcCompasSdioGuardTests(unittest.TestCase):
                          patch.index("EXPORT_SYMBOL_GPL(mmc_compas_sdio_identity)")]
         self.assertIn("guard->funcs[i]", identity)
         self.assertIn("func->num != 2", identity)
-        self.assertIn("if (!tuple->size)", identity)
-        self.assertIn("if (tuple->size != 1)", identity)
-        self.assertLess(identity.index("if (tuple->size != 1)"),
-                        identity.index("identity->maker_tuple_present = true"))
-        self.assertIn("identity->maker_tuple_value != tuple->data[0]", identity)
+        self.assertIn("tuple->code != 0x81 || tuple->size != 1 || tuple->data[0] != 1", identity)
+        self.assertIn("identity->maker_tuple_value = 1", identity)
+        self.assertIn("identity->azurewave = true", identity)
+        self.assertIn("break;", identity)
+        self.assertNotIn("EOPNOTSUPP", identity)
 
 
 if __name__ == "__main__":

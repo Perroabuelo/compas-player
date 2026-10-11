@@ -1,6 +1,6 @@
 --- a/modules/bcm_wlbt_power/bcm_wlbt_power.c
 +++ b/modules/bcm_wlbt_power/bcm_wlbt_power.c
-@@ -1,636 +1,623 @@
+@@ -1,636 +1,625 @@
  // SPDX-License-Identifier: GPL-2.0
 -//
 -// bcm_wlbt_power -- power and wiring for a BCM43430 Wi-Fi/Bluetooth combo on
@@ -152,7 +152,7 @@
 +
 +static char *profile = "auto";
 +module_param(profile, charp, 0444);
-+MODULE_PARM_DESC(profile, "auto/azurewave: exact CIS identification; ap6212a: explicitly validated firmware profile");
++MODULE_PARM_DESC(profile, "auto/azurewave: exact CIS identification; ap6212a: explicit AP6212A profile; auto-ap6212a: exact AzureWave CIS or validated AP6212A fallback");
 +
 +static struct platform_device *radio_pdev, *brcmf_pdev;
 +static struct device *msc_dev;
@@ -225,7 +225,8 @@
 +	} else {
 +		/* No tuple is not proof of a module maker. Accept AP only as the
 +		 * explicitly selected, stock-observed firmware/NVRAM profile. */
-+		if (strcmp(profile, "ap6212a") || (id->maker_tuple_present && id->maker_tuple_value != 0))
++		if ((strcmp(profile, "ap6212a") && strcmp(profile, "auto-ap6212a")) ||
++		    (id->maker_tuple_present && id->maker_tuple_value != 0))
 +			return -ENODEV;
 +		vendor = 0;
 +		selected = "ap6212a";
@@ -924,7 +925,8 @@
 -	if (wl_reg_on < 0 || wl_reg_on > 191 || bt_reg_on < 0 || bt_reg_on > 191 ||
 -	    wl_host_wake < -1 || wl_host_wake > 191 || host_wake_bt < -1 || host_wake_bt > 191) {
 -		pr_err("bcm_wlbt_power: required and optional GPIOs must be valid\n");
-+	if (strcmp(profile, "auto") && strcmp(profile, "azurewave") && strcmp(profile, "ap6212a"))
++	if (strcmp(profile, "auto") && strcmp(profile, "azurewave") &&
++	    strcmp(profile, "ap6212a") && strcmp(profile, "auto-ap6212a"))
  		return -EINVAL;
 -	}
 -

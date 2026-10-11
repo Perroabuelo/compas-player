@@ -179,7 +179,9 @@ class ExperimentalRadioTests(unittest.TestCase):
             root = out
             self.assertTrue((root / "usr/bin/compas-radio").exists())
             init = (root / "usr/libexec/compas/radio-bt/bt_init.vendor.sh").read_text()
-            self.assertIn("Unsupported R1 Bluetooth identity", init)
+            self.assertIn('chipvendor=$(cat "$RADIO/chipvendor") || exit 1', init)
+            self.assertIn('chipvendor=0x81', init)
+            self.assertNotIn('radio_profile=$(cat "$RADIO/profile"', init)
             self.assertNotIn("rfkill0/state", init)
             self.assertNotIn("get_rfkill_index", init)
             self.assertIn("sh bcm_wlbt_power.sh", (root / "module_driver/driver_default_init_script.sh").read_text())
@@ -202,6 +204,49 @@ class ExperimentalRadioTests(unittest.TestCase):
             result = h.run("wifi-up")
             self.assertNotEqual(result.returncode, 0, result.stderr)
             self.assertEqual([], h.operations())
+
+    def test_bluetooth_firmware_selection_follows_stock_chipvendor_rules(self):
+        stage = load_stager()
+        block = stage.bt_profile_block()
+        cases = (
+            ("present-81", "0x81", "0xa9a6", 0, "bcm4343a1_aw",
+             "BCM4343A1_001.002.009.0122.0538.hcd"),
+            ("present-00", "0x00", "0xa9a6", 0, "bcm4343a1",
+             "BCM4343A1_001.002.009.1010.1030.hcd"),
+            ("present-unknown", "0x7f", "0xa9a6", 0, "bcm4343a1",
+             "BCM4343A1_001.002.009.1010.1030.hcd"),
+            ("missing", None, "0xa9a6", 0, "bcm4343a1_aw",
+             "BCM4343A1_001.002.009.0122.0538.hcd"),
+            ("unreadable", "directory", "0xa9a6", 1, None, None),
+            ("not-ready", "0x81", "0xa9a6", 1, None, None),
+            ("unsupported", "0x81", "0x1234", 1, None, None),
+        )
+        for label, vendor_value, device, status, expected_type, expected_fw in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as td:
+                root = Path(td) / "root"
+                radio = root / "sys/devices/platform/bcm_wlbt_power"
+                radio.mkdir(parents=True)
+                (radio / "identity_state").write_text("starting\n" if label == "not-ready" else "ready\n")
+                (radio / "sdio_vendor").write_text("0x02d0\n")
+                (radio / "sdio_device").write_text(device + "\n")
+                if vendor_value == "directory":
+                    (radio / "chipvendor").mkdir()
+                elif vendor_value is not None:
+                    (radio / "chipvendor").write_text(vendor_value + "\n")
+                firmware_dir = root / "lib/firmware/bt_bcm"
+                firmware_dir.mkdir(parents=True)
+                for filename in stage.BT_NAMES:
+                    (firmware_dir / filename).write_bytes(b"fixture")
+                result_file = Path(td) / "selection"
+                script = block.replace("/sys/devices/platform/bcm_wlbt_power", str(radio))
+                script = script.replace("/lib/firmware/bt_bcm", str(firmware_dir))
+                script += f'printf "%s\\n%s\\n" "$chip_type" "$firmware" > "{result_file}"\n'
+                result = subprocess.run(["/bin/sh", "-c", script], text=True, capture_output=True)
+                self.assertEqual(status, result.returncode, result.stderr)
+                if expected_fw is None:
+                    self.assertFalse(result_file.exists())
+                else:
+                    self.assertEqual([expected_type, expected_fw], result_file.read_text().splitlines())
 
     def test_ready_identity_with_wifi_fault_rejects_wifi_but_keeps_bluetooth_available(self):
         with tempfile.TemporaryDirectory() as td:

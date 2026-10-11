@@ -39,9 +39,9 @@ EXPECTED_FIRMWARE = {
 }
 EXPECTED_POWER_INIT = (
     "insmod bcm_wlbt_power.ko wl_reg_on=PB03 wl_host_wake=PA08 wl_mmc=0 "
-    "bt_reg_on=PB04 host_wake_bt=PB05 profile=ap6212a\n"
+    "bt_reg_on=PB04 host_wake_bt=PB05 profile=auto-ap6212a\n"
 )
-EXPECTED_POWER_INIT_SHA256 = "70bfcad10a832fcaafef77a5227e5f43a95474a7f839d21f6b2317c400e6aff4"
+EXPECTED_POWER_INIT_SHA256 = "c0a93259f17b0745c058c73544f8360bc3a12f48c83e8c27b8bbbd8c52508203"
 REQUIRED_MODULES = ("brcmfmac.ko", "brcmutil.ko", "bcm_wlbt_power.ko")
 ABI_EXPECTED_MODULES = {
     "brcmfmac.ko": "brcmfmac",
@@ -230,24 +230,24 @@ def replace_block(text: str, pattern: str, replacement: str, label: str) -> str:
 
 
 def bt_profile_block() -> str:
-    return '''# Compas R1 provider is authoritative; unknown identities fail closed.
+    return '''# Compas R1 provider validates readiness and supported SDIO identity.
 RADIO=/sys/devices/platform/bcm_wlbt_power
 [ "$(cat "$RADIO/identity_state" 2>/dev/null)" = ready ] || exit 1
 [ "$(cat "$RADIO/sdio_vendor" 2>/dev/null)" = 0x02d0 ] || exit 1
 [ "$(cat "$RADIO/sdio_device" 2>/dev/null)" = 0xa9a6 ] || exit 1
-radio_profile=$(cat "$RADIO/profile" 2>/dev/null) || exit 1
-chipvendor=$(cat "$RADIO/chipvendor" 2>/dev/null) || exit 1
-case "$radio_profile:$chipvendor" in
-    azurewave:0x81)
-        chip_type=bcm4343a1_aw
-        firmware=BCM4343A1_001.002.009.0122.0538.hcd
-        ;;
-    ap6212a:0x00)
-        chip_type=bcm4343a1
-        firmware=BCM4343A1_001.002.009.1010.1030.hcd
-        ;;
-    *) echo "Unsupported R1 Bluetooth identity" >&2; exit 1 ;;
-esac
+if [ -e "$RADIO/chipvendor" ]; then
+    chipvendor=$(cat "$RADIO/chipvendor") || exit 1
+else
+    # The stock OEM init script uses AW firmware when chipvendor is absent.
+    chipvendor=0x81
+fi
+if [ "$chipvendor" = 0x81 ]; then
+    chip_type=bcm4343a1_aw
+    firmware=BCM4343A1_001.002.009.0122.0538.hcd
+else
+    chip_type=bcm4343a1
+    firmware=BCM4343A1_001.002.009.1010.1030.hcd
+fi
 FIRMWARE_PATH="/lib/firmware/bt_bcm/$firmware"
 [ -s "$FIRMWARE_PATH" ] || exit 1
 '''
@@ -543,7 +543,7 @@ esac
             "schema_version": 1,
             "status": "host-only candidate; not validated on device; not a flash/package artifact",
             "board": "R1",
-            "wifi_profile": "ap6212a",
+            "wifi_profile": "auto-ap6212a",
             "power_init": {"path": str(power_init), "sha256": digest(power_init),
                            "pins": {"wl_reg_on": "PB03", "wl_host_wake": "PA08", "wl_mmc": "0",
                                     "bt_reg_on": "PB04", "host_wake_bt": "PB05"}},
