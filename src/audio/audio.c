@@ -2025,6 +2025,8 @@ static void publish_current_format_locked(const decoder_t * dec, const char * pa
  * seek can be computed against the old timeline in between. */
 static bool dop_fall_back_to_pcm(decoder_t * dec, uint64_t * frame_io, const char * publish_path,
                                  float replaygain_linear, bool replaygain_applied) {
+    /* PCM after DoP must not reuse the low-pass from the PCM that preceded it. */
+    peq_note_pcm_discontinuity();
     uint64_t pcm_frame = 0;
     unsigned int dop_rate = dec->sample_rate;
     bool ok = dsd_set_dop(dec->as.dsd, false, *frame_io, &pcm_frame);
@@ -2931,10 +2933,31 @@ static void ab_switch_adopt(ab_switch_job_t ** active, decoder_t * primary,
     } else
         ab_switch_free_job(candidate);
 }
+/* Edge of an A-B source change. Continuous blocks of the same source keep
+ * crossfeed memory; only the switch (or dropping back to the primary) notes
+ * a break. The playback thread is the only writer. */
+static bool ab_pcm_alternate = false;
+
+static void ab_pcm_use_primary(void) {
+    if (!ab_pcm_alternate) return;
+    ab_pcm_alternate = false;
+    peq_note_pcm_discontinuity();
+}
+
+static void ab_pcm_use_alternate(void) {
+    if (ab_pcm_alternate) return;
+    ab_pcm_alternate = true;
+    peq_note_pcm_discontinuity();
+}
+
 static void ab_switch_mix_source(ab_switch_job_t ** active, int16_t * primary,
                                  int16_t * alternate, uint64_t frames,
                                  unsigned channels) {
-    if (!*active || !frames)
+    if (!*active) {
+        ab_pcm_use_primary();
+        return;
+    }
+    if (!frames)
         return;
     decoder_read_result_t r =
         decoder_read_s16(&(*active)->decoder, frames, alternate);
@@ -2950,10 +2973,15 @@ static void ab_switch_mix_source(ab_switch_job_t ** active, int16_t * primary,
     if (!valid) {
         ab_switch_free_job(*active);
         *active = NULL;
+        ab_pcm_use_primary();
         return;
     }
-    if (select_b)
+    if (select_b) {
+        ab_pcm_use_alternate();
         memcpy(primary, alternate, (size_t)frames * channels * sizeof(*primary));
+    } else {
+        ab_pcm_use_primary();
+    }
 }
 
 static void * audio_thread_func(void * arg) {
@@ -3035,6 +3063,9 @@ static void * audio_thread_func(void * arg) {
             } else pthread_cond_wait(&audio_cond, &audio_mutex);
         }
         restart_requested = false;
+        /* New playback is not a continuation of the low-pass left by stop. */
+        ab_pcm_alternate = false;
+        peq_note_pcm_discontinuity();
         free(cur_path_local);
         cur_path_local = restart_path; restart_path = NULL; /* ownership transferred */
         double start_seconds = restart_start_seconds;
@@ -3289,6 +3320,7 @@ static void * audio_thread_func(void * arg) {
             if (ab_active && !ab_keep) {
                 ab_switch_free_job(ab_active);
                 ab_active = NULL;
+                ab_pcm_use_primary();
             }
             ab_switch_free_job(ab_discard);
             pthread_mutex_lock(&audio_mutex);
@@ -3598,6 +3630,8 @@ static void * audio_thread_func(void * arg) {
                 if (seek_frame > cur_dec.total_frames) seek_frame = cur_dec.total_frames;
                 if (decoder_seek(&cur_dec, seek_frame)) {
                     cur_frames_played_local = seek_frame;
+                    ab_pcm_alternate = false;
+                    peq_note_pcm_discontinuity();
                     audio_tempo_destroy(tempo); tempo = NULL;
                     tempo_pending_frames = 0;
                     tempo_finished = false;
@@ -3647,6 +3681,10 @@ static void * audio_thread_func(void * arg) {
                     audio_tempo_destroy(tempo); tempo = NULL;
                     tempo_pending_frames = 0;
                     tempo_finished = false;
+                    /* The decoder was rebuilt, so the next PCM is not the
+                     * sample that followed the pre-seek low-pass. */
+                    ab_pcm_alternate = false;
+                    peq_note_pcm_discontinuity();
                     /* The reopen restored the last delivered source position,
                      * so it can commit this tempo without retrying a failed
                      * seek or overwriting a newer scoped preference. */
@@ -4559,6 +4597,10 @@ static void * audio_thread_func(void * arg) {
                 }
 
                 if (dop_chunk) {
+                    /* DoP skips the PCM stage. The next PCM buffer, including
+                     * one at the same rate and format, must not reuse the
+                     * low-pass from the PCM that preceded this chunk. */
+                    peq_note_pcm_discontinuity();
                     need_fade_in = false; /* DSD bits: nothing may scale them */
                 } else {
                 apply_gain_s32(buf_cur_s32, (size_t) n_cur * cur_dec.channels, cur_replaygain_linear);
@@ -4648,6 +4690,7 @@ static void * audio_thread_func(void * arg) {
                 loop_requested = false;
             if (loop_requested && cur_frames_played_local >= loop_end_frame) {
                 if (decoder_seek(&cur_dec, loop_start_frame)) {
+                    peq_note_pcm_discontinuity();
                     cur_frames_played_local = loop_start_frame;
                     pthread_mutex_lock(&audio_mutex);
                     if (playback_generation == cur_generation)

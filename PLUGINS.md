@@ -170,7 +170,7 @@ plugin.define({
   | Area | Tokens |
   | --- | --- |
   | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager` |
-  | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.hw_volume_curve` |
+  | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
   | Network | `network.http.sync`, `network.http.async`, `network.http.download`, `network.http.download_progress` |
@@ -200,6 +200,8 @@ plugin.define({
 | 16 | Playback speed/stereo width/progress plus format/output snapshots, silent volume, transient EQ, output events, playback settings, native A–B loops/comparison, and finite HTTP seeking. Modeless progress bars and download byte snapshots are also available, as is the File Manager (`open_file_manager`, `file_copy`, `file_move`, `file_delete`). API 16 remains the unreleased v1.1 API. |
 
 All of these are additions; older plugins keep working.
+
+Headphone crossfeed is the capability `audio.crossfeed` (`plugin.eq_get_crossfeed` / `plugin.eq_set_crossfeed`). It does not raise `PLUGIN_API_VERSION`. Check the capability; do not require a newer `api_min`.
 
 ## Screens
 
@@ -781,8 +783,8 @@ These additions keep API version **16**. Check each capability with
 | `get_playback_format()` | `playback.format`: `nil` while idle, otherwise a snapshot with `path`, `codec`, source `sample_rate`/`bit_depth`, `output_sample_rate`/`output_bit_depth`, `channels`, `bitrate_kbps`, `duration_seconds`, `is_stream`, `seekable`, `is_dsd`, `dop`, `replaygain_applied`/`replaygain_applied_db`, `generation`, and live `software_volume_gain`, `playback_speed`, `crossfade_enabled`. Unknown source depth/bitrate is 0; MP3 has no encoded PCM bit depth. Software gain is a linear PCM multiplier, distinct from hardware/UI volume. Crossfade reports the setting, not whether two tracks are currently mixing. |
 | `get_output_info()` | `playback.output_info`: `route` (`wired`, `bluetooth`, or `usb_dac`), `active`, PCM `sample_rate`/`bit_depth`, `hardware_sample_rate`/`hardware_bit_depth` when known, cached `bluetooth_codec` when available, `resampling`, `resampling_known`, and `dop`. Bluetooth and USB conversion/final hardware formats are unknown; matching PCM fields alone cannot prove bit-perfect output. |
 | `eq_apply_profile(path, { persist = false })` | `audio.peq.transient`: applies an SD profile to runtime EQ without saving it. Default persistence remains enabled. Later explicit EQ save/edit operations may save the active profile. |
-| `get_eq_state()` | `audio.peq.state`: detached runtime snapshot with `bypass`, `preamp_db`, `stereo_width`, and ten ordered `bands` (`index`, `freq_hz`, `gain_db`, `q`, `type`, `enabled`). This observes active settings, including transient profiles, rather than reading a possibly stale saved profile. |
-| `eq_apply_state(state, { persist = false })` | `audio.peq.state`: validates the complete snapshot before applying it. Persistence defaults to true. Plugins can restore a saved runtime snapshot without writing flash; compare the current state with the last state they applied before restoring, to preserve subsequent user changes. Numerical limits: preamp/gain −300 to 300 dB, frequency 1–24000 Hz, Q 0.01–100, width 0–2; all must be finite. |
+| `get_eq_state()` | `audio.peq.state`: detached runtime snapshot with `bypass`, `preamp_db`, `stereo_width`, `crossfeed`, and ten ordered `bands` (`index`, `freq_hz`, `gain_db`, `q`, `type`, `enabled`). This observes active settings, including transient profiles, rather than reading a possibly stale saved profile. |
+| `eq_apply_state(state, { persist = false })` | `audio.peq.state`: validates the complete snapshot before applying it. Persistence defaults to true. Plugins can restore a saved runtime snapshot without writing flash; compare the current state with the last state they applied before restoring, to preserve subsequent user changes. Numerical limits: preamp/gain −300 to 300 dB, frequency 1–24000 Hz, Q 0.01–100, width 0–2, crossfeed 0–1; all must be finite. `crossfeed` may be omitted; a missing field applies as off so older snapshots still load. |
 | `get_track_metadata(path)` | `library.track_metadata`: exact local SD-path lookup in the scanned database, returning `id`, `path`, `title`, `artist`, `album`, `album_artist`, and `genre`. Returns `nil` for unindexed/remote/invalid paths; absent tags are empty strings. Does not parse files or iterate the library on each track. |
 | `get_crossfade()`, `set_crossfade(enabled)` | `playback.settings`: boolean; retains native coupling with gapless. |
 | `get_gapless()`, `set_gapless(enabled)` | `playback.settings`: boolean; disabling gapless also disables crossfade. |
@@ -955,10 +957,12 @@ saved immediately, and the EQ screen shows it.
 | `plugin.eq_load_profile(path)` | Loads a `.peq` profile. Returns `false` if it can't be read. |
 | `plugin.eq_save_profile(path)` | Saves the current EQ as a `.peq` profile, the same format as the EQ screen. Returns `false` if it can't be written. |
 | `plugin.eq_reset()` | Restores the defaults. |
-| `plugin.eq_set_bypass(on)` | `true` turns the whole EQ off. |
+| `plugin.eq_set_bypass(on)` | `true` turns the whole EQ off, including stereo width and crossfeed. The PCM stage then leaves samples unchanged. DoP output never reaches it. |
 | `plugin.eq_set_preamp(db)` | Sets the preamp gain. |
 | `plugin.eq_get_stereo_width()` | Gets the configured width (API 16, capability `audio.stereo_width`). |
 | `plugin.eq_set_stereo_width(width)` | Sets width from 0 (mono fold) through 1 (neutral) to 2 (wider). Rejects nonfinite/out-of-range values. |
+| `plugin.eq_get_crossfeed()` | Gets headphone crossfeed strength (capability `audio.crossfeed`). 0 is off. |
+| `plugin.eq_set_crossfeed(strength)` | Sets strength from 0 (off) to 1 (full effect). Rejects nonfinite or out-of-range values. 0.65 is a conservative strength when a plugin turns crossfeed on itself. |
 | `plugin.eq_set_band(index, freq_hz, gain_db, q)` | Sets one band. `index` is 1 to 10. |
 | `plugin.eq_set_band_type(index, type)` | `"peaking"`, `"low_shelf"` or `"high_shelf"`. |
 | `plugin.eq_set_band_enabled(index, on)` | Turns one band on or off. |
@@ -970,6 +974,51 @@ unchanged. Widening applies headroom compensation, reducing the center level.
 Native DSD over PCM (DoP) bypasses all PEQ processing, including width.
 This is stereo width, not crossfeed or a room simulation. The EQ frequency graph
 shows the band/preamp response and excludes this channel-dependent matrix.
+
+Crossfeed is saved as `crossfeed` in the same `.peq` current file and named
+profiles, so `eq_save_profile` / `eq_load_profile` and `get_eq_state` /
+`eq_apply_state` round-trip it. Profiles and snapshots that omit the field load
+as off. `eq_reset()` and the EQ screen's Flat / Reset actions turn it off.
+New installs start off. The native control is one strength slider on the EQ
+band-options screen (0 is off). There is no separate enable switch.
+
+Crossfeed is a filtered-difference headphone blend. It is not a stereo-width
+matrix, a room model, or a head-related transfer function, and it has no
+interaural delay. A one-pole low-pass at 700 Hz tracks
+each channel. At strength `s` the cross coefficient is `k = 0.30 * s`:
+`yL = xL + k * (lpR - lpL)` and the mirror for the right channel. Once the
+low-pass has settled, that is direct `1 - k` and cross `k`. A centered steady
+signal stays at unity gain. A steady full-scale hard-panned tone stays inside
+full scale. High frequencies are left almost untouched.
+
+A polarity reversal can still overshoot while the low-pass holds the previous
+sample, by about `1 + 2k` (1.6 at full strength). The PCM stage's 1 ms limiter
+attack does not cover those first samples and is not what prevents that clip.
+While crossfeed is active, the same sample applies a stereo-linked gain so the
+frame peak does not exceed the limiter ceiling (32760 in 16-bit, 8386560 in
+24-bit) unless the peak before crossfeed was already above that ceiling. That
+gain is not a constant attenuation: in-range audio, including steady mono and
+a steady hard-pan, is unchanged. Strength 0 does not apply it. Preamp boosts
+that already exceed the ceiling still go to the existing limiter.
+
+Strength changes ramp over 20 ms. The audio thread restarts the low-pass from
+the next sample after a stop/restart, seek, A-B loop jump, A-B source switch,
+or a DoP stretch followed by PCM, including when the rate and PCM format are
+unchanged. Continuous gapless PCM and ordinary block boundaries keep the
+low-pass. A sample-rate or 16/24-bit format change does the same restart, so
+the previous stream is not replayed and a steady tone does not step. Mono
+input is unchanged. Any non-zero strength runs the PCM processor even when
+every EQ band is flat, preamp is 0 dB, and stereo width is 1, so the PCM
+stage rewrites samples. Strength 0, with the ramp already at 0, leaves this
+stage's samples unchanged and does no per-sample work. EQ bypass skips
+crossfeed along with the rest of that stage. Native DoP never enters it.
+ReplayGain and volume stay outside this stage, in their existing order around
+it. Bluetooth and USB conversion can still change the signal after this
+stage; a matching PCM format alone does not prove bit-perfect output.
+
+The EQ frequency graph does not include crossfeed. Order inside the PCM stage
+is preamp, EQ bands, crossfeed (with the immediate peak gain above), stereo
+width, then the limiter.
 
 A bad index or type is an error. Since every call writes
 to storage, change only the bands that changed.

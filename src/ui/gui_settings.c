@@ -247,6 +247,8 @@ static lv_obj_t * eq_bypass_switch;
 static lv_obj_t * eq_band_enabled_switch;
 static lv_obj_t * eq_preamp_slider;
 static lv_obj_t * eq_preamp_value_label;
+static lv_obj_t * eq_crossfeed_slider;
+static lv_obj_t * eq_crossfeed_value_label;
 static lv_obj_t * eq_freq_slider;
 static lv_obj_t * eq_gain_slider;
 static lv_obj_t * eq_q_slider;
@@ -314,7 +316,13 @@ typedef enum {
     EQ_FIELD_FREQ,
     EQ_FIELD_GAIN,
     EQ_FIELD_Q,
+    EQ_FIELD_CROSSFEED,
 } eq_field_t;
+
+static void eq_format_crossfeed(char * out, size_t out_size, double strength) {
+    if (strength <= 0.0) snprintf(out, out_size, "%s", TR("Crossfeed: Off"));
+    else snprintf(out, out_size, TR("Crossfeed: %d%%"), (int) lround(strength * 100.0));
+}
 
 static void eq_numeric_entry_done_cb(const char * text, void * user_data) {
     eq_field_t field = (eq_field_t) (intptr_t) user_data;
@@ -329,6 +337,15 @@ static void eq_numeric_entry_done_cb(const char * text, void * user_data) {
             peq_set_preamp_db(val);
             if (eq_preamp_slider) lv_slider_set_value(eq_preamp_slider, (int32_t) (val * 10.0), LV_ANIM_OFF);
             if (eq_preamp_value_label) lv_label_set_text_fmt(eq_preamp_value_label, TR("Pre-Amp: %+.2f dB"), val);
+            peq_save();
+            break;
+        case EQ_FIELD_CROSSFEED:
+            if (val < 0.0) val = 0.0;
+            if (val > 100.0) val = 100.0;
+            peq_set_crossfeed(val / 100.0);
+            if (eq_crossfeed_slider) lv_slider_set_value(eq_crossfeed_slider, (int32_t) lround(val), LV_ANIM_OFF);
+            eq_format_crossfeed(formatted, sizeof(formatted), peq_get_crossfeed());
+            if (eq_crossfeed_value_label) lv_label_set_text(eq_crossfeed_value_label, formatted);
             peq_save();
             break;
         case EQ_FIELD_FREQ:
@@ -381,6 +398,10 @@ static void eq_field_label_click_cb(lv_event_t * e) {
         case EQ_FIELD_PREAMP:
             title = TR("Pre-Amp (dB, -12 to 12)");
             snprintf(buf, sizeof(buf), "%.2f", peq_get_preamp_db());
+            break;
+        case EQ_FIELD_CROSSFEED:
+            title = TR("Crossfeed (0 to 100)");
+            snprintf(buf, sizeof(buf), "%.0f", peq_get_crossfeed() * 100.0);
             break;
         case EQ_FIELD_FREQ:
             title = TR("Frequency (Hz, 20 to 20000)");
@@ -487,6 +508,19 @@ static void eq_preamp_slider_event_cb(lv_event_t * e) {
     if (code == LV_EVENT_VALUE_CHANGED) {
         peq_set_preamp_db(db);
         lv_label_set_text_fmt(eq_preamp_value_label, TR("Pre-Amp: %+.2f dB"), db);
+    } else if (code == LV_EVENT_RELEASED) {
+        peq_save();
+    }
+}
+
+static void eq_crossfeed_slider_event_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    double strength = (double) lv_slider_get_value(lv_event_get_target(e)) / 100.0;
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        char formatted[32];
+        peq_set_crossfeed(strength);
+        eq_format_crossfeed(formatted, sizeof(formatted), strength);
+        lv_label_set_text(eq_crossfeed_value_label, formatted);
     } else if (code == LV_EVENT_RELEASED) {
         peq_save();
     }
@@ -4239,6 +4273,12 @@ static void refresh_all_eq_widgets(void) {
     if (eq_bypass_state_label) lv_label_set_text(eq_bypass_state_label, peq_get_bypass() ? TR("OFF") : TR("ON"));
     if (eq_preamp_slider) lv_slider_set_value(eq_preamp_slider, (int32_t) (peq_get_preamp_db() * 10.0), LV_ANIM_OFF);
     if (eq_preamp_value_label) lv_label_set_text_fmt(eq_preamp_value_label, TR("Pre-Amp: %+.2f dB"), peq_get_preamp_db());
+    if (eq_crossfeed_slider) lv_slider_set_value(eq_crossfeed_slider, (int32_t) lround(peq_get_crossfeed() * 100.0), LV_ANIM_OFF);
+    if (eq_crossfeed_value_label) {
+        char formatted[32];
+        eq_format_crossfeed(formatted, sizeof(formatted), peq_get_crossfeed());
+        lv_label_set_text(eq_crossfeed_value_label, formatted);
+    }
     refresh_eq_band_widgets();
     if (eq_profile_button_label) {
         char name[256];
@@ -4931,6 +4971,7 @@ static lv_obj_t * build_eq_band_options_screen(void) {
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_gap(content, 16, 0);
     lv_obj_t * preamp = create_eq_slider_card(content, EQ_FIELD_PREAMP, &eq_preamp_value_label, &eq_preamp_slider, -120, 120);
+    lv_obj_t * crossfeed = create_eq_slider_card(content, EQ_FIELD_CROSSFEED, &eq_crossfeed_value_label, &eq_crossfeed_slider, 0, 100);
     lv_obj_t * title = lv_label_create(content);
     lv_label_set_text(title, TR("Filter type"));
     lv_obj_add_style(title, &style_theme_text_primary, 0);
@@ -4960,11 +5001,14 @@ static lv_obj_t * build_eq_band_options_screen(void) {
     lv_obj_add_event_cb(reset, eq_reset_btn_cb, LV_EVENT_CLICKED, NULL);
     refresh_all_eq_widgets();
     lv_obj_add_event_cb(eq_preamp_slider, eq_preamp_slider_event_cb, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(eq_crossfeed_slider, eq_crossfeed_slider_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(eq_band_enabled_switch, eq_band_enabled_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(eq_type_dropdown, eq_type_dropdown_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     finalize_screen_navigation(scr);
     lv_obj_remove_flag(preamp, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_remove_flag(crossfeed, LV_OBJ_FLAG_GESTURE_BUBBLE);
     register_swipe_dead_zone(preamp);
+    register_swipe_dead_zone(crossfeed);
     return scr;
 }
 
@@ -5353,6 +5397,7 @@ void gui_settings_teardown(void) {
     if (eq_band_options_screen) { lv_obj_delete(eq_band_options_screen); eq_band_options_screen = NULL; }
     eq_bypass_switch = eq_band_enabled_switch = NULL;
     eq_preamp_slider = eq_preamp_value_label = NULL;
+    eq_crossfeed_slider = eq_crossfeed_value_label = NULL;
     eq_freq_slider = eq_gain_slider = eq_q_slider = NULL;
     eq_type_dropdown = eq_freq_value_label = eq_gain_value_label = eq_q_value_label = NULL;
     eq_band_number_label = eq_profile_button_label = eq_main_content = eq_footer = eq_bypass_state_label = NULL;
