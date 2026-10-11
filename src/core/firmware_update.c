@@ -1,6 +1,6 @@
 #include "firmware_update.h"
+#include "../network/firmware_ota.h"
 #include "input_device_utils.h"
-#include "firmware_image.h"
 #include "gui_library.h"
 #include "storage_paths.h"
 #include "battery.h"
@@ -47,9 +47,17 @@ static const char * board_image(void) {
 #endif
 }
 
-static bool is_upt_file(const char * name) {
-    const char * ext = strrchr(name, '.');
-    return ext && strcasecmp(ext, ".upt") == 0;
+static bool same_file_snapshot(const struct stat * left, const struct stat * right) {
+    return left->st_dev == right->st_dev && left->st_ino == right->st_ino &&
+           left->st_size == right->st_size && left->st_mtim.tv_sec == right->st_mtim.tv_sec &&
+           left->st_mtim.tv_nsec == right->st_mtim.tv_nsec && left->st_ctim.tv_sec == right->st_ctim.tv_sec &&
+           left->st_ctim.tv_nsec == right->st_ctim.tv_nsec;
+}
+
+static bool same_file_content_snapshot(const struct stat * left, const struct stat * right) {
+    return left->st_dev == right->st_dev && left->st_ino == right->st_ino &&
+           left->st_size == right->st_size && left->st_mtim.tv_sec == right->st_mtim.tv_sec &&
+           left->st_mtim.tv_nsec == right->st_mtim.tv_nsec;
 }
 
 void firmware_update_get_status(firmware_update_status_t * out) {
@@ -123,34 +131,24 @@ bool firmware_update_scan_checked(char * out_path, size_t out_size, char * error
         snprintf(error, error_size, TR("No SD card is mounted."));
         return false;
     }
-    DIR * dir = opendir(FIRMWARE_UPDATE_SD_ROOT);
-    if (!dir) { snprintf(error, error_size, TR("Cannot read the SD card.")); return false; }
-    int count = 0;
-    bool valid = true;
-    struct dirent * de;
-    for (;;) {
-        errno = 0;
-        de = readdir(dir);
-        if (!de) { if (errno) valid = false; break; }
-        if (de->d_name[0] == '.' || !is_upt_file(de->d_name)) continue;
-        count++;
-        if (strcmp(de->d_name, board_image()) != 0) valid = false;
-        char path[512];
-        int n = snprintf(path, sizeof(path), "%s/%s", FIRMWARE_UPDATE_SD_ROOT, de->d_name);
-        struct stat st;
-        if (n < 0 || (size_t) n >= sizeof(path) || lstat(path, &st) != 0 || !S_ISREG(st.st_mode)) valid = false;
-        if (count == 1 && out_size) {
-            n = snprintf(out_path, out_size, "%s", path);
-            if (n < 0 || (size_t) n >= out_size) valid = false;
-        }
+    char path[512];
+    int n = snprintf(path, sizeof(path), "%s/%s", FIRMWARE_UPDATE_SD_ROOT, board_image());
+    struct stat st;
+    if (n < 0 || (size_t) n >= sizeof(path)) {
+        snprintf(error, error_size, TR("The firmware path is too long."));
+        return false;
     }
-    closedir(dir);
-    if (count == 1 && valid) return true;
-    if (!count) snprintf(error, error_size, TR("No .upt firmware file found on SD card"));
-    else if (count > 1) snprintf(error, error_size, TR("Keep only one .upt file in the SD card root."));
-    else snprintf(error, error_size, TR("Use a regular %s file for this player. Check the SD card."), board_image());
-    if (out_size) out_path[0] = '\0';
-    return false;
+    if (lstat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        snprintf(error, error_size, TR("Use a regular %s file in the SD card root."), board_image());
+        return false;
+    }
+    n = snprintf(out_path, out_size, "%s", path);
+    if (n < 0 || (size_t) n >= out_size) {
+        if (out_size) out_path[0] = '\0';
+        snprintf(error, error_size, TR("The firmware path is too long."));
+        return false;
+    }
+    return true;
 }
 
 bool firmware_update_scan(char * out_path, size_t out_size) {
@@ -304,16 +302,18 @@ static bool prepare_recovery(const char * path) {
         lstat(SD_COMPAS_ROOT, &dir_st) != 0 || !S_ISDIR(dir_st.st_mode) ||
         lstat(SD_COMPAS_ROOT "/ota", &dir_st) != 0 || !S_ISDIR(dir_st.st_mode))
         return finish_update(false, TR("Update diagnostics must be stored on the SD card."));
-    if (!set_phase(FIRMWARE_UPDATE_VALIDATING, "validating selected package"))
+    if (!set_phase(FIRMWARE_UPDATE_VALIDATING, "checking selected SD firmware file"))
         return finish_update(false, TR("Cannot save update diagnostics on the SD card."));
-    if (!firmware_image_validate(path, error, sizeof(error))) return finish_update(false, error);
-    /* Re-check the directory after the long read, before any NAND change. */
+    /* Re-check the named file before any NAND change. Recovery validates its contents. */
     if (!firmware_update_scan_checked(selected, sizeof(selected), error, sizeof(error)) || strcmp(path, selected))
         return finish_update(false, error[0] ? error : TR("The selected update file changed. Select it again."));
-    if (lstat(path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino ||
-        before.st_size != after.st_size || before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec || before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)
+    if (lstat(path, &after) != 0 || !same_file_snapshot(&before, &after))
+        return finish_update(false, TR("The update file changed during verification. Select it again."));
+    if (!firmware_ota_park_other_upts(path, error, sizeof(error)))
+        return finish_update(false, error[0] ? error : TR("Could not move other .upt files aside on the SD card."));
+    /* Parking can rename aliases on case-insensitive filesystems. Confirm the
+     * selected object is still the same before enabling stock recovery. */
+    if (lstat(path, &after) != 0 || !same_file_content_snapshot(&before, &after))
         return finish_update(false, TR("The update file changed during verification. Select it again."));
 #ifndef HOST_BUILD
     if (access("/usr/sbin/flash_erase", X_OK) || access("/usr/sbin/nandwrite", X_OK) || access("/bin/sync", X_OK))

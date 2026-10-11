@@ -109,7 +109,7 @@ Download the R1 `r1.upt` from [releases](https://github.com/Starnished66/compas-
 
 Open **Settings → System → About → Firmware Update**. Online updates use only GitHub's designated latest published weekly release, with no fallback to older releases. A saved online download requires Wi-Fi when installing so the player can check that it still matches the latest release.
 
-For an offline update, place one firmware file in the SD card root, named `r1.upt`, `r3proii.upt`, or `r3ii_2025.upt` for your model, then choose **Install from SD card**. The player checks the package structure and chunk checksums before preparing recovery. Renaming another model's image does not make it compatible.
+For an offline update, place the firmware image in the SD card root using the filename for your model: `r1.upt`, `r3proii.upt`, or `r3ii_2025.upt`. Choose **Install from SD card**. Compás checks that the named file is a regular file, then moves other root `.upt` files aside so recovery sees only the selected image. Stock recovery checks the package contents and whether the image is compatible with the player; naming another model's image does not make it compatible. OTA downloads are checked for package structure and chunk checksums before they are placed on the card.
 
 Preparation runs in the background and records its phases and helper output in `SD/.compas/ota/update.log`. If preparation takes longer than expected, keep the player powered and wait: flash helpers are allowed to finish rather than being interrupted. Recovery performs the actual firmware installation after reboot.
 

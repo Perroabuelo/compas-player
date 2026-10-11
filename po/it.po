@@ -29,7 +29,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-10 08:54-0600\n"
+"POT-Creation-Date: 2026-10-11 13:10-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Italian\n"
@@ -62,19 +62,12 @@ msgstr "Errore di riproduzione"
 msgid "No SD card is mounted."
 msgstr "Nessuna scheda SD"
 
-msgid "Cannot read the SD card."
-msgstr "Impossibile leggere la scheda SD."
-
-msgid "No .upt firmware file found on SD card"
-msgstr "Nessun file firmware .upt trovato sulla scheda SD"
-
-#, fuzzy
-msgid "Keep only one .upt file in the SD card root."
-msgstr "Impossibile spostare gli altri file .upt sulla scheda SD."
+msgid "The firmware path is too long."
+msgstr ""
 
 #, c-format
-msgid "Use a regular %s file for this player. Check the SD card."
-msgstr ""
+msgid "Use a regular %s file in the SD card root."
+msgstr "Usa un file %s regolare nella radice della scheda SD."
 
 #, c-format
 msgid "Could not prepare update helper: %s"
@@ -133,6 +126,9 @@ msgstr "Impossibile collocare l'aggiornamento sulla scheda SD."
 #, fuzzy
 msgid "The update file changed during verification. Select it again."
 msgstr "Il download del plugin non ha superato la verifica. Riprova."
+
+msgid "Could not move other .upt files aside on the SD card."
+msgstr "Impossibile spostare gli altri file .upt sulla scheda SD."
 
 msgid "A required recovery helper is missing. Update preparation stopped."
 msgstr ""
@@ -239,6 +235,9 @@ msgstr "GitHub sta limitando le richieste. Riprova più tardi."
 msgid "GitHub returned HTTP %d."
 msgstr "GitHub ha restituito HTTP %d."
 
+msgid "Cannot read the SD card."
+msgstr "Impossibile leggere la scheda SD."
+
 msgid "A newer or changed release is available. Check for updates again before downloading."
 msgstr ""
 
@@ -297,9 +296,6 @@ msgstr "Impossibile scaricare i checksum della release."
 #, fuzzy
 msgid "This update no longer matches the latest release. Download the latest image again."
 msgstr "Il file di aggiornamento sulla scheda SD è cambiato. Scaricalo di nuovo."
-
-msgid "Could not move other .upt files aside on the SD card."
-msgstr "Impossibile spostare gli altri file .upt sulla scheda SD."
 
 msgid "Could not enter recovery mode."
 msgstr "Impossibile entrare in modalità recovery."
@@ -414,6 +410,34 @@ msgstr "On"
 msgid "Off"
 msgstr "Off"
 
+msgid "Screenshot saved"
+msgstr "Screenshot salvato"
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Screenshot non riuscito (%s)"
+
+msgid "unknown"
+msgstr "sconosciuto"
+
+msgid "Cannot play folder"
+msgstr "Impossibile riprodurre la cartella"
+
+msgid "Paused: headphones disconnected"
+msgstr "In pausa: cuffie scollegate"
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Checkpoint della coda non riuscito; l'archiviazione potrebbe essere di sola lettura"
+
+msgid "Playback history could not be saved"
+msgstr "Impossibile salvare la cronologia di riproduzione"
+
+msgid "Subsonic"
+msgstr "Subsonic"
+
+msgid "Stream Media"
+msgstr "Streaming"
+
 msgid "Could not open this file."
 msgstr "Impossibile aprire questo file."
 
@@ -453,34 +477,6 @@ msgstr "Apri un libro e tocca l'icona del segnalibro per salvarlo qui."
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Aggiungi file .txt alla cartella Books, poi aggiorna la libreria."
-
-msgid "Screenshot saved"
-msgstr "Screenshot salvato"
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Screenshot non riuscito (%s)"
-
-msgid "unknown"
-msgstr "sconosciuto"
-
-msgid "Cannot play folder"
-msgstr "Impossibile riprodurre la cartella"
-
-msgid "Paused: headphones disconnected"
-msgstr "In pausa: cuffie scollegate"
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Checkpoint della coda non riuscito; l'archiviazione potrebbe essere di sola lettura"
-
-msgid "Playback history could not be saved"
-msgstr "Impossibile salvare la cronologia di riproduzione"
-
-msgid "Subsonic"
-msgstr "Subsonic"
-
-msgid "Stream Media"
-msgstr "Streaming"
 
 #
 msgid "Disconnect USB storage from the computer before changing files."
@@ -1775,18 +1771,6 @@ msgstr "Aggiorna plugin"
 msgid "Plugin Manager"
 msgstr "Gestione plugin"
 
-msgid "No entries to display"
-msgstr "Nessuna voce da mostrare"
-
-msgid "No plugin settings available"
-msgstr "Nessuna impostazione del plugin disponibile"
-
-msgid "Plugin"
-msgstr "Plugin"
-
-msgid "Plugin Settings"
-msgstr "Impostazioni plugin"
-
 #, fuzzy
 msgid "Download layouts"
 msgstr "Caricamento dei layout"
@@ -1947,6 +1931,18 @@ msgstr "Alcuni file dei plugin sono stati modificati sulla scheda. Sostituirli?"
 msgid "Plugin operation failed"
 msgstr "Operazione sul plugin non riuscita"
 
+msgid "No entries to display"
+msgstr "Nessuna voce da mostrare"
+
+msgid "No plugin settings available"
+msgstr "Nessuna impostazione del plugin disponibile"
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Plugin Settings"
+msgstr "Impostazioni plugin"
+
 msgid "Played"
 msgstr "Riprodotto"
 
@@ -2014,6 +2010,14 @@ msgstr "Personalizzato"
 msgid "%d min remaining"
 msgstr "%d min rimanenti"
 
+#, fuzzy
+msgid "Crossfeed: Off"
+msgstr "Crossfade"
+
+#, c-format
+msgid "Crossfeed: %d%%"
+msgstr ""
+
 #, c-format
 msgid "Pre-Amp: %+.2f dB"
 msgstr "Pre-Amp: %+.2f dB"
@@ -2024,6 +2028,9 @@ msgstr "%.0f Hz"
 
 msgid "Pre-Amp (dB, -12 to 12)"
 msgstr "Pre-Amp (dB, da -12 a 12)"
+
+msgid "Crossfeed (0 to 100)"
+msgstr ""
 
 msgid "Frequency (Hz, 20 to 20000)"
 msgstr "Frequenza (Hz, da 20 a 20000)"
@@ -2231,6 +2238,13 @@ msgstr "Volume iniziale"
 
 msgid "Launch at a fixed volume"
 msgstr "Avvia a un volume fisso"
+
+#, fuzzy
+msgid "Max Volume"
+msgstr "Volume iniziale"
+
+msgid "Limits the player volume, including buttons, remote controls and plugins."
+msgstr ""
 
 msgid "Car Mode"
 msgstr "Modalità auto"
@@ -3201,6 +3215,9 @@ msgstr "Controlli di alimentazione"
 
 msgid "Playback and device actions"
 msgstr "Azioni di riproduzione e dispositivo"
+
+#~ msgid "No .upt firmware file found on SD card"
+#~ msgstr "Nessun file firmware .upt trovato sulla scheda SD"
 
 #~ msgid "Download Themes"
 #~ msgstr "Scarica temi"

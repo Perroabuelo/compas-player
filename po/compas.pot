@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-10 08:54-0600\n"
+"POT-Creation-Date: 2026-10-11 13:10-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -39,17 +39,11 @@ msgstr ""
 msgid "No SD card is mounted."
 msgstr ""
 
-msgid "Cannot read the SD card."
-msgstr ""
-
-msgid "No .upt firmware file found on SD card"
-msgstr ""
-
-msgid "Keep only one .upt file in the SD card root."
+msgid "The firmware path is too long."
 msgstr ""
 
 #, c-format
-msgid "Use a regular %s file for this player. Check the SD card."
+msgid "Use a regular %s file in the SD card root."
 msgstr ""
 
 #, c-format
@@ -104,6 +98,9 @@ msgid "Cannot save update diagnostics on the SD card."
 msgstr ""
 
 msgid "The update file changed during verification. Select it again."
+msgstr ""
+
+msgid "Could not move other .upt files aside on the SD card."
 msgstr ""
 
 msgid "A required recovery helper is missing. Update preparation stopped."
@@ -212,6 +209,9 @@ msgstr ""
 msgid "GitHub returned HTTP %d."
 msgstr ""
 
+msgid "Cannot read the SD card."
+msgstr ""
+
 msgid ""
 "A newer or changed release is available. Check for updates again before "
 "downloading."
@@ -276,9 +276,6 @@ msgstr ""
 msgid ""
 "This update no longer matches the latest release. Download the latest image "
 "again."
-msgstr ""
-
-msgid "Could not move other .upt files aside on the SD card."
 msgstr ""
 
 msgid "Could not enter recovery mode."
@@ -393,6 +390,34 @@ msgstr ""
 msgid "Off"
 msgstr ""
 
+msgid "Screenshot saved"
+msgstr ""
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr ""
+
+msgid "unknown"
+msgstr ""
+
+msgid "Cannot play folder"
+msgstr ""
+
+msgid "Paused: headphones disconnected"
+msgstr ""
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr ""
+
+msgid "Playback history could not be saved"
+msgstr ""
+
+msgid "Subsonic"
+msgstr ""
+
+msgid "Stream Media"
+msgstr ""
+
 msgid "Could not open this file."
 msgstr ""
 
@@ -428,34 +453,6 @@ msgid "Open a book and tap the bookmark icon to save it here."
 msgstr ""
 
 msgid "Add .txt files to the Books folder, then refresh the library."
-msgstr ""
-
-msgid "Screenshot saved"
-msgstr ""
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr ""
-
-msgid "unknown"
-msgstr ""
-
-msgid "Cannot play folder"
-msgstr ""
-
-msgid "Paused: headphones disconnected"
-msgstr ""
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr ""
-
-msgid "Playback history could not be saved"
-msgstr ""
-
-msgid "Subsonic"
-msgstr ""
-
-msgid "Stream Media"
 msgstr ""
 
 msgid "Disconnect USB storage from the computer before changing files."
@@ -1724,18 +1721,6 @@ msgstr ""
 msgid "Plugin Manager"
 msgstr ""
 
-msgid "No entries to display"
-msgstr ""
-
-msgid "No plugin settings available"
-msgstr ""
-
-msgid "Plugin"
-msgstr ""
-
-msgid "Plugin Settings"
-msgstr ""
-
 msgid "Download layouts"
 msgstr ""
 
@@ -1892,6 +1877,18 @@ msgstr ""
 msgid "Plugin operation failed"
 msgstr ""
 
+msgid "No entries to display"
+msgstr ""
+
+msgid "No plugin settings available"
+msgstr ""
+
+msgid "Plugin"
+msgstr ""
+
+msgid "Plugin Settings"
+msgstr ""
+
 msgid "Played"
 msgstr ""
 
@@ -1959,6 +1956,13 @@ msgstr ""
 msgid "%d min remaining"
 msgstr ""
 
+msgid "Crossfeed: Off"
+msgstr ""
+
+#, c-format
+msgid "Crossfeed: %d%%"
+msgstr ""
+
 #, c-format
 msgid "Pre-Amp: %+.2f dB"
 msgstr ""
@@ -1968,6 +1972,9 @@ msgid "%.0f Hz"
 msgstr ""
 
 msgid "Pre-Amp (dB, -12 to 12)"
+msgstr ""
+
+msgid "Crossfeed (0 to 100)"
 msgstr ""
 
 msgid "Frequency (Hz, 20 to 20000)"
@@ -2166,6 +2173,13 @@ msgid "Startup Volume"
 msgstr ""
 
 msgid "Launch at a fixed volume"
+msgstr ""
+
+msgid "Max Volume"
+msgstr ""
+
+msgid ""
+"Limits the player volume, including buttons, remote controls and plugins."
 msgstr ""
 
 msgid "Car Mode"

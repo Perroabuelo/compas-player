@@ -28,7 +28,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-10 08:54-0600\n"
+"POT-Creation-Date: 2026-10-11 13:10-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Portuguese (Brazil)\n"
@@ -61,19 +61,12 @@ msgstr "Erro de reprodução"
 msgid "No SD card is mounted."
 msgstr "Sem cartão SD"
 
-msgid "Cannot read the SD card."
-msgstr "Não foi possível ler o cartão SD."
-
-msgid "No .upt firmware file found on SD card"
-msgstr "Nenhum arquivo de firmware .upt no cartão SD"
-
-#, fuzzy
-msgid "Keep only one .upt file in the SD card root."
-msgstr "Não foi possível separar os outros arquivos .upt no cartão SD."
+msgid "The firmware path is too long."
+msgstr ""
 
 #, c-format
-msgid "Use a regular %s file for this player. Check the SD card."
-msgstr ""
+msgid "Use a regular %s file in the SD card root."
+msgstr "Use um arquivo %s regular na raiz do cartão SD."
 
 #, c-format
 msgid "Could not prepare update helper: %s"
@@ -132,6 +125,9 @@ msgstr "Não foi possível colocar a atualização no cartão SD."
 #, fuzzy
 msgid "The update file changed during verification. Select it again."
 msgstr "O download do plugin falhou na verificação. Tente de novo."
+
+msgid "Could not move other .upt files aside on the SD card."
+msgstr "Não foi possível separar os outros arquivos .upt no cartão SD."
 
 msgid "A required recovery helper is missing. Update preparation stopped."
 msgstr ""
@@ -238,6 +234,9 @@ msgstr "O GitHub está limitando as solicitações. Tente mais tarde."
 msgid "GitHub returned HTTP %d."
 msgstr "O GitHub retornou HTTP %d."
 
+msgid "Cannot read the SD card."
+msgstr "Não foi possível ler o cartão SD."
+
 msgid "A newer or changed release is available. Check for updates again before downloading."
 msgstr ""
 
@@ -296,9 +295,6 @@ msgstr "Não foi possível baixar os checksums da versão."
 #, fuzzy
 msgid "This update no longer matches the latest release. Download the latest image again."
 msgstr "O arquivo de atualização no cartão SD mudou. Baixe de novo."
-
-msgid "Could not move other .upt files aside on the SD card."
-msgstr "Não foi possível separar os outros arquivos .upt no cartão SD."
 
 msgid "Could not enter recovery mode."
 msgstr "Não foi possível entrar no modo de recuperação."
@@ -413,6 +409,34 @@ msgstr "Ligado"
 msgid "Off"
 msgstr "Desligado"
 
+msgid "Screenshot saved"
+msgstr "Captura salva"
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Falha na captura (%s)"
+
+msgid "unknown"
+msgstr "desconhecido"
+
+msgid "Cannot play folder"
+msgstr "Não é possível tocar a pasta"
+
+msgid "Paused: headphones disconnected"
+msgstr "Pausado: fones desconectados"
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Falha ao salvar a fila; o armazenamento pode estar somente leitura"
+
+msgid "Playback history could not be saved"
+msgstr "Não foi possível salvar o histórico de reprodução"
+
+msgid "Subsonic"
+msgstr "Subsonic"
+
+msgid "Stream Media"
+msgstr "Streaming"
+
 msgid "Could not open this file."
 msgstr "Não foi possível abrir este arquivo."
 
@@ -452,34 +476,6 @@ msgstr "Abra um livro e toque no ícone de marcador para salvá-lo aqui."
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Adicione arquivos .txt à pasta Livros e atualize a biblioteca."
-
-msgid "Screenshot saved"
-msgstr "Captura salva"
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Falha na captura (%s)"
-
-msgid "unknown"
-msgstr "desconhecido"
-
-msgid "Cannot play folder"
-msgstr "Não é possível tocar a pasta"
-
-msgid "Paused: headphones disconnected"
-msgstr "Pausado: fones desconectados"
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Falha ao salvar a fila; o armazenamento pode estar somente leitura"
-
-msgid "Playback history could not be saved"
-msgstr "Não foi possível salvar o histórico de reprodução"
-
-msgid "Subsonic"
-msgstr "Subsonic"
-
-msgid "Stream Media"
-msgstr "Streaming"
 
 #
 msgid "Disconnect USB storage from the computer before changing files."
@@ -1774,18 +1770,6 @@ msgstr "Atualizar plugins"
 msgid "Plugin Manager"
 msgstr "Gerenciar plugins"
 
-msgid "No entries to display"
-msgstr "Nenhum item para mostrar"
-
-msgid "No plugin settings available"
-msgstr "Nenhuma configuração de plugin disponível"
-
-msgid "Plugin"
-msgstr "Plugin"
-
-msgid "Plugin Settings"
-msgstr "Configurações do plugin"
-
 #, fuzzy
 msgid "Download layouts"
 msgstr "Carregando layouts"
@@ -1946,6 +1930,18 @@ msgstr "Alguns arquivos de plugin foram alterados no cartão. Substituí-los?"
 msgid "Plugin operation failed"
 msgstr "Falha na operação do plugin"
 
+msgid "No entries to display"
+msgstr "Nenhum item para mostrar"
+
+msgid "No plugin settings available"
+msgstr "Nenhuma configuração de plugin disponível"
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Plugin Settings"
+msgstr "Configurações do plugin"
+
 msgid "Played"
 msgstr "Tocada"
 
@@ -2013,6 +2009,14 @@ msgstr "Personalizado"
 msgid "%d min remaining"
 msgstr "%d min restantes"
 
+#, fuzzy
+msgid "Crossfeed: Off"
+msgstr "Crossfade"
+
+#, c-format
+msgid "Crossfeed: %d%%"
+msgstr ""
+
 #, c-format
 msgid "Pre-Amp: %+.2f dB"
 msgstr "Pré-amp: %+.2f dB"
@@ -2023,6 +2027,9 @@ msgstr "%.0f Hz"
 
 msgid "Pre-Amp (dB, -12 to 12)"
 msgstr "Pré-amp (dB, -12 a 12)"
+
+msgid "Crossfeed (0 to 100)"
+msgstr ""
 
 msgid "Frequency (Hz, 20 to 20000)"
 msgstr "Frequência (Hz, 20 a 20000)"
@@ -2230,6 +2237,13 @@ msgstr "Volume inicial"
 
 msgid "Launch at a fixed volume"
 msgstr "Iniciar com volume fixo"
+
+#, fuzzy
+msgid "Max Volume"
+msgstr "Volume inicial"
+
+msgid "Limits the player volume, including buttons, remote controls and plugins."
+msgstr ""
 
 msgid "Car Mode"
 msgstr "Modo carro"
@@ -3200,6 +3214,9 @@ msgstr "Controles de energia"
 
 msgid "Playback and device actions"
 msgstr "Ações de reprodução e do aparelho"
+
+#~ msgid "No .upt firmware file found on SD card"
+#~ msgstr "Nenhum arquivo de firmware .upt no cartão SD"
 
 #~ msgid "Download Themes"
 #~ msgstr "Baixar temas"

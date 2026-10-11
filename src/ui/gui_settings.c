@@ -592,7 +592,7 @@ static int update_ui_last_phase = -1;
 static bool update_ui_last_delayed;
 
 static bool firmware_usb_ready(void) {
-    if (!gui_network_usb_prompt_invalidated()) return true;
+    if (!gui_network_firmware_update_usb_blocked()) return true;
     show_error_toast(TR("Wait for USB mode switching to finish and disconnect USB storage before updating."));
     return false;
 }

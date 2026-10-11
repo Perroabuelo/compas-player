@@ -4621,12 +4621,26 @@ lv_obj_t * gui_network_get_usb_dac_overlay(void) { return usb_dac_overlay_screen
 bool gui_network_usb_dac_mode_active(void) { return usb_dac_mode_active; }
 lv_obj_t * gui_network_get_import_wifi_screen(void) { return import_wifi_screen; }
 
-bool gui_network_usb_prompt_invalidated(void) {
+static bool usb_live_operation_blocks_update(void) {
     /* Check the live UDC state so a confirm click between polls cannot race
      * a newly-configured USB storage host. */
     return usb_mode_switch_active || usb_mode_switch_queued || usb_bridge_restart_active ||
-           usb_dac_mode_active || gui_network_usb_storage_session_active() ||
-           usb_mode_control_storage_host_configured();
+           usb_dac_mode_active || usb_mode_control_storage_host_configured();
+}
+
+bool gui_network_usb_prompt_invalidated(void) {
+    return usb_live_operation_blocks_update() || gui_network_usb_storage_session_active();
+}
+
+bool gui_network_firmware_update_usb_blocked(void) {
+    if (usb_live_operation_blocks_update()) return true;
+    if (!gui_network_usb_storage_session_active()) return false;
+
+    /* The historical latch stays set until unplug so storage cache flush and
+     * rescan semantics remain intact. Permit updates on this cable only when
+     * the currently configured gadget is positively identified as ADB. */
+    usb_mode_t live_mode;
+    return !usb_mode_control_detect_current(&live_mode) || live_mode != USB_MODE_ADB;
 }
 
 bool gui_network_boot_prompt_blocked(void) {
