@@ -465,6 +465,52 @@ static void test_established_stop_waits_for_output_release(const char *wav) {
     assert(fabs(audio_get_resume_position_seconds() - stopped_position) < 0.1);
 }
 
+static void test_volume_percentage_cap(void) {
+    audio_set_max_volume_percent(100);
+    assert(audio_clamp_volume_percent(-1) == 0);
+    assert(audio_clamp_volume_percent(0) == 0);
+    assert(audio_clamp_volume_percent(1) == 1);
+    assert(audio_clamp_volume_percent(100) == 100);
+    assert(audio_clamp_volume_percent(101) == 100);
+
+    audio_set_max_volume_percent(0);
+    assert(audio_clamp_volume_percent(100) == 1);
+    audio_set_volume(1.0f);
+    assert(fabsf(audio_get_volume() - 0.01f) < 0.001f);
+    audio_set_volume(0.0f);
+    assert(audio_get_volume() == 0.0f); /* mute remains available under a cap */
+    audio_set_max_volume_percent(101);
+    assert(audio_clamp_volume_percent(100) == 100);
+    audio_set_volume(0.9f);
+    audio_set_max_volume_percent(45);
+    assert(fabsf(audio_get_volume() - 0.45f) < 0.001f);
+    assert(audio_clamp_volume_percent(100) == 45);
+    audio_set_max_volume_percent(80);
+    assert(fabsf(audio_get_volume() - 0.45f) < 0.001f); /* raising the cap does not restore volume */
+    audio_set_volume(1.0f);
+    assert(fabsf(audio_get_volume() - 0.8f) < 0.001f);
+
+    /* A delayed drag request must still observe a newly lowered cap. */
+    audio_request_volume(0.95f);
+    audio_set_max_volume_percent(25);
+    assert(audio_get_volume() <= 0.2501f);
+    /* Keep observing while the worker gets time to process the request,
+     * even though the synchronous cap setter already lowered the output. */
+    for (int attempt = 0; attempt < 20; attempt++) {
+        struct timespec pause = { .tv_sec = 0, .tv_nsec = 10000000L };
+        nanosleep(&pause, NULL);
+        assert(audio_get_volume() <= 0.2501f);
+    }
+    audio_request_volume(0.2f);
+    audio_set_max_volume_percent(30); /* below-cap queued intent survives */
+    for (int attempt = 0; attempt < 200 && fabsf(audio_get_volume() - 0.2f) >= 0.001f; attempt++) {
+        struct timespec pause = { .tv_sec = 0, .tv_nsec = 10000000L };
+        nanosleep(&pause, NULL);
+    }
+    assert(fabsf(audio_get_volume() - 0.2f) < 0.001f);
+    audio_set_max_volume_percent(100);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     const char *wav = argv[1];
@@ -473,6 +519,7 @@ int main(int argc, char **argv) {
     make_wav(wav);
     make_wav(latest_wav);
     audio_init();
+    test_volume_percentage_cap();
     test_mode_and_pause_before_output(wav);
     stop_and_wait();
     test_stop_cancels_startup(wav);

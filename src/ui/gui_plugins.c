@@ -728,8 +728,7 @@ void gui_plugin_seek(double seconds) {
 }
 
 static void plugin_set_volume(int percent, bool show_popup, bool persist) {
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
+    percent = audio_clamp_volume_percent(percent);
 
     gui_player_set_volume_percent(percent);
     audio_set_volume((float) percent / 100.0f);

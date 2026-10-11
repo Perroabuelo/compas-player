@@ -661,9 +661,7 @@ static void physical_button_action(button_mapping_action_t action,
         case BUTTON_MAPPING_ACTION_VOLUME_UP:
         case BUTTON_MAPPING_ACTION_VOLUME_DOWN: {
             int delta = (int)count * (action == BUTTON_MAPPING_ACTION_VOLUME_UP ? 1 : -1);
-            int new_percent = gui_player_get_volume_percent() + delta;
-            if (new_percent < 0) new_percent = 0;
-            if (new_percent > 100) new_percent = 100;
+            int new_percent = audio_clamp_volume_percent(gui_player_get_volume_percent() + delta);
             gui_player_set_volume_percent(new_percent);
             audio_set_volume((float)new_percent / 100.0f);
             gui_player_remember_volume_percent(new_percent);
@@ -791,6 +789,7 @@ static void update_timer_cb(lv_timer_t * timer) {
     int bt_synced_volume_percent;
     if (bt_control_source_volume_sync_consume_percent(&bt_synced_volume_percent) &&
         !gui_player_volume_is_being_adjusted()) {
+        bt_synced_volume_percent = audio_clamp_volume_percent(bt_synced_volume_percent);
         gui_player_set_volume_percent(bt_synced_volume_percent);
         gui_player_remember_volume_percent(bt_synced_volume_percent);
         settings_save_async(&current_settings);
@@ -842,6 +841,7 @@ static void update_timer_cb(lv_timer_t * timer) {
     int remote_volume_percent;
     if (remote_control_consume_volume(&remote_volume_percent) &&
         !gui_player_volume_is_being_adjusted()) {
+        remote_volume_percent = audio_clamp_volume_percent(remote_volume_percent);
         gui_player_set_volume_percent(remote_volume_percent);
         audio_set_volume((float) remote_volume_percent / 100.0f);
         gui_player_remember_volume_percent(remote_volume_percent);
@@ -1817,6 +1817,7 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
      * RELEASED case during the session), so turning startup_volume_fixed_enabled
      * back off later resumes from wherever the slider was really last left,
      * not from stale fixed-mode state. */
+    audio_set_max_volume_percent(current_settings.max_volume_percent);
     if (current_settings.car_mode_enabled) {
         audio_set_volume((float) current_settings.car_mode_volume_percent / 100.0f);
     } else {

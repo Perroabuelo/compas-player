@@ -247,6 +247,7 @@ static void set_defaults(player_settings_t * out) {
     out->startup_volume_fixed_enabled = true; /* matches stock's own default */
     out->startup_volume_fixed_percent = 20;
     out->car_mode_volume_percent = 80;
+    out->max_volume_percent = 100;
     out->sleep_timer_minutes = 15;
     out->timezone[0] = '\0';
     out->hostname[0] = '\0'; /* empty -- stock's own /usr/resource/hostname stays in effect */
@@ -619,6 +620,8 @@ bool settings_load(player_settings_t * out) {
         } else if (strcmp(key, "car_mode_volume_percent") == 0) {
             out->car_mode_volume_percent = atoi(value);
             car_mode_volume_percent_seen = true;
+        } else if (strcmp(key, "max_volume_percent") == 0) {
+            out->max_volume_percent = atoi(value);
         } else if (strcmp(key, "sleep_timer_minutes") == 0) {
             out->sleep_timer_minutes = atoi(value);
         } else if (strcmp(key, "timezone") == 0) {
@@ -678,6 +681,7 @@ bool settings_load(player_settings_t * out) {
     if (!car_mode_volume_percent_seen && legacy_car_mode_volume_percent_seen)
         out->car_mode_volume_percent = legacy_car_mode_volume_percent;
     if (out->car_mode_volume_percent < 0 || out->car_mode_volume_percent > 100) out->car_mode_volume_percent = 80;
+    if (out->max_volume_percent < 1 || out->max_volume_percent > 100) out->max_volume_percent = 100;
     if (out->brightness_percent < 0 || out->brightness_percent > 100) out->brightness_percent = 80;
     if (out->resume_mode < 0 || out->resume_mode > 2) out->resume_mode = 0;
     if (out->play_pause_button_mode < 0 || out->play_pause_button_mode > 2) out->play_pause_button_mode = 0;
@@ -822,6 +826,7 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "startup_volume_fixed_enabled=%d\n", settings->startup_volume_fixed_enabled ? 1 : 0);
     fprintf(f, "startup_volume_fixed_percent=%d\n", settings->startup_volume_fixed_percent);
     fprintf(f, "car_mode_volume_percent=%d\n", settings->car_mode_volume_percent);
+    fprintf(f, "max_volume_percent=%d\n", settings->max_volume_percent);
     fprintf(f, "sleep_timer_minutes=%d\n", settings->sleep_timer_minutes);
     fprintf(f, "timezone=%s\n", settings->timezone);
     fprintf(f, "hostname=%s\n", settings->hostname);

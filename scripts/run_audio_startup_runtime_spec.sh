@@ -9,7 +9,9 @@ mkdir -p "$build_dir"
 # objects provide its decoder/output dependencies; main.o is excluded so the
 # spec supplies its own entry point.
 make -s -C "$repo_root" host BOARD=r1
-mapfile -t objects < <(find "$repo_root/build_host" -mindepth 2 -name '*.o' -print)
+mapfile -t objects < <(find "$repo_root/build_host" -mindepth 2 -name '*.o' \
+    ! -path "$repo_root/build_host/libwavpack/*" \
+    ! -path "$repo_root/build_host/libsndfile/*" -print)
 if ((${#objects[@]} == 0)); then
     echo "No host object files found under build_host" >&2
     exit 1
@@ -23,6 +25,8 @@ gcc -std=gnu11 -Wall -Wextra -Werror -pthread \
 g++ -pthread \
     "$build_dir/audio_startup_runtime_spec.o" \
     "${objects[@]}" \
+    "$repo_root/build_host/libwavpack/libwavpack.a" \
+    "$repo_root/build_host/libsndfile/libsndfile.a" \
     -Wl,--wrap=metadata_read_without_artwork \
     -Wl,--wrap=SDL_OpenAudioDevice -Wl,--wrap=SDL_CloseAudioDevice \
     $(sdl2-config --libs) -lpthread -lm \

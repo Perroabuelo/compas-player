@@ -413,11 +413,18 @@ static void volume_popup_track_event_cb(lv_event_t * e) {
          * mid-interaction. */
         lv_timer_pause(volume_popup_hide_timer);
     } else if (code == LV_EVENT_VALUE_CHANGED) {
+        percent = audio_clamp_volume_percent((int) percent);
+        if (percent != lv_slider_get_value(volume_popup_track))
+            lv_slider_set_value(volume_popup_track, percent, LV_ANIM_OFF);
         hw_volume_coalesce_drag_update(&volume_popup_hv, (int) percent);
         if (volume_popup_value_label) lv_label_set_text_fmt(volume_popup_value_label, "%d", (int) percent);
         refresh_volume_topbar(percent);
     } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        hw_volume_coalesce_drag_end(&volume_popup_hv, (int) percent);
+        percent = audio_clamp_volume_percent((int) percent);
+        if (percent != lv_slider_get_value(volume_popup_track))
+            lv_slider_set_value(volume_popup_track, percent, LV_ANIM_OFF);
+        percent = hw_volume_coalesce_drag_end(&volume_popup_hv, (int) percent);
+        if (volume_popup_value_label) lv_label_set_text_fmt(volume_popup_value_label, "%d", (int) percent);
         if (volume_slider) lv_slider_set_value(volume_slider, percent, LV_ANIM_OFF);
         gui_player_remember_volume_percent(percent);
         settings_save_async(&current_settings);
@@ -4559,7 +4566,7 @@ static bool player_bind_widgets(lv_obj_t * scr) {
     }
 
     lv_slider_set_range(r_volume, 0, 100);
-    lv_slider_set_value(r_volume, (int32_t) (audio_get_volume() * 100.0f), LV_ANIM_OFF);
+    lv_slider_set_value(r_volume, audio_clamp_volume_percent((int32_t) (audio_get_volume() * 100.0f + 0.5f)), LV_ANIM_OFF);
 
     /* Part D: Hit targets */
     lv_obj_update_layout(scr);
@@ -4806,6 +4813,7 @@ static lv_obj_t * build_player_screen(uint32_t screen_width, uint32_t screen_hei
 
 
 void show_volume_popup(int32_t percent) {
+    percent = audio_clamp_volume_percent(percent);
     if (!volume_popup || !volume_popup_track) return;
     /* A BT/remote/hw-button echo writing the slider under a live finger
      * snaps the knob back to the last applied value, then the next indev
@@ -7888,18 +7896,18 @@ bool gui_player_is_seeking(void) {
 
 
 int32_t gui_player_get_volume_percent(void) {
-    return volume_slider ? lv_slider_get_value(volume_slider) : (int32_t)(audio_get_volume() * 100.0f);
+    return audio_clamp_volume_percent(volume_slider ? lv_slider_get_value(volume_slider) : (int32_t)(audio_get_volume() * 100.0f + 0.5f));
 }
 
 void gui_player_set_volume_percent(int32_t percent) {
     /* External/hardware writes are newer than any coalesced drag sample. */
     hw_volume_coalesce_cancel(&volume_popup_hv);
+    percent = audio_clamp_volume_percent(percent);
     if (volume_slider) lv_slider_set_value(volume_slider, percent, LV_ANIM_OFF);
 }
 
 void gui_player_remember_volume_percent(int32_t percent) {
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
+    percent = audio_clamp_volume_percent(percent);
     if (current_settings.car_mode_enabled) {
         current_settings.car_mode_volume_percent = percent;
         gui_settings_sync_car_mode();
@@ -7914,7 +7922,8 @@ void gui_player_set_car_mode_enabled(bool enabled) {
         current_settings.car_mode_enabled = enabled;
         float volume = enabled ? (float) current_settings.car_mode_volume_percent / 100.0f
                                : current_settings.volume;
-        int32_t percent = (int32_t) (volume * 100.0f + 0.5f);
+        int32_t percent = audio_clamp_volume_percent((int32_t) (volume * 100.0f + 0.5f));
+        volume = (float) percent / 100.0f;
         gui_player_set_volume_percent(percent);
         audio_set_volume(volume);
         refresh_volume_topbar(percent);

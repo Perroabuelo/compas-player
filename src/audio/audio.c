@@ -1203,6 +1203,7 @@ static double speed_for_decoder_locked(const char * path, const decoder_t * dec)
 static float volume = 1.0f;      /* UI-facing 0.0-1.0 percent, what audio_get_volume() returns */
 static float volume_gain = 1.0f; /* actual linear PCM multiplier the playback thread applies -- see audio_set_volume() */
 static atomic_uint volume_set_generation = 0;
+static atomic_int max_volume_cap_percent = 100;
 static pthread_once_t volume_request_once = PTHREAD_ONCE_INIT;
 static pthread_mutex_t volume_request_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t volume_request_cond = PTHREAD_COND_INITIALIZER;
@@ -5560,14 +5561,14 @@ static int compute_hw_raw(float vol) {
  * generation. The check and state update share audio_mutex, so a worker
  * that races a release-time audio_set_volume() cannot restore an older
  * drag sample afterward. */
-static void audio_apply_volume(float new_volume, unsigned int generation) {
+static float audio_clamp_volume_locked(float new_volume) {
     if (new_volume < 0.0f) new_volume = 0.0f;
     if (new_volume > 1.0f) new_volume = 1.0f;
-    pthread_mutex_lock(&audio_mutex);
-    if (atomic_load(&volume_set_generation) != generation) {
-        pthread_mutex_unlock(&audio_mutex);
-        return;
-    }
+    float cap = (float) atomic_load(&max_volume_cap_percent) / 100.0f;
+    return new_volume > cap ? cap : new_volume;
+}
+
+static void audio_apply_volume_locked(float new_volume) {
     volume = new_volume;
     volume_gain = (new_volume <= 0.0f) ? 0.0f : 1.0f;
 #ifndef HOST_BUILD
@@ -5577,12 +5578,43 @@ static void audio_apply_volume(float new_volume, unsigned int generation) {
         volume_gain = (new_volume <= 0.0f) ? 0.0f : (float) pow(10.0, calibrated_taper_db((double) new_volume) / 20.0);
     }
 #endif
+}
+
+static void audio_apply_volume(float new_volume, unsigned int generation) {
+    pthread_mutex_lock(&audio_mutex);
+    if (atomic_load(&volume_set_generation) != generation) {
+        pthread_mutex_unlock(&audio_mutex);
+        return;
+    }
+    /* Read the cap only after taking audio_mutex: a cap reduction cannot
+     * race a queued request that already sampled the old ceiling. */
+    new_volume = audio_clamp_volume_locked(new_volume);
+    audio_apply_volume_locked(new_volume);
     pthread_mutex_unlock(&audio_mutex);
 }
 
 void audio_set_volume(float new_volume) {
     unsigned int generation = atomic_fetch_add(&volume_set_generation, 1) + 1;
     audio_apply_volume(new_volume, generation);
+}
+
+int audio_clamp_volume_percent(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    int cap = atomic_load(&max_volume_cap_percent);
+    return percent > cap ? cap : percent;
+}
+
+void audio_set_max_volume_percent(int percent) {
+    if (percent < 1) percent = 1;
+    if (percent > 100) percent = 100;
+    pthread_mutex_lock(&audio_mutex);
+    atomic_store(&max_volume_cap_percent, percent);
+    /* Clamp current output atomically with the cap update. Queued requests
+     * continue through their generation check and are clipped to this cap. */
+    float cap = (float) percent / 100.0f;
+    if (volume > cap) audio_apply_volume_locked(cap);
+    pthread_mutex_unlock(&audio_mutex);
 }
 
 void audio_stage_custom_hw_volume_curve(bool active, const uint8_t * curve) {

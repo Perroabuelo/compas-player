@@ -2868,16 +2868,27 @@ static void * bt_source_vol_sync_thread_func(void * arg) {
                                            strcmp(bt_soft_volume_applied_path, path) == 0 &&
                                            !atomic_load(&bt_source_soft_volume) &&
                                            !atomic_load(&modern_soft_volume_requested);
-                        if (live_match && still_ready && raw != bt_source_vol_last_synced_raw) {
+                        bool adopted = live_match && still_ready && raw != bt_source_vol_last_synced_raw;
+                        float accessory_percent = (float) raw / (float) BT_SOURCE_VOLUME_MAX;
+                        if (adopted) {
                             bt_source_vol_last_synced_raw = raw;
-                            last_synced_app_percent = (float) raw / (float) BT_SOURCE_VOLUME_MAX;
-                            audio_set_volume(last_synced_app_percent);
-                            int percent = (raw * 100 + BT_SOURCE_VOLUME_MAX / 2) /
-                                          BT_SOURCE_VOLUME_MAX;
-                            atomic_store_explicit(&bt_source_vol_pending_percent, percent,
-                                                  memory_order_release);
+                            /* Preserve the accessory's original fraction so the
+                             * next app push corrects it when it exceeds the cap. */
+                            last_synced_app_percent = accessory_percent;
                         }
                         pthread_mutex_unlock(&bt_soft_volume_mutex);
+                        if (adopted) {
+                            /* Do not nest audio's lock under bt_soft_volume_mutex. */
+                            audio_set_volume(accessory_percent);
+                            int percent = (int) (audio_get_volume() * 100.0f + 0.5f);
+                            pthread_mutex_lock(&bt_soft_volume_mutex);
+                            /* A disconnect can clear the path while audio is
+                             * applied; do not republish its stale UI event. */
+                            if (generation == bt_soft_volume_clears)
+                                atomic_store_explicit(&bt_source_vol_pending_percent, percent,
+                                                      memory_order_release);
+                            pthread_mutex_unlock(&bt_soft_volume_mutex);
+                        }
                         pthread_mutex_unlock(&bt_soft_volume_serial);
                     }
                 }

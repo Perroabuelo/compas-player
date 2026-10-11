@@ -354,6 +354,10 @@ typedef struct {
     /* Dedicated volume applied whenever Car Mode is enabled. */
     int car_mode_volume_percent;
 
+    /* Users chosen hard ceiling on the volume. 100 (the default) means no
+     * limit. */
+    int max_volume_percent;
+
     /* Duration the quick-drawer sleep icon arms next time it's tapped --
      * see gui.c's quick_drawer_sleep_event_cb()/poll_sleep_timer(). Always
      * one of SLEEP_TIMER_STEPS (settings_load() snaps any hand-edited or
