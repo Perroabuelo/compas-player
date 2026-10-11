@@ -2363,6 +2363,12 @@ typedef struct {
     lv_label_long_mode_t long_mode;
 } player_lyrics_geometry_t;
 
+#define PLAYER_LYRICS_GEOMETRY_OBJECT_COUNT 4
+#define PLAYER_TIMELINE_COVER_LIVE_DECORATION_MAX 8
+static player_lyrics_geometry_t player_lyrics_geometry[PLAYER_LYRICS_GEOMETRY_OBJECT_COUNT];
+static unsigned player_lyrics_object_count;
+static bool player_lyrics_generated_timelines;
+
 static bool player_lyrics_open;
 static bool player_lyrics_animating;
 /* Keep preparation damage queued until the timeline starts on a fresh tick. */
@@ -2589,7 +2595,8 @@ static void player_timeline_cover_cache_refresh_cb(lv_event_t * e) {
          * avoids repeatedly drawing the same backdrop and copying fragmented
          * damage between the direct framebuffer pages. */
         lv_display_t * display = lv_event_get_target(e);
-        if (player_lyrics_animating && player_timeline_lyrics_open && player_timeline_lyrics_close &&
+        if (player_lyrics_animating && !player_lyrics_generated_timelines &&
+            player_timeline_lyrics_open && player_timeline_lyrics_close &&
             player_screen && lv_display_get_screen_active(display) == player_screen) {
             lv_area_t * area = lv_event_get_param(e);
             if (area) {
@@ -2617,9 +2624,96 @@ static void player_timeline_cover_cache_refresh_cb(lv_event_t * e) {
     }
 }
 
-/* A card snapshot replaces only static cover pixels. Geometry can animate
- * on the card itself; drawing changes or other children must stay live.
- * Drawing-property animations, including radius, retain live rendering. */
+/* The native circular cover can retain a one-shot artwork snapshot while its
+ * static circular border decorations stay live. Rounded rectangles and
+ * authored timelines keep their existing live-rendering fallback. */
+static bool player_timeline_cover_circle_snapshot(lv_anim_timeline_t * timeline) {
+    if (!timeline || !player_lyrics_generated_timelines || !cover_card ||
+        lv_obj_get_style_radius(cover_card, LV_PART_MAIN) != LV_RADIUS_CIRCLE ||
+        player_lyrics_object_count == 0 || player_lyrics_geometry[0].obj != cover_card) return false;
+    const player_lyrics_geometry_t * geometry = &player_lyrics_geometry[0];
+    if (geometry->w <= 0 || geometry->h != geometry->w || geometry->compact_w <= 0 ||
+        geometry->compact_h != geometry->compact_w) return false;
+
+    bool has_circle_radius = false;
+    uint32_t count = player_layouts_timeline_style_animation_count(timeline);
+    for (uint32_t i = 0; i < count; ++i) {
+        player_layout_style_transition_t animation;
+        if (!player_layouts_timeline_get_style_animation(timeline, i, &animation)) return false;
+        if (animation.target == cover_card && animation.prop == LV_STYLE_RADIUS) {
+            if (animation.selector != LV_PART_MAIN || animation.start_value != LV_RADIUS_CIRCLE ||
+                animation.end_value != LV_RADIUS_CIRCLE) return false;
+            has_circle_radius = true;
+        }
+    }
+    return has_circle_radius;
+}
+
+/* Only plain, static circular border objects wholly inside the circular card
+ * may remain live after the card's rounded clipping is replaced by a snapshot. */
+static bool player_timeline_cover_live_circle_decoration(lv_obj_t * child) {
+    int32_t width_style = child ? lv_obj_get_style_width(child, LV_PART_MAIN) : 0;
+    int32_t height_style = child ? lv_obj_get_style_height(child, LV_PART_MAIN) : 0;
+    if (!child || !LV_COORD_IS_PCT(width_style) || !LV_COORD_IS_PCT(height_style) ||
+        LV_COORD_GET_PCT(width_style) <= 0 || LV_COORD_GET_PCT(width_style) > 100 ||
+        LV_COORD_GET_PCT(height_style) <= 0 || LV_COORD_GET_PCT(height_style) > 100 ||
+        LV_COORD_GET_PCT(width_style) != LV_COORD_GET_PCT(height_style) ||
+        lv_obj_get_style_min_width(child, LV_PART_MAIN) != 0 ||
+        lv_obj_get_style_min_height(child, LV_PART_MAIN) != 0 ||
+        lv_obj_get_style_max_width(child, LV_PART_MAIN) != LV_COORD_MAX ||
+        lv_obj_get_style_max_height(child, LV_PART_MAIN) != LV_COORD_MAX ||
+        lv_obj_get_style_align(child, LV_PART_MAIN) != LV_ALIGN_CENTER ||
+        lv_obj_get_style_x(child, LV_PART_MAIN) != 0 || lv_obj_get_style_y(child, LV_PART_MAIN) != 0 ||
+        lv_obj_get_style_pad_left(child, LV_PART_MAIN) || lv_obj_get_style_pad_right(child, LV_PART_MAIN) ||
+        lv_obj_get_style_pad_top(child, LV_PART_MAIN) || lv_obj_get_style_pad_bottom(child, LV_PART_MAIN)) return false;
+    if (lv_obj_get_class(child) != &lv_obj_class ||
+        lv_obj_get_child_count(child) != 0 || lv_obj_get_ext_draw_size(child) != 0 ||
+        lv_obj_get_event_count(child) != 0 ||
+        lv_obj_get_layer_type(child) != LV_LAYER_TYPE_NONE ||
+        lv_obj_get_style_opa_recursive(child, LV_PART_MAIN) != LV_OPA_COVER ||
+        lv_obj_get_style_bg_opa(child, LV_PART_MAIN) != LV_OPA_TRANSP ||
+        lv_obj_get_style_bg_image_src(child, LV_PART_MAIN) ||
+        lv_obj_get_style_border_width(child, LV_PART_MAIN) <= 0 ||
+        lv_obj_get_style_border_opa(child, LV_PART_MAIN) != LV_OPA_COVER ||
+        lv_obj_get_style_radius(child, LV_PART_MAIN) != LV_RADIUS_CIRCLE ||
+        lv_obj_get_style_shadow_width(child, LV_PART_MAIN) ||
+        lv_obj_get_style_outline_width(child, LV_PART_MAIN) ||
+        lv_obj_get_style_transform_width(child, LV_PART_MAIN) ||
+        lv_obj_get_style_transform_height(child, LV_PART_MAIN) ||
+        lv_obj_get_style_transform_rotation(child, LV_PART_MAIN) ||
+        lv_obj_get_style_transform_scale_x(child, LV_PART_MAIN) != LV_SCALE_NONE ||
+        lv_obj_get_style_transform_scale_y(child, LV_PART_MAIN) != LV_SCALE_NONE ||
+        lv_obj_get_style_transform_skew_x(child, LV_PART_MAIN) ||
+        lv_obj_get_style_transform_skew_y(child, LV_PART_MAIN) ||
+        lv_obj_get_style_translate_x(child, LV_PART_MAIN) ||
+        lv_obj_get_style_translate_y(child, LV_PART_MAIN) ||
+        lv_obj_get_style_color_filter_dsc(child, LV_PART_MAIN) ||
+        lv_obj_get_style_color_filter_opa(child, LV_PART_MAIN) != LV_OPA_TRANSP ||
+        lv_anim_get(child, NULL)) return false;
+
+    int32_t x = lv_obj_get_x(child), y = lv_obj_get_y(child);
+    int32_t width = lv_obj_get_width(child), height = lv_obj_get_height(child);
+    int32_t card_width = lv_obj_get_width(cover_card), card_height = lv_obj_get_height(cover_card);
+    const player_lyrics_geometry_t * geometry = &player_lyrics_geometry[0];
+    int32_t expected_width = card_width * LV_COORD_GET_PCT(width_style) / 100;
+    int32_t expected_height = card_height * LV_COORD_GET_PCT(height_style) / 100;
+    int32_t compact_width = geometry->compact_w * LV_COORD_GET_PCT(width_style) / 100;
+    int32_t compact_height = geometry->compact_h * LV_COORD_GET_PCT(height_style) / 100;
+    int32_t compact_x = geometry->compact_w / 2 - compact_width / 2;
+    int32_t compact_y = geometry->compact_h / 2 - compact_height / 2;
+    int32_t border_width = lv_obj_get_style_border_width(child, LV_PART_MAIN);
+    return width > 0 && height > 0 && width == height &&
+           LV_ABS(width - expected_width) <= 1 && LV_ABS(height - expected_height) <= 1 && x >= 0 && y >= 0 &&
+           x + width <= card_width && y + height <= card_height &&
+           LV_ABS(2 * x + width - card_width) <= 1 && LV_ABS(2 * y + height - card_height) <= 1 &&
+           compact_width > 0 && compact_height > 0 && LV_ABS(compact_width - compact_height) <= 1 &&
+           compact_x >= 0 && compact_y >= 0 && compact_x + compact_width <= geometry->compact_w &&
+           compact_y + compact_height <= geometry->compact_h &&
+           LV_ABS(2 * compact_x + compact_width - geometry->compact_w) <= 1 &&
+           LV_ABS(2 * compact_y + compact_height - geometry->compact_h) <= 1 &&
+           border_width > 0 && border_width <= compact_width;
+}
+
 static bool player_timeline_cover_cache_eligible(lv_anim_timeline_t * timeline) {
     if (!timeline || !cover_card || !cover_img || lv_obj_get_parent(cover_img) != cover_card ||
         lv_obj_get_child_count(cover_img) != 0 ||
@@ -2635,14 +2729,23 @@ static bool player_timeline_cover_cache_eligible(lv_anim_timeline_t * timeline) 
         lv_obj_get_style_transform_scale_y(cover_card, 0) != LV_SCALE_NONE ||
         lv_obj_get_style_transform_skew_x(cover_card, 0) ||
         lv_obj_get_style_transform_skew_y(cover_card, 0)) return false;
+    bool circle_snapshot = player_timeline_cover_circle_snapshot(timeline);
     uint32_t children = lv_obj_get_child_count(cover_card);
+    uint32_t live_decoration_count = 0;
     for (uint32_t i = 0; i < children; ++i) {
         lv_obj_t * child = lv_obj_get_child(cover_card, i);
         if (child != cover_img && child != player_timeline_cover_fade &&
             lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN) &&
             !player_layouts_timeline_has_animation_for_obj(timeline, child)) continue;
-        if ((child != cover_img && child != player_timeline_cover_fade) ||
-            (lv_obj_get_child_count(child) != 0 &&
+        if (child != cover_img && child != player_timeline_cover_fade) {
+            if (circle_snapshot && !player_layouts_timeline_has_animation_for_obj(timeline, child) &&
+                player_timeline_cover_live_circle_decoration(child)) {
+                if (++live_decoration_count > PLAYER_TIMELINE_COVER_LIVE_DECORATION_MAX) return false;
+                continue;
+            }
+            return false;
+        }
+        if ((lv_obj_get_child_count(child) != 0 &&
              (child != player_timeline_cover_fade || !player_cover_fade_cache_eligible(child))) ||
             player_layouts_timeline_has_animation_for_obj(timeline, child)) return false;
         if (child == player_timeline_cover_fade && lv_obj_get_child_count(child) &&
@@ -2657,7 +2760,9 @@ static bool player_timeline_cover_cache_eligible(lv_anim_timeline_t * timeline) 
         if (animation.selector != LV_PART_MAIN ||
             (animation.prop != LV_STYLE_WIDTH && animation.prop != LV_STYLE_HEIGHT &&
              animation.prop != LV_STYLE_TRANSLATE_X && animation.prop != LV_STYLE_TRANSLATE_Y &&
-             animation.prop != LV_STYLE_OPA)) return false;
+             animation.prop != LV_STYLE_OPA &&
+             !(animation.prop == LV_STYLE_RADIUS && circle_snapshot &&
+               animation.start_value == LV_RADIUS_CIRCLE && animation.end_value == LV_RADIUS_CIRCLE))) return false;
         ++card_count;
     }
     return card_count == player_layouts_timeline_animation_count_for_obj(timeline, cover_card);
@@ -2680,6 +2785,23 @@ static void player_timeline_cover_snapshot_take(lv_anim_timeline_t * timeline) {
         !player_timeline_cover_cache_eligible(timeline)) return;
     const void * source = lv_image_get_src(cover_img);
     if (!source) return;
+    int32_t current_w = lv_obj_get_width(cover_card);
+    int32_t current_h = lv_obj_get_height(cover_card);
+    int32_t snapshot_w = player_timeline_cover_w > 0 ? player_timeline_cover_w : current_w;
+    int32_t snapshot_h = player_timeline_cover_h > 0 ? player_timeline_cover_h : current_h;
+    lv_obj_t * live_decorations[PLAYER_TIMELINE_COVER_LIVE_DECORATION_MAX];
+    unsigned live_decoration_count = 0;
+    if (player_timeline_cover_circle_snapshot(timeline)) {
+        for (uint32_t i = 0; i < lv_obj_get_child_count(cover_card); ++i) {
+            lv_obj_t * child = lv_obj_get_child(cover_card, i);
+            if (child == cover_img || child == player_timeline_cover_fade ||
+                lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) continue;
+            if (player_layouts_timeline_has_animation_for_obj(timeline, child) ||
+                !player_timeline_cover_live_circle_decoration(child) ||
+                live_decoration_count >= PLAYER_TIMELINE_COVER_LIVE_DECORATION_MAX) return;
+            live_decorations[live_decoration_count++] = child;
+        }
+    }
     player_timeline_cover_source = source;
     lv_image_src_t source_type = lv_image_src_get_type(source);
     player_timeline_cover_source_owned = source_type == LV_IMAGE_SRC_FILE || source_type == LV_IMAGE_SRC_SYMBOL;
@@ -2690,11 +2812,6 @@ static void player_timeline_cover_snapshot_take(lv_anim_timeline_t * timeline) {
             return;
         }
     }
-
-    int32_t current_w = lv_obj_get_width(cover_card);
-    int32_t current_h = lv_obj_get_height(cover_card);
-    int32_t snapshot_w = player_timeline_cover_w > 0 ? player_timeline_cover_w : current_w;
-    int32_t snapshot_h = player_timeline_cover_h > 0 ? player_timeline_cover_h : current_h;
     bool retain = source == &current_cover_dsc && player_timeline_cover_can_retain() &&
         snapshot_w > 0 && snapshot_h > 0 &&
         (uint64_t) lv_draw_buf_width_to_stride(snapshot_w, LV_COLOR_FORMAT_ARGB8888) * snapshot_h +
@@ -2769,7 +2886,13 @@ static void player_timeline_cover_snapshot_take(lv_anim_timeline_t * timeline) {
                 retain = false;
             }
         }
-        if (!player_timeline_cover_frame) player_timeline_cover_frame = lv_snapshot_take(cover_card, format);
+        if (!player_timeline_cover_frame) {
+            for (unsigned i = 0; i < live_decoration_count; ++i)
+                lv_obj_add_flag(live_decorations[i], LV_OBJ_FLAG_HIDDEN);
+            player_timeline_cover_frame = lv_snapshot_take(cover_card, format);
+            for (unsigned i = 0; i < live_decoration_count; ++i)
+                lv_obj_remove_flag(live_decorations[i], LV_OBJ_FLAG_HIDDEN);
+        }
         lv_obj_set_size(cover_card, current_w, current_h);
         lv_obj_update_layout(cover_card);
         if (retain && player_timeline_cover_frame) {
@@ -2814,15 +2937,11 @@ static void player_timeline_cover_snapshot_take(lv_anim_timeline_t * timeline) {
     lv_image_set_antialias(cover_img, false);
     player_timeline_cover_internal = was_internal;
 }
-#define PLAYER_LYRICS_GEOMETRY_OBJECT_COUNT 4
-static player_lyrics_geometry_t player_lyrics_geometry[PLAYER_LYRICS_GEOMETRY_OBJECT_COUNT];
 /* Cover first, then the metadata labels the layout has; the title is required
  * but artist and album are optional, so this is 2..4. */
-static unsigned player_lyrics_object_count;
 static lv_obj_t * player_lyrics_hidden[32];
 static unsigned player_lyrics_hidden_count;
 static int32_t player_lyrics_content_top;
-static bool player_lyrics_generated_timelines;
 
 #ifdef UI_PERF_TRACE
 #define PLAYER_LYRICS_PERF_FRAME_CAPACITY 64
@@ -3527,9 +3646,9 @@ static bool player_lyrics_generated_prepare(bool opening) {
                                 g->translate_y + g->compact_y - g->y,
                                 g->compact_w, g->compact_h,
                                 i ? g->normal_pad_left : lv_obj_get_style_radius(g->obj, 0) };
-        /* A native card keeps its radius in pixels while it changes size.
-         * Declaring that drawing constraint retains the live rounded clipping
-         * through the same eligibility rules used by authored timelines. */
+        /* Keep fixed-radius native cards live as their geometry changes.
+         * A constant circle radius also permits the bounded artwork snapshot
+         * while static circular borders remain live. */
         for (unsigned j = 0; j < 5U; ++j) {
             player_layout_style_transition_t * t = &transitions[count++];
             t->target = g->obj; t->selector = LV_PART_MAIN; t->prop = props[j];
