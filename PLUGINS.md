@@ -682,6 +682,68 @@ plugin.register_list_item("display", "Theme", function()
 end)
 ```
 
+### Writing a `.theme` file
+
+A theme is a plain text file that you can write without a plugin. Put it in
+`SD/Themes/` (subfolders up to two levels deep are scanned), name it with a
+lowercase `.theme` extension, and pick it under **More → Themes**. Files whose
+names start with a dot are ignored.
+
+Each line is `key=value`. Blank lines, lines starting with `#`, and lines with
+no `=` are skipped. Unknown keys are ignored, so a theme written for a newer
+version still loads on an older one.
+
+Colors are `0xRRGGBB` (decimal also works).
+
+The five required keys are:
+
+| Key | Used for |
+| --- | --- |
+| `name` | The name shown in the Themes list |
+| `screen` | Screen background |
+| `card` | Card background |
+| `list_row` | List row background |
+| `text_primary` | Main text color |
+| `text_muted` | Secondary text color |
+
+A file missing any of them, or with a malformed value, is rejected and not
+shown in the list.
+
+Optional keys:
+
+| Key | Values | Effect |
+| --- | --- | --- |
+| `icon_root` | `theme1`, `theme2`, or a folder under `SD/Themes/` | Folder the icons are taken from. `theme1` and `theme2` are the firmware's built-in icon sets. |
+| `drawer_root` | Same as `icon_root` | Icon folder for the drawer |
+| `icon.<path>` | Source file, relative to `SD/Themes/` | Replaces one icon, for example `icon.launcher/book.png=MyTheme/book.png` |
+| `home_mode` | `tile` or `list` | Home screen style |
+| `home_tile_gap`, `home_row_gap` | Pixels | Spacing on Home |
+| `home_order` | Comma-separated tile ids | Home tile order. In tile mode, at most 6 tiles. |
+| `submenu_mode` | `tile` or `list` | Style of the Music, streaming and wireless launcher menus |
+| `tile.<id>.<property>` | See below | Styles one Home tile. Ids such as `music` and `stream_media`. |
+
+Tile properties: `bg_color`, `text_color`, `radius`, `height`, `width`,
+`align` (`left`, `center`, `right`), `text_size` (`small`, `medium`, `large`,
+`mono`), `accessory` and `icon` (`true` or `false`).
+
+Paths must be relative. They may not contain `..`, a backslash, or a leading
+slash, and the `icon_root` and `drawer_root` paths are checked the same way.
+
+A minimal theme:
+
+```
+name=Night Blue
+screen=0x0B1B2B
+card=0x14304A
+list_row=0x102638
+text_primary=0xF2F6FA
+text_muted=0x9FB3C8
+icon_root=theme2
+```
+
+The bundled themes in `plugins_examples/Themes/` (for example `White.theme`
+and `MountainSunset.theme`) are complete examples to copy from.
+
 ## Playback
 
 ### Playing files
