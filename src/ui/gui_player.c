@@ -5129,11 +5129,19 @@ double deferred_resume_position = 0.0;
 static int * shuffle_order = NULL;
 static int shuffle_order_count = 0; /* playlist_count this bag was generated for -- staleness check */
 static int shuffle_pos = -1;        /* index into shuffle_order such that shuffle_order[shuffle_pos] == playlist_index */
+static bool shuffle_rng_seeded = false;
 
 /* Precomputed reshuffled continuation bag for the shuffle-wrap case.
  * Invalidated on playlist change by ensure_shuffle_order_current(). */
 static int * pending_shuffle_order = NULL;
 static uint64_t queue_revision = 1;
+/* Advances only when a caller explicitly starts a track (push_nav=true).
+ * Audio's playback generation and queue revision also advance during normal
+ * gapless playback, so background folder preparation must not use them as an
+ * intent-change signal. */
+static uint64_t playback_intent_epoch = 1;
+
+uint64_t gui_player_playback_intent_epoch(void) { return playback_intent_epoch; }
 
 
 
@@ -5268,6 +5276,12 @@ static void fisher_yates_shuffle(int * arr, int count) {
     }
 }
 
+static void ensure_shuffle_rng_seeded(void) {
+    if (shuffle_rng_seeded) return;
+    srand((unsigned int) time(NULL));
+    shuffle_rng_seeded = true;
+}
+
 /* (Re)generates shuffle_order if it's stale (playlist size changed, or it
  * was never generated) and points shuffle_pos at wherever the currently
  * playing track landed in the new order -- switching into shuffle mode, or
@@ -5276,11 +5290,7 @@ static void fisher_yates_shuffle(int * arr, int count) {
 static void ensure_shuffle_order_current(void) {
     if (shuffle_order && shuffle_order_count == playlist_count) return;
 
-    static bool rng_seeded = false;
-    if (!rng_seeded) {
-        srand((unsigned int) time(NULL));
-        rng_seeded = true;
-    }
+    ensure_shuffle_rng_seeded();
 
     free(shuffle_order);
     shuffle_order = malloc(sizeof(int) * (size_t) playlist_count);
@@ -5780,19 +5790,47 @@ void queue_add_song(const char * path) {
     if (path && path[0]) gui_player_queue_add_many(&path, 1);
 }
 
-void gui_player_queue_add_many(const char * const * paths, int count) {
+static bool queue_budget_add(size_t * total, size_t bytes) {
+    if (*total > SIZE_MAX - bytes) return false;
+    *total += bytes;
+    return true;
+}
+
+static bool queue_batch_fits_budget(const char * const * paths, int count,
+                                    size_t staging_bytes, size_t memory_limit) {
+    if (!paths || count <= 0 || count > INT_MAX - playlist_count ||
+        count > INT_MAX - queued_pending_count) return false;
+    size_t total = staging_bytes;
+    /* Admit the folder's incremental peak only. A retained lazy All Songs
+     * queue can contain tens of thousands of entries and is already resident;
+     * charging it again here made even a tiny folder impossible to append. */
+    if ((size_t)count > SIZE_MAX / (3 * sizeof(char *) + sizeof(int)) ||
+        !queue_budget_add(&total, (size_t)count * (3 * sizeof(char *) + sizeof(int)))) return false;
+    for (int i = 0; i < count; i++) {
+        if (!paths[i] || !queue_budget_add(&total, strlen(paths[i]) + 1)) return false;
+    }
+    return total <= memory_limit;
+}
+
+bool gui_player_queue_try_add_many_bounded(const char * const * paths, int count,
+                                           size_t staging_bytes, size_t memory_limit) {
+    if (!queue_batch_fits_budget(paths, count, staging_bytes, memory_limit)) return false;
+    return gui_player_queue_try_add_many(paths, count);
+}
+
+bool gui_player_queue_try_add_many(const char * const * paths, int count) {
     if (audio_consume_track_advanced()) gui_player_handle_auto_advance();
-    if (count <= 0) return;
-    if (count > INT_MAX - playlist_count || count > INT_MAX - queued_pending_count) return;
+    if (count <= 0) return false;
+    if (count > INT_MAX - playlist_count || count > INT_MAX - queued_pending_count) return false;
 
     char ** copies = calloc((size_t) count, sizeof(*copies));
-    if (!copies) return;
+    if (!copies) return false;
     for (int i = 0; i < count; i++) {
         copies[i] = paths[i] ? strdup(paths[i]) : NULL;
         if (!copies[i]) {
             for (int j = 0; j < count; j++) free(copies[j]);
             free(copies);
-            return;
+            return false;
         }
     }
 
@@ -5811,7 +5849,7 @@ void gui_player_queue_add_many(const char * const * paths, int count) {
         current_settings.last_source_name[0] = '\0';
         settings_save_async(&current_settings);
         show_info_toast(TR("Queue ready. Press Play to start."));
-        return;
+        return true;
     }
     int pos = (queue_next_insert_index >= 0 && queue_next_insert_index <= playlist_count)
         ? queue_next_insert_index : playlist_index + 1;
@@ -5819,7 +5857,7 @@ void gui_player_queue_add_many(const char * const * paths, int count) {
     if (!grown) {
         for (int i = 0; i < count; i++) free(copies[i]);
         free(copies);
-        return;
+        return false;
     }
     playlist = grown;
     int * grown_order = playlist_lazy_sort_order
@@ -5828,7 +5866,7 @@ void gui_player_queue_add_many(const char * const * paths, int count) {
     if (playlist_lazy_sort_order && !grown_order) {
         for (int i = 0; i < count; i++) free(copies[i]);
         free(copies);
-        return;
+        return false;
     }
     if (grown_order) playlist_lazy_sort_order = grown_order;
 
@@ -5853,6 +5891,11 @@ void gui_player_queue_add_many(const char * const * paths, int count) {
     char msg[128];
     snprintf(msg, sizeof(msg), TR_N("Added %d song to queue", "Added %d songs to queue", count), count);
     show_info_toast(msg);
+    return true;
+}
+
+void gui_player_queue_add_many(const char * const * paths, int count) {
+    (void) gui_player_queue_try_add_many(paths, count);
 }
 
 void queue_remove_song_at_offset(int offset) {
@@ -5991,6 +6034,7 @@ static void play_track_at_from_internal(int index, double start_seconds, bool pu
         resolve_replaygain(&seed, &has_gain, &gain_db, &has_peak, &peak);
         audio_play_file_at(path, start_seconds, has_gain, gain_db, has_peak, peak);
     }
+    if (push_nav) playback_intent_epoch++;
     current_playback_generation = audio_get_playback_generation();
     request_track_metadata(index, true, false, true);
     arm_next_track_for_audio(index);
@@ -6198,6 +6242,22 @@ bool gui_player_play_folder_track(const char * track_path) {
     if (!file_browser_open_lazy_directory(track_path, &index, &playable, &selected)) return false;
     /* The index owns its directory string for as long as the queue holds it. */
     return play_file_browser_index(index, playable, selected, file_browser_index_directory(index), -1);
+}
+
+bool gui_player_play_folder_index(file_browser_index_t *index, unsigned playable_count,
+                                  int play_mode) {
+    if (play_mode != PLAY_MODE_SEQUENTIAL && play_mode != PLAY_MODE_SHUFFLE) {
+        if (index) file_browser_index_close(index);
+        return false;
+    }
+    unsigned initial = 0;
+    if (play_mode == PLAY_MODE_SHUFFLE && playable_count > 1) {
+        ensure_shuffle_rng_seeded();
+        initial = (unsigned)(rand() % playable_count);
+    }
+    gui_player_set_play_mode(play_mode);
+    return play_file_browser_index(index, playable_count, initial,
+                                   index ? file_browser_index_directory(index) : "", -1);
 }
 
 void toggle_play_pause(void) {

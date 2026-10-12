@@ -338,6 +338,50 @@ bool playlist_files_append(const char * path, const char * song_path) {
     return ok;
 }
 
+bool playlist_files_append_stream(const char * path, int count,
+                                  playlist_files_path_provider provider, void * context) {
+    if (!path || count < 0 || !provider) return false;
+    pthread_mutex_lock(&playlist_files_mutex);
+    char dir[PATH_MAX], temp[PATH_MAX];
+    dir_of(path, dir, sizeof(dir));
+    bool ok = snprintf(temp, sizeof(temp), "%s/.playlist-XXXXXX", dir) < (int) sizeof(temp);
+    FILE * input = ok ? fopen(path, "rb") : NULL;
+    /* This API appends to a picker-selected existing playlist. If it was
+     * removed while the worker was scanning, fail without recreating it. */
+    if (!input) ok = false;
+    int fd = ok ? mkstemp(temp) : -1;
+    FILE * output = fd >= 0 ? fdopen(fd, "wb") : NULL;
+    if (!output) { if (fd >= 0) close(fd); ok = false; }
+    if (input) {
+        char buffer[4096]; size_t n;
+        int last = '\n';
+        while (ok && (n = fread(buffer, 1, sizeof(buffer), input)) > 0) {
+            ok = fwrite(buffer, 1, n, output) == n;
+            last = (unsigned char)buffer[n - 1];
+        }
+        if (ferror(input)) ok = false;
+        fclose(input);
+        if (ok && last != '\n') ok = fputc('\n', output) != EOF;
+    }
+    for (int i = 0; ok && i < count; i++) {
+        const char * song_path = NULL;
+        if (!provider(context, i, &song_path) || !song_path || !song_path[0] ||
+            strchr(song_path, '\n') || strchr(song_path, '\r')) { ok = false; break; }
+        char rel[PATH_MAX];
+        const char * line = make_relative_path(dir, song_path, rel, sizeof(rel)) ? rel : song_path;
+        ok = fprintf(output, "%s\n", line) >= 0;
+    }
+    if (output) {
+        if (ok) ok = fflush(output) == 0 && fsync(fileno(output)) == 0;
+        if (fclose(output) != 0) ok = false;
+    }
+    if (ok) ok = rename(temp, path) == 0;
+    if (!ok && fd >= 0) unlink(temp);
+    if (ok) fsync_dir(dir);
+    pthread_mutex_unlock(&playlist_files_mutex);
+    return ok;
+}
+
 /* Trims a trailing \n and/or \r in place -- fgets() below always leaves one
  * on any line short enough to fit in the buffer, and playlist_files_append()/
  * playlist_files_create() only ever write bare \n themselves, but a file
