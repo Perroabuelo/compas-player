@@ -234,3 +234,7 @@ for rel in "${shared_paths[@]}" usr/bin/wifi_on.sh; do
     sh -n "$root/$rel"
 done
 sh -n "$wrapper"
+
+# Install startup tracing only after the boot-pipeline payload has passed its
+# sanity checks. The installer validates every target before replacing any.
+python3 "$repo/scripts/install_startup_trace.py" "$root"

@@ -673,12 +673,16 @@ if [[ -n $vendor_drivers ]]; then
     python3 - "$work/root" "$work/xImage" "$vendor_driver_manifest" \
         "$vendor_provenance" "$board" "$vendor_version" "$vendor_release_date" \
         "$vendor_sha256" "$vendor_kernel_sha256" "$vendor_source_url" "$vendor_archive_url" \
-        "$preserved_charge_voltage" "$preserved_charge_current" "$repo/firmware/vendor_drivers.json" <<'PY'
+        "$preserved_charge_voltage" "$preserved_charge_current" "$repo/firmware/vendor_drivers.json" \
+        "$vendor_root" "$repo/scripts/install_startup_trace.py" <<'PY'
 import hashlib, json, os, pathlib, sys, tempfile
+import runpy
 
 (root, kernel, manifest_path, provenance_path, board, version, release_date,
- upt_sha, kernel_sha, source_url, archive_url, charge_voltage, charge_current, pin_path) = sys.argv[1:]
+ upt_sha, kernel_sha, source_url, archive_url, charge_voltage, charge_current, pin_path,
+ vendor_root, trace_installer) = sys.argv[1:]
 root, kernel = pathlib.Path(root), pathlib.Path(kernel)
+vendor_root, trace_installer = pathlib.Path(vendor_root), pathlib.Path(trace_installer)
 manifest = json.loads(pathlib.Path(manifest_path).read_text())
 
 def digest(path):
@@ -704,7 +708,23 @@ for rel in ("module_driver", "lib/firmware"):
             elif path.is_file():
                 sha, size = digest(path)
                 actual[key] = {"sha256": sha, "size": size}
-if actual != manifest["installed_files"]:
+expected = manifest["installed_files"].copy()
+loader_rel = "/module_driver/driver_default_init_script.sh"
+source_loader = vendor_root / loader_rel.lstrip("/")
+installed_loader = root / loader_rel.lstrip("/")
+source_sha, source_size = digest(source_loader)
+installed_sha, installed_size = digest(installed_loader)
+pinned_loader = expected.get(loader_rel)
+if pinned_loader != {"sha256": source_sha, "size": source_size}:
+    raise SystemExit("Pinned vendor module loader differs from its installed-files manifest")
+trace_module = runpy.run_path(str(trace_installer))["instrument_modules"]
+instrumented_loader = trace_module(source_loader.read_text()).encode()
+derived_sha = hashlib.sha256(instrumented_loader).hexdigest()
+derived_size = len(instrumented_loader)
+if (installed_sha, installed_size) != (derived_sha, derived_size):
+    raise SystemExit("Final module loader differs from validated startup-trace transformation")
+expected[loader_rel] = {"sha256": derived_sha, "size": derived_size}
+if actual != expected:
     raise SystemExit("Driver or firmware files changed after vendor refresh (overlay integrity check failed)")
 actual_kernel, _ = digest(kernel)
 if actual_kernel != kernel_sha:
@@ -723,6 +743,12 @@ provenance = {
     "installed_files": actual,
     "driver_init_policy": "vendor initialization sequence replaces base sequence and diagnostic wrappers",
     "previous_driver_init_sha256": manifest["previous_driver_init_sha256"],
+    "startup_trace": {
+        "module_loader_source_sha256": source_sha,
+        "module_loader_source_size": source_size,
+        "module_loader_installed_sha256": derived_sha,
+        "module_loader_installed_size": derived_size,
+    },
 }
 pin = json.loads(pathlib.Path(pin_path).read_text())["boards"][board]
 if pin["sha256"] != upt_sha or pin["version"] != version:
