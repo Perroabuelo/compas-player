@@ -11,7 +11,7 @@ plugin.define({
     id = "org.example.hello",
     name = "Hello Player",
     version = "1.0.0",
-    api_min = 1,
+    api_min = 16,
 })
 
 plugin.register_list_item("settings", "Hello Player", function()
@@ -23,7 +23,7 @@ end)
 
 Save it as `.plugins/Hello.lua`. Insert the card, then open **Settings > System > Plugin Manager > Refresh Plugins**. The **Hello Player** row appears under **Settings > System > Additional Tools**. Tap it to see the message. Browse **Plugin Store** from Plugin Manager for published plugins.
 
-Use the top level of your script to register rows and callbacks. Files in nested folders are not loaded as plugins. Give each plugin a unique, stable ID. `api_min` is the oldest plugin API your script supports; use `1` for basic UI calls and raise it when you rely on newer functions. See [PLUGINS.md](../PLUGINS.md) for the complete API, sandbox rules, and examples.
+Use the top level of your script to register rows and callbacks. Files in nested folders are not loaded as plugins. Give each plugin a unique, stable ID. API 16 is the standard for new Compás plugins. Set `api_min = 16` and check capabilities before using optional features. See [PLUGINS.md](../PLUGINS.md) for the complete API, sandbox rules, and examples.
 
 ## Themes
 

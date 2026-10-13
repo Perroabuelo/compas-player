@@ -942,6 +942,8 @@ static void entry_click_cb(lv_event_t * e) {
         fb->page_start = 0;
         scan_current_dir(fb);
         rebuild_list(fb);
+    } else if (fb->callbacks.on_pick_file) {
+        fb->callbacks.on_pick_file(path);
     } else if (clicked.is_playlist) {
         char ** playlist;
         int count;
@@ -1178,7 +1180,8 @@ file_browser_t * file_browser_create(lv_obj_t * parent, const char * root,
     if (!fb) return NULL;
     fb->screen = parent;
     fb->callbacks = *options;
-    fb->list_flags = (options->on_cue_select ? LIST_CUE : 0u) | (options->on_open_other ? LIST_ALL_FILES : 0u);
+    fb->list_flags = ((options->on_cue_select || options->on_pick_file) ? LIST_CUE : 0u) |
+                     ((options->on_open_other || options->on_pick_file) ? LIST_ALL_FILES : 0u);
     snprintf(fb->root_dir, sizeof(fb->root_dir), "%s", root);
     snprintf(fb->current_dir, sizeof(fb->current_dir), "%s", root);
     fb->next = browsers;

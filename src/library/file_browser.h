@@ -35,6 +35,9 @@ typedef void (*file_browser_index_select_cb_t)(file_browser_index_t *index,
 /* Called when the user taps a file that is not media (only listed with
  * on_open_other). path is valid only during the call. */
 typedef void (*file_browser_open_cb_t)(const char * path);
+/* Called for every tapped file before playable/playlist/cue dispatch. The
+ * path is valid only for the duration of the call. */
+typedef void (*file_browser_pick_file_cb_t)(const char * path);
 /* Called when selection mode starts or ends or the selection changes. */
 typedef void (*file_browser_selection_cb_t)(file_browser_t * browser);
 
@@ -43,6 +46,7 @@ typedef struct {
     file_browser_cue_select_cb_t on_cue_select;     /* NULL hides .cue sheets */
     file_browser_index_select_cb_t on_index_select; /* NULL: playable taps go to on_select */
     file_browser_open_cb_t on_open_other;           /* non-NULL lists every file */
+    file_browser_pick_file_cb_t on_pick_file;       /* non-NULL selects any file as a raw path */
     file_browser_selection_cb_t on_selection;       /* non-NULL: long press selects */
 } file_browser_options_t;
 

@@ -1519,11 +1519,27 @@ typedef struct {
 
 static plugin_file_op_t plugin_file_op = { .callback_ref = LUA_NOREF };
 
+typedef struct { bool active; lua_State * L; int callback_ref; } plugin_file_picker_t;
+static plugin_file_picker_t plugin_file_picker = { .callback_ref = LUA_NOREF };
+
 /* A canonical path on the SD card (aliases such as "sd_0/." or "sd_0//"
  * would reach the whole card): the card root itself only when allow_root
  * (a destination folder). */
 static bool plugin_sd_path_ok(const char * path, bool allow_root) {
     return file_op_path_in_root(path, MUSIC_ROOT_DIR) && (allow_root || strcmp(path, MUSIC_ROOT_DIR) != 0);
+}
+
+static bool plugin_song_path_valid(const char * path);
+
+static bool plugin_picker_folder_valid(const char * folder) {
+    if (!plugin_sd_path_ok(folder, true)) return false;
+    char root_real[PATH_MAX], folder_real[PATH_MAX];
+    if (!realpath(MUSIC_ROOT_DIR, root_real) || !realpath(folder, folder_real)) return false;
+    size_t root_len = strlen(root_real);
+    if (strncmp(folder_real, root_real, root_len) != 0 ||
+        (folder_real[root_len] != '\0' && folder_real[root_len] != '/')) return false;
+    struct stat st;
+    return stat(folder_real, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 /* plugin.file_copy(paths, dest_dir [, callback]) and friends. paths is one
@@ -1626,6 +1642,55 @@ static int l_plugin_open_file_manager(lua_State * L) {
     if (!gui_plugin_open_file_manager(folder)) return push_plugin_error(L, "could not open that folder");
     lua_pushboolean(L, true);
     return 1;
+}
+
+/* plugin.pick_file([folder], callback) -> true | nil, error. */
+static int l_plugin_pick_file(lua_State * L) {
+    const char * folder = luaL_optstring(L, 1, NULL);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (folder && !plugin_picker_folder_valid(folder))
+        return luaL_error(L, "plugin.pick_file: folder must be on the SD card");
+    if (plugin_file_picker.active) return push_plugin_error(L, "another file picker is already open");
+    if (!gui_plugin_pick_file(folder)) return push_plugin_error(L, "could not open that folder");
+    plugin_file_picker.active = true;
+    plugin_file_picker.L = plugin_main_state(L);
+    lua_pushvalue(L, 2);
+    plugin_file_picker.callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+static void plugin_file_picker_release(bool cancel_ui) {
+    plugin_file_picker_t * job = &plugin_file_picker;
+    lua_State * L = job->L;
+    int ref = job->callback_ref;
+    job->active = false;
+    job->L = NULL;
+    job->callback_ref = LUA_NOREF;
+    plugin_instance_t * inst = plugin_instance_for_state(L);
+    if (L && ref != LUA_NOREF && !(inst && inst->aborted)) luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    if (cancel_ui) gui_plugin_cancel_file_picker();
+}
+
+void plugin_manager_file_picker_complete(const char * path) {
+    plugin_file_picker_t * job = &plugin_file_picker;
+    if (!job->active) return;
+    lua_State * L = job->L;
+    int ref = job->callback_ref;
+    plugin_instance_t * inst = plugin_instance_for_state(L);
+    if (!L || ref == LUA_NOREF || (inst && inst->aborted)) {
+        plugin_file_picker_release(false);
+        return;
+    }
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+    plugin_file_picker_release(false);
+    if (path && plugin_song_path_valid(path)) lua_pushstring(L, path);
+    else lua_pushnil(L);
+    if (plugin_call(L, 1, 0, 0) != LUA_OK) {
+        const char * err = lua_tostring(L, -1);
+        fprintf(stderr, "[plugins] file picker callback error: %s\n", err ? err : "unknown error");
+        lua_pop(L, 1);
+    }
 }
 
 /* Forgets the callback without stopping the operation, which the user may
@@ -4809,7 +4874,7 @@ static const char * const plugin_capabilities[] = {
     "playback.format", "playback.output_info", "playback.silent_volume", "audio.peq.transient",
     "playback.output_events", "playback.settings", "playback.ab_loop", "playback.ab_switch", "playback.http_seek",
     "audio.peq.state", "library.track_metadata", "playback.transient_volume",
-    "filesystem.file_ops", "ui.file_manager", "ui.player_menu"
+    "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.file_picker"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -5649,6 +5714,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "file_operation_status",     l_plugin_file_operation_status },
     { "cancel_file_operation",     l_plugin_cancel_file_operation },
     { "open_file_manager",         l_plugin_open_file_manager },
+    { "pick_file",                 l_plugin_pick_file },
     { "play_file",                 l_plugin_play_file },
     { "play_list",                 l_plugin_play_list },
     { "play_remote",               l_plugin_play_remote },
@@ -6199,6 +6265,7 @@ static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
     if (plugin_zip_image.active && failed_load_owner_matches(plugin_zip_image.L, L, aborted))
         plugin_zip_image_cancel();
     if (failed_load_owner_matches(plugin_file_op.L, L, aborted)) plugin_file_op_release();
+    if (failed_load_owner_matches(plugin_file_picker.L, L, aborted)) plugin_file_picker_release(true);
 }
 
 /* Discards failed plugin instance and rolls back staged hardware volume curve. */
@@ -6629,6 +6696,7 @@ void plugin_manager_deinit(void) {
     plugin_manager_cancel_all_async_http();
     plugin_zip_image_cancel();
     plugin_file_op_release();
+    plugin_file_picker_release(true);
     deinit_diag("plugin_manager_deinit: cancel_all_async_http after");
 
     for (int i = 0; i < PLUGIN_MAX_INTERVALS; i++) {

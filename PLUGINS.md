@@ -177,7 +177,7 @@ plugin.define({
 
   | Area | Tokens |
   | --- | --- |
-  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager` |
+  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker` |
   | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
@@ -205,7 +205,7 @@ plugin.define({
 | 13 | LED control, `get_volume`, `get_battery`, and the `volume_changed`, `battery_changed`, `suspending` and `system_resumed` events |
 | 14 | `zip_read`, `zip_list`, `zip_image_async`, `html_to_blocks`, `show_text_view` with pictures, grid lists, `is_list_showing`, and one long (4095-byte) HTTP header per request |
 | 15 | Full XML Player-layout support (`ui.player_layout_xml`), including plugin-bundle discovery, current named-widget features, companion PNG previews, and resolution-specific XML variants using `@WIDTHxHEIGHT` or `_WIDTHxHEIGHT` filenames |
-| 16 | Playback speed/stereo width/progress plus format/output snapshots, silent volume, transient EQ, output events, playback settings, native A–B loops/comparison, and finite HTTP seeking. Modeless progress bars and download byte snapshots are also available, as is the File Manager (`open_file_manager`, `file_copy`, `file_move`, `file_delete`). API 16 remains the unreleased v1.1 API. |
+| 16 | Playback speed/stereo width/progress plus format/output snapshots, silent volume, transient EQ, output events, playback settings, native A–B loops/comparison, and finite HTTP seeking. Modeless progress bars and download byte snapshots are also available, as are File Manager operations and the native file picker. API 16 is the standard for new plugins. |
 
 All of these are additions; older plugins keep working.
 
@@ -959,6 +959,15 @@ operations, and `"ui.file_manager"` before `open_file_manager`.
   when given (an existing folder on the SD card; a path elsewhere raises a
   Lua error). Returns `true`, or `nil, error` when the folder does not exist
   or the File Manager is already open under another screen.
+- `plugin.pick_file(folder, callback)`: opens the native SD card browser at
+  `folder` (pass `nil` for the SD root) and calls `callback(path)` with the selected file,
+  or `callback(nil)` if the user backs out or returns Home. The callback runs
+  after the picker leaves the navigation stack. Directories can be browsed;
+  audio files, playlists, cue sheets, and other files are returned as one raw
+  path without playback. Only one picker may be pending; another request
+  returns `nil, error`; a successful open returns `true`. An invalid starting
+  folder raises a Lua error. Plugin unload or UI reload silently cancels a
+  pending callback. Check `plugin.has_capability("ui.file_picker")`.
 - `plugin.file_copy(paths, dest_dir [, callback])`,
   `plugin.file_move(paths, dest_dir [, callback])`,
   `plugin.file_delete(paths [, callback])`: copy, move or delete files and

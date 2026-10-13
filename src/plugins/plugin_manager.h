@@ -487,5 +487,7 @@ void plugin_manager_interval_fired(int slot);
  * inherits from the native singleton screen). */
 void plugin_manager_text_input_submitted(const char * text);
 void plugin_manager_text_input_cancelled(void);
+/* GUI bridge for the one pending plugin.pick_file() request. */
+void plugin_manager_file_picker_complete(const char * path);
 
 #endif /* PLUGIN_MANAGER_H */

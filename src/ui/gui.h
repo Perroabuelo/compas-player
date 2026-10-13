@@ -297,6 +297,9 @@ bool gui_plugin_refresh_library(void);
 
 /* plugin.open_file_manager([folder]): the native More > File Manager. */
 bool gui_plugin_open_file_manager(const char * folder);
+/* plugin.pick_file([folder], callback): native indexed SD card browser. */
+bool gui_plugin_pick_file(const char * folder);
+void gui_plugin_cancel_file_picker(void);
 /* After a plugin's file operation, so every file browser shows the change. */
 void gui_plugin_refresh_file_browsers(void);
 
