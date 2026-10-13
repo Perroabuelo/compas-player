@@ -1267,9 +1267,12 @@ static bool player_read_flac_format(const char * path, audio_current_format_info
                         ((unsigned int) header[19] << 4) | (header[20] >> 4);
     unsigned int depth = (((header[20] & 1u) << 4) | (header[21] >> 4)) + 1;
     if (!rate || depth < 4) return false;
+    /* A truncated path would attach this format snapshot to the wrong file. */
+    size_t path_len = strlen(path);
+    if (path_len >= sizeof(out->path)) return false;
     memset(out, 0, sizeof(*out));
     out->valid = true;
-    snprintf(out->path, sizeof(out->path), "%s", path);
+    memcpy(out->path, path, path_len + 1);
     out->source_sample_rate = rate;
     out->source_bit_depth = depth;
     return true;
@@ -4301,10 +4304,8 @@ lv_obj_t * player_layout_create_builtin(lv_obj_t * scr) {
     lv_obj_add_style(fav_icon, &icon_press_style, LV_STATE_PRESSED);
     lv_obj_center(fav_icon);
 
-    /* The supplied reference is the R1 480x800 composition. Keep the
-     * existing compact typography on shorter panels so the three metadata
-     * lines do not collide with the cover there. */
-    const bool reference_player = BOARD_SCREEN_HEIGHT >= 800;
+    /* The supplied reference is the R1 480x800 composition. These compact
+     * fonts keep the three metadata lines clear of the cover on shorter panels. */
     const lv_font_t * player_title_font = &app_font_player_title;
     const lv_font_t * player_meta_font = &app_font_player_meta;
 
@@ -8123,11 +8124,23 @@ bool gui_player_queue_save_as(const char * name) {
     }
     if (playlist_lazy_snapshot) {
         w->provider.snapshot = metadata_db_snapshot_retain(playlist_lazy_snapshot);
-        if (!w->provider.snapshot) { for (int i = 0; i < count; i++) free(w->provider.explicit_paths[i]); free(w->provider.explicit_paths); free(w->provider.ranks); free(order); free(w); return false; }
+        if (!w->provider.snapshot) {
+            for (int i = 0; i < count; i++) free(w->provider.explicit_paths[i]);
+            free(w->provider.explicit_paths);
+            free(w->provider.ranks);
+            free(order);
+            free(w);
+            return false;
+        }
     }
     if (playlist_lazy_file_index && !file_browser_index_retain(playlist_lazy_file_index, &w->provider.file_index)) {
         if (w->provider.snapshot) metadata_db_snapshot_close(w->provider.snapshot);
-        for (int i = 0; i < count; i++) free(w->provider.explicit_paths[i]); free(w->provider.explicit_paths); free(w->provider.ranks); free(order); free(w); return false;
+        for (int i = 0; i < count; i++) free(w->provider.explicit_paths[i]);
+        free(w->provider.explicit_paths);
+        free(w->provider.ranks);
+        free(order);
+        free(w);
+        return false;
     }
     bool has_sd = false;
     for (int i = 0; i < count; i++) if (playlist[i] && is_sd_card_path(playlist[i])) has_sd = true;

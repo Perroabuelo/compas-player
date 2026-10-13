@@ -579,6 +579,42 @@ $(OPUSFILE_PATCH_STAMP): patches/opusfile_allocation_safety.patch $(OPUSFILE_DIR
 	fi
 	@touch $@
 
+# Warning fixes for the gitignored codec/container checkouts. The same
+# reverse-then-forward dry-run as the allocation patch above, fuzz 0, so a
+# second build does not apply twice and a drifted tree fails loudly.
+# libopusfile's warning patch is ordered after the allocation patch.
+VENDOR_PATCH_APPLY = scripts/apply-tracked-patch.sh
+ALAC_WARNING_PATCH = patches/alac_fourcc.patch
+ALAC_WARNING_STAMP = $(ALAC_DIR)/.compas_warning_fixes
+$(ALAC_WARNING_STAMP): $(ALAC_WARNING_PATCH) $(ALAC_DIR)/codec/ALACAudioTypes.h
+	$(VENDOR_PATCH_APPLY) $(ALAC_DIR) $(ALAC_WARNING_PATCH)
+	@touch $@
+FAAD2_WARNING_PATCH = patches/faad2_ps_dec_init.patch
+FAAD2_WARNING_STAMP = $(FAAD2_DIR)/.compas_warning_fixes
+$(FAAD2_WARNING_STAMP): $(FAAD2_WARNING_PATCH) $(FAAD2_DIR)/libfaad/ps_dec.c
+	$(VENDOR_PATCH_APPLY) $(FAAD2_DIR) $(FAAD2_WARNING_PATCH)
+	@touch $@
+OPUS_WARNING_PATCH = patches/opus_warning_fixes.patch
+OPUS_WARNING_STAMP = $(OPUS_DIR)/.compas_warning_fixes
+$(OPUS_WARNING_STAMP): $(OPUS_WARNING_PATCH) $(OPUS_DIR)/src/repacketizer.c $(OPUS_DIR)/silk/enc_API.c $(OPUS_DIR)/silk/HP_variable_cutoff.c $(OPUS_DIR)/silk/fixed/main_FIX.h $(OPUS_DIR)/silk/float/main_FLP.h
+	$(VENDOR_PATCH_APPLY) $(OPUS_DIR) $(OPUS_WARNING_PATCH)
+	@touch $@
+OPUSFILE_WARN_PATCH = patches/opusfile_maybe_uninitialized.patch
+OPUSFILE_WARN_STAMP = $(OPUSFILE_DIR)/.compas_warning_fixes
+$(OPUSFILE_WARN_STAMP): $(OPUSFILE_WARN_PATCH) $(OPUSFILE_PATCH_STAMP) $(OPUSFILE_DIR)/src/opusfile.c
+	$(VENDOR_PATCH_APPLY) $(OPUSFILE_DIR) $(OPUSFILE_WARN_PATCH)
+	@touch $@
+WAVPACK_CMAKE_PATCH = patches/libwavpack_cmake_310.patch
+WAVPACK_CMAKE_STAMP = $(WAVPACK_DIR)/.compas_warning_fixes
+$(WAVPACK_CMAKE_STAMP): $(WAVPACK_CMAKE_PATCH) $(WAVPACK_DIR)/CMakeLists.txt
+	$(VENDOR_PATCH_APPLY) $(WAVPACK_DIR) $(WAVPACK_CMAKE_PATCH)
+	@touch $@
+SNDFILE_CMAKE_PATCH = patches/libsndfile_cmake_310.patch
+SNDFILE_CMAKE_STAMP = $(SNDFILE_DIR)/.compas_warning_fixes
+$(SNDFILE_CMAKE_STAMP): $(SNDFILE_CMAKE_PATCH) $(SNDFILE_DIR)/CMakeLists.txt
+	$(VENDOR_PATCH_APPLY) $(SNDFILE_DIR) $(SNDFILE_CMAKE_PATCH)
+	@touch $@
+
 # Rebuild both libraries when allocation/configuration flags change.
 .PHONY: FORCE_OPUSFILE_CONFIG
 FORCE_OPUSFILE_CONFIG:
@@ -801,16 +837,16 @@ $(BUILD_TARGET_DIR)/.audio_vendor_config: FORCE_AUDIO_VENDOR_CONFIG
 	@printf '%s\n' '$(CROSS_CC) $(TARGET_CPU_FLAGS) $(WAVPACK_OPTIONS) $(SNDFILE_OPTIONS)' > $@.tmp
 	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 
-$(BUILD_HOST_DIR)/libwavpack/libwavpack.a: $(BUILD_HOST_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt
+$(BUILD_HOST_DIR)/libwavpack/libwavpack.a: $(BUILD_HOST_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt $(WAVPACK_CMAKE_STAMP)
 	cmake -S $(WAVPACK_DIR) -B $(dir $@) $(WAVPACK_OPTIONS) -DCMAKE_C_COMPILER=$(CC)
 	+cmake --build $(dir $@) --target wavpack
-$(BUILD_HOST_DIR)/libsndfile/libsndfile.a: $(BUILD_HOST_DIR)/.audio_vendor_config $(SNDFILE_DIR)/CMakeLists.txt
+$(BUILD_HOST_DIR)/libsndfile/libsndfile.a: $(BUILD_HOST_DIR)/.audio_vendor_config $(SNDFILE_DIR)/CMakeLists.txt $(SNDFILE_CMAKE_STAMP)
 	cmake -S $(SNDFILE_DIR) -B $(dir $@) $(SNDFILE_OPTIONS) -DCMAKE_C_COMPILER=$(CC)
 	+cmake --build $(dir $@) --target sndfile
-$(BUILD_TARGET_DIR)/libwavpack/libwavpack.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt
+$(BUILD_TARGET_DIR)/libwavpack/libwavpack.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt $(WAVPACK_CMAKE_STAMP)
 	cmake -S $(WAVPACK_DIR) -B $(dir $@) $(WAVPACK_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS)'
 	+cmake --build $(dir $@) --target wavpack
-$(BUILD_TARGET_DIR)/libsndfile/libsndfile.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(SNDFILE_DIR)/CMakeLists.txt
+$(BUILD_TARGET_DIR)/libsndfile/libsndfile.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(SNDFILE_DIR)/CMakeLists.txt $(SNDFILE_CMAKE_STAMP)
 	cmake -S $(SNDFILE_DIR) -B $(dir $@) $(SNDFILE_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS)'
 	+cmake --build $(dir $@) --target sndfile
 
@@ -923,7 +959,7 @@ $(BUILD_HOST_DIR)/%.o: src/%.c $(LVGL_PATCH_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(HOST_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/%.o: src/%.cpp $(LVGL_PATCH_STAMP)
+$(BUILD_HOST_DIR)/%.o: src/%.cpp $(LVGL_PATCH_STAMP) $(ALAC_WARNING_STAMP)
 	@mkdir -p $(dir $@)
 	$(CXX) $(HOST_CXXFLAGS) -c $< -o $@
 
@@ -935,15 +971,15 @@ $(BUILD_HOST_DIR)/lv_xml/%.o: $(LV_XML_DIR)/%.c $(LVGL_PATCH_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(HOST_CFLAGS) $(LV_XML_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/faad2/%.o: $(FAAD2_DIR)/libfaad/%.c
+$(BUILD_HOST_DIR)/faad2/%.o: $(FAAD2_DIR)/libfaad/%.c $(FAAD2_WARNING_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(FAAD2_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.c
+$(BUILD_HOST_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.c $(ALAC_WARNING_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALAC_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.cpp
+$(BUILD_HOST_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.cpp $(ALAC_WARNING_STAMP)
 	@mkdir -p $(dir $@)
 	$(CXX) $(ALAC_CXXFLAGS) -c $< -o $@
 
@@ -959,7 +995,7 @@ $(BUILD_HOST_DIR)/stb_vorbis/%.o: $(STB_VORBIS_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(HOST_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/opus/%.o: $(OPUS_DIR)/%.c
+$(BUILD_HOST_DIR)/opus/%.o: $(OPUS_DIR)/%.c $(OPUS_WARNING_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(OPUS_CFLAGS) -c $< -o $@
 
@@ -967,7 +1003,7 @@ $(BUILD_HOST_DIR)/libogg/%.o: $(OGG_DIR)/src/%.c libogg_vendor_config/ogg/config
 	@mkdir -p $(dir $@)
 	$(CC) $(OGG_CFLAGS) -c $< -o $@
 
-$(BUILD_HOST_DIR)/opusfile/%.o: $(OPUSFILE_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(BUILD_HOST_DIR)/.opusfile_config $(OPUSFILE_PATCH_STAMP)
+$(BUILD_HOST_DIR)/opusfile/%.o: $(OPUSFILE_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(BUILD_HOST_DIR)/.opusfile_config $(OPUSFILE_PATCH_STAMP) $(OPUSFILE_WARN_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(OPUSFILE_CFLAGS) -c $< -o $@
 
@@ -1038,7 +1074,7 @@ $(BUILD_TARGET_DIR)/core/app_version.o: src/core/app_version.c $(LVGL_PATCH_STAM
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(TARGET_CFLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/%.o: src/%.cpp $(LVGL_PATCH_STAMP) $(TARGET_CPU_FLAGS_STAMP)
+$(BUILD_TARGET_DIR)/%.o: src/%.cpp $(LVGL_PATCH_STAMP) $(ALAC_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CXX) $(TARGET_CXXFLAGS) -c $< -o $@
 
@@ -1054,15 +1090,15 @@ $(BUILD_TARGET_DIR)/tinyalsa/%.o: $(TINYALSA_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(TINYALSA_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/faad2/%.o: $(FAAD2_DIR)/libfaad/%.c $(TARGET_CPU_FLAGS_STAMP)
+$(BUILD_TARGET_DIR)/faad2/%.o: $(FAAD2_DIR)/libfaad/%.c $(FAAD2_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(FAAD2_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.c $(TARGET_CPU_FLAGS_STAMP)
+$(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.c $(ALAC_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(ALAC_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.cpp $(TARGET_CPU_FLAGS_STAMP)
+$(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.cpp $(ALAC_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CXX) $(ALAC_CXXFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
@@ -1082,7 +1118,7 @@ $(BUILD_TARGET_DIR)/dbus/%.o: $(DBUS_DIR)/dbus/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(DBUS_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/opus/%.o: $(OPUS_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opus_config
+$(BUILD_TARGET_DIR)/opus/%.o: $(OPUS_DIR)/%.c $(OPUS_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opus_config
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(TARGET_OPUS_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
@@ -1090,7 +1126,7 @@ $(BUILD_TARGET_DIR)/libogg/%.o: $(OGG_DIR)/src/%.c libogg_vendor_config/ogg/conf
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(OGG_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 
-$(BUILD_TARGET_DIR)/opusfile/%.o: $(OPUSFILE_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opusfile_config $(OPUSFILE_PATCH_STAMP)
+$(BUILD_TARGET_DIR)/opusfile/%.o: $(OPUSFILE_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opusfile_config $(OPUSFILE_PATCH_STAMP) $(OPUSFILE_WARN_STAMP)
 	@mkdir -p $(dir $@)
 	$(CROSS_CC) $(OPUSFILE_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
 

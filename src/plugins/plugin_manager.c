@@ -6296,7 +6296,15 @@ static void load_plugin_file(const char * path) {
     plugin_instance_t * inst = &plugin_instances[slot];
     memset(inst, 0, sizeof(*inst));
     inst->L = plugin_main_state(L);
-    snprintf(inst->filename, sizeof(inst->filename), "%s", base);
+    size_t base_len = strlen(base);
+    if (base_len >= sizeof(inst->filename)) {
+        fprintf(stderr, "[plugins] refusing to load %s: filename exceeds %zu bytes\n",
+                path, sizeof(inst->filename) - 1);
+        lua_close(L);
+        memset(inst, 0, sizeof(*inst));
+        return;
+    }
+    memcpy(inst->filename, base, base_len + 1);
     loading_plugin_slot = slot;
     luaL_openlibs(L);
     sandbox_plugin_lua_state(L);
@@ -6329,7 +6337,9 @@ static void load_plugin_file(const char * path) {
             uint64_t h = 0xcbf29ce484222325ULL; /* FNV-1a 64 */
             for (const char * p = path; *p; p++) { h ^= (unsigned char) *p; h *= 0x100000001b3ULL; }
             char base_no_ext[sizeof(inst->id)];
-            snprintf(base_no_ext, sizeof(base_no_ext), "%s", base);
+            size_t copy_len = base_len < sizeof(base_no_ext) ? base_len : sizeof(base_no_ext) - 1;
+            memcpy(base_no_ext, base, copy_len);
+            base_no_ext[copy_len] = '\0';
             char * base_dot = strrchr(base_no_ext, '.');
             if (base_dot && strcasecmp(base_dot, ".lua") == 0) *base_dot = '\0';
             snprintf(inst->id, sizeof(inst->id), "legacy.%.*s.%016llx",

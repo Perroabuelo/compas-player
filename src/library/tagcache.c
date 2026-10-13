@@ -291,8 +291,16 @@ static const char * ascii_casestr(const char * hay, const char * needle) {
     return NULL;
 }
 
-static void db_path(char * out, size_t out_size, const char * name) {
-    snprintf(out, out_size, "%s/%s", db_dir, name);
+static bool db_path(char * out, size_t out_size, const char * name) {
+    if (!out || out_size == 0) return false;
+    out[0] = '\0';
+    if (!name) return false;
+    int n = snprintf(out, out_size, "%s/%s", db_dir, name);
+    if (n < 0 || (size_t) n >= out_size) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
 }
 
 /* 1 = logical path still names the pinned directory, 0 = a different
@@ -621,16 +629,14 @@ static void unlink_other_generations(int32_t keep, int32_t previous) {
             long parsed = strtol(name + sizeof(refs_prefix) - 1, &end, 10);
             if (*end == '\0' && parsed > 0 && parsed <= INT32_MAX &&
                 (parsed == keep || parsed == previous)) continue;
-            db_path(path, sizeof(path), name);
-            unlink(path);
+            if (db_path(path, sizeof(path), name)) unlink(path);
             continue;
         }
         if (strncmp(name, "migration.g", 11) == 0) {
             char *end;
             long gen = strtol(name + 11, &end, 10);
             if (*end == '\0' && gen > 0 && gen != keep && gen != previous) {
-                db_path(path, sizeof(path), name);
-                unlink(path);
+                if (db_path(path, sizeof(path), name)) unlink(path);
             }
             continue;
         }
@@ -638,20 +644,17 @@ static void unlink_other_generations(int32_t keep, int32_t previous) {
         if (gpos) {
             int gen = atoi(gpos + 6);
             if ((keep > 0 && gen == keep) || (previous > 0 && gen == previous)) continue;
-            db_path(path, sizeof(path), name);
-            unlink(path);
+            if (db_path(path, sizeof(path), name)) unlink(path);
             continue;
         }
         size_t n = strlen(name);
         if (n >= 4 && strcmp(name + n - 4, ".new") == 0) {
-            db_path(path, sizeof(path), name);
-            unlink(path);
+            if (db_path(path, sizeof(path), name)) unlink(path);
             continue;
         }
         if (keep > 0 && (strcmp(name, "database_idx.tcd") == 0 ||
                          (strncmp(name, "database_", 9) == 0 && n >= 4 && strcmp(name + n - 4, ".tcd") == 0))) {
-            db_path(path, sizeof(path), name);
-            unlink(path);
+            if (db_path(path, sizeof(path), name)) unlink(path);
         }
     }
     closedir(d);

@@ -299,7 +299,8 @@ static int index_write_run(int directory_fd, dir_entry_t *rows, size_t count, fi
     qsort(rows, count, sizeof(*rows), sort_comparator(mode));
     int fd = index_temp_fd(directory_fd);
     if (fd < 0 || !index_write_full(fd, rows, count * sizeof(*rows))) {
-        if (fd >= 0) close(fd); return -1;
+        if (fd >= 0) close(fd);
+        return -1;
     }
     lseek(fd, 0, SEEK_SET); return fd;
 }
@@ -454,7 +455,9 @@ bool file_browser_index_open_cancelable(const char *directory, file_browser_inde
 }
 
 bool file_browser_index_retain(const file_browser_index_t *source, file_browser_index_t **out) {
-    if (!source || !out) return false; file_browser_index_t *copy = calloc(1, sizeof(*copy)); if (!copy) return false;
+    if (!source || !out) return false;
+    file_browser_index_t *copy = calloc(1, sizeof(*copy));
+    if (!copy) return false;
     if (source->memory_backed) {
         copy->fd = -1; copy->playable_fd = -1;
         copy->directory_fd = dup(source->directory_fd);
@@ -806,6 +809,16 @@ static void browser_delete_cb(lv_event_t *event) {
     if (!worker_frees) free(fb);
 }
 
+/* Child path must fit entirely. A truncated join would name a different file. */
+static bool join_child_path(char * out, size_t out_size, const char * dir, const char * name) {
+    int n = snprintf(out, out_size, "%s/%s", dir, name);
+    if (n <= 0 || (size_t) n >= out_size) {
+        if (out_size > 0) out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
 /* Builds the playlist from every playable file in the current directory
  * (in the same sorted order they're displayed) and reports which position
  * within that file-only list corresponds to `file_display_index`. */
@@ -830,10 +843,10 @@ static void build_playlist_and_select(file_browser_t * fb, int file_display_inde
 
     for (int i = 0; i < all_count; i++) {
         if (all[i].is_dir || all[i].is_playlist || all[i].is_cue) continue;
-        if (strcmp(all[i].name, selected_entry.name) == 0) selected = count;
 
         char full_path[PATH_MAX];
-        snprintf(full_path, sizeof(full_path), "%s/%s", fb->current_dir, all[i].name);
+        if (!join_child_path(full_path, sizeof(full_path), fb->current_dir, all[i].name)) continue;
+        if (strcmp(all[i].name, selected_entry.name) == 0) selected = count;
         playlist[count] = strdup(full_path);
         if (!playlist[count]) { for (int j = 0; j < count; j++) free(playlist[j]); free(playlist); free(all); return; }
         count++;
@@ -1203,7 +1216,7 @@ static void entry_click_cb(lv_event_t * e) {
     }
 
     char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/%s", fb->current_dir, clicked.name);
+    if (!join_child_path(path, sizeof(path), fb->current_dir, clicked.name)) return;
     if (clicked.is_dir) {
         snprintf(fb->current_dir, sizeof(fb->current_dir), "%s", path);
         if (fb->position_depth < FILE_BROWSER_POSITION_STACK) {
@@ -1644,7 +1657,7 @@ bool file_browser_build_playlist_for_path(const char * path, char *** out_playli
 
     char dir_path[PATH_MAX];
     size_t dir_len = (size_t) (slash - path);
-    if (dir_len >= sizeof(dir_path)) dir_len = sizeof(dir_path) - 1;
+    if (dir_len >= sizeof(dir_path)) return false;
     memcpy(dir_path, path, dir_len);
     dir_path[dir_len] = '\0';
 
@@ -1664,7 +1677,7 @@ bool file_browser_build_playlist_for_path(const char * path, char *** out_playli
         if (scanned[i].is_dir || scanned[i].is_playlist || scanned[i].is_cue) continue;
 
         char full_path[PATH_MAX];
-        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, scanned[i].name);
+        if (!join_child_path(full_path, sizeof(full_path), dir_path, scanned[i].name)) continue;
         if (strcmp(full_path, path) == 0) selected = count;
 
         playlist[count] = strdup(full_path);

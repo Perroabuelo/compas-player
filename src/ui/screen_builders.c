@@ -939,7 +939,7 @@ lv_obj_t * build_icon_grid_screen(const char * title, lv_event_cb_t back_btn_cb,
             lv_obj_align(img_wrap, LV_ALIGN_TOP_MID, 0, top_offset);
             /* ~83% down the icon's own scaled height -- matches where the
              * reserved band actually starts, per a pixel scan of every
-             * wireless/*.png asset (glyph content ends around 60-68% down
+             * wireless PNG asset (glyph content ends around 60-68% down
              * their shared 190px-tall native canvas; centering the label a
              * bit past that, within the remaining flat-background band,
              * comfortably clears every icon's glyph regardless of its
@@ -1032,18 +1032,22 @@ void pill_row_apply_icon(lv_obj_t * row, lv_obj_t * label, const char * icon_pat
     if (!icon_path) return;
 
     /* Relative icon paths are resolved against <sd_root>/.plugins/ (the plugin directory),
-     * while absolute paths starting with '/' are preserved verbatim. */
+     * while absolute paths starting with '/' are preserved verbatim.
+     * A path that does not fit is skipped; a truncated path could open a different file. */
     char resolved[600];
+    int resolved_len;
     if (icon_path[0] == '/') {
-        snprintf(resolved, sizeof(resolved), "%s", icon_path);
+        resolved_len = snprintf(resolved, sizeof(resolved), "%s", icon_path);
     } else {
-        snprintf(resolved, sizeof(resolved), "%s/.plugins/%s", MUSIC_ROOT_DIR, icon_path);
+        resolved_len = snprintf(resolved, sizeof(resolved), "%s/.plugins/%s", MUSIC_ROOT_DIR, icon_path);
     }
+    if (resolved_len < 0 || (size_t)resolved_len >= sizeof(resolved)) return;
 
     /* "S:" is LVGL's POSIX-filesystem driver letter (lv_conf.h). Opens
-     * resolved as an absolute filesystem path. */
-    char src[600];
-    snprintf(src, sizeof(src), "S:%s", resolved);
+     * resolved as an absolute filesystem path. Two extra bytes hold that prefix. */
+    char src[sizeof(resolved) + 2];
+    int src_len = snprintf(src, sizeof(src), "S:%s", resolved);
+    if (src_len < 0 || (size_t)src_len >= sizeof(src)) return;
 
     /* lv_image_set_scale() only scales rendering without altering widget bounds.
      * Wrap in an explicitly-sized container matching target dimensions so layout
