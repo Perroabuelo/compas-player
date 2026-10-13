@@ -1493,7 +1493,8 @@ static drmp3_uint32 mp3_build_seek_points_cancellable(drmp3 * scan, uint64_t tot
                                                        drmp3_uint32 desired_count, uint64_t job_generation,
                                                        drmp3_seek_point * points, bool * out_cancelled,
                                                        const atomic_uint * cancel_token,
-                                                       unsigned expected_token) {
+                                                       unsigned expected_token,
+                                                       bool (*cancel)(void *), void * cancel_user) {
     *out_cancelled = false;
     if (desired_count == 0 || total_pcm_frames == 0) return 0;
 
@@ -1516,7 +1517,7 @@ static drmp3_uint32 mp3_build_seek_points_cancellable(drmp3 * scan, uint64_t tot
     uint64_t next_target = 0;
     drmp3_uint32 placed = 0;
     while (placed < desired_count) {
-        if (mp3_index_should_cancel(job_generation) ||
+        if ((cancel ? cancel(cancel_user) : mp3_index_should_cancel(job_generation)) ||
             (cancel_token && atomic_load_explicit(cancel_token, memory_order_relaxed) != expected_token)) {
             *out_cancelled = true; return placed;
         }
@@ -1535,7 +1536,7 @@ static drmp3_uint32 mp3_build_seek_points_cancellable(drmp3 * scan, uint64_t tot
             frame_info[DRMP3_SEEK_LEADING_MP3_FRAMES].bytePos = scan->streamCursor - scan->dataSize;
             frame_info[DRMP3_SEEK_LEADING_MP3_FRAMES].pcmFrameIndex = running_pcm_frame_count;
 
-            if (mp3_index_should_cancel(job_generation) ||
+            if ((cancel ? cancel(cancel_user) : mp3_index_should_cancel(job_generation)) ||
                 (cancel_token && atomic_load_explicit(cancel_token, memory_order_relaxed) != expected_token)) {
                 *out_cancelled = true; return placed;
             }
@@ -1602,7 +1603,7 @@ static void * mp3_index_worker(void * arg) {
                 bool cancelled = false;
                 drmp3_uint32 placed = mp3_build_seek_points_cancellable(
                     scan, job->total_pcm_frames, job->count, job->generation, job->points, &cancelled,
-                    NULL, 0);
+                    NULL, 0, NULL, NULL);
                 job->count = placed;
                 if (placed > 0 && !cancelled) {
                     job->outcome = MP3_INDEX_READY;
@@ -1821,11 +1822,88 @@ bool audio_probe_file_format(const char * path, audio_current_format_info_t * ou
 /* A separate, bounded decode pass for waveform previews. This deliberately
  * uses decoder_t directly and never touches the active decoder, output, PEQ,
  * replaygain, or playback mutex. */
+typedef struct {
+    bool (*cancel)(void *);
+    void * user;
+    struct timespec started;
+} waveform_cancel_context_t;
+
+static bool waveform_cancel_or_expired(void * user) {
+    waveform_cancel_context_t * context = user;
+    if (context->cancel && context->cancel(context->user)) return true;
+    struct timespec now;
+    (void) clock_gettime(CLOCK_MONOTONIC, &now);
+    int64_t elapsed = (int64_t)(now.tv_sec - context->started.tv_sec) * INT64_C(1000000000) +
+                      (int64_t)now.tv_nsec - (int64_t)context->started.tv_nsec;
+    return elapsed > INT64_C(90000000000);
+}
+
+/* Build a private dense table on a throwaway decoder. The table is attached
+ * only to the waveform decoder and freed by decoder_close(); playback and the
+ * production MP3 index worker never see or adopt it. */
+static bool waveform_prepare_mp3_seek_table(decoder_t * dec, const char * path,
+                                             waveform_cancel_context_t * cancel_context,
+                                             bool * cancelled) {
+    enum { WAVEFORM_MP3_MAX_POINTS = 8192 };
+    *cancelled = false;
+    if (!dec || dec->type != DECODER_MP3 || dec->net_stream || dec->sample_rate == 0 ||
+        dec->channels == 0 || dec->total_frames == 0) return false;
+
+    uint64_t interval = dec->sample_rate / 4;
+    if (interval == 0) interval = 1;
+    uint64_t desired = dec->total_frames / interval;
+    if (desired < 2) return false;
+    if (desired > WAVEFORM_MP3_MAX_POINTS) desired = WAVEFORM_MP3_MAX_POINTS;
+
+    drmp3_seek_point * points = calloc((size_t)desired, sizeof(*points));
+    drmp3 * scan = malloc(sizeof(*scan));
+    if (!points || !scan) {
+        free(points);
+        free(scan);
+        return false;
+    }
+
+    bool opened = drmp3_init_file(scan, path, NULL) != 0;
+    bool same_file = opened && scan->sampleRate == dec->as.mp3->sampleRate &&
+                     scan->channels == dec->as.mp3->channels &&
+                     scan->streamLength == dec->as.mp3->streamLength &&
+                     scan->streamStartOffset == dec->as.mp3->streamStartOffset &&
+                     scan->delayInPCMFrames == dec->as.mp3->delayInPCMFrames &&
+                     scan->paddingInPCMFrames == dec->as.mp3->paddingInPCMFrames;
+    drmp3_uint32 placed = 0;
+    if (same_file) {
+        if (waveform_cancel_or_expired(cancel_context)) {
+            *cancelled = true;
+        } else {
+            placed = mp3_build_seek_points_cancellable(scan, dec->total_frames, (drmp3_uint32)desired,
+                                                       0, points, cancelled, NULL, 0,
+                                                       waveform_cancel_or_expired, cancel_context);
+        }
+    }
+    if (opened) drmp3_uninit(scan);
+    free(scan);
+
+    if (*cancelled) {
+        free(points);
+        return false;
+    }
+    if (!same_file || placed == 0 ||
+        !drmp3_bind_seek_table(dec->as.mp3, placed, points)) {
+        free(points);
+        return false;
+    }
+    dec->mp3_seek_points = points;
+    dec->mp3_seek_point_count = placed;
+    dec->mp3_seek_index_attempted = true;
+    return true;
+}
+
 bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
                             bool (*cancel)(void *), void * user) {
     enum {
         WAVEFORM_MAX_BINS = 256,
         WAVEFORM_READ_FRAMES = 4096,
+        WAVEFORM_WINDOW_MS = 80,
         WAVEFORM_YIELD_INTERVAL_MS = 100,
         WAVEFORM_YIELD_SLEEP_US = 1000,
         WAVEFORM_MAX_CONSECUTIVE_ERRORS = 10
@@ -1856,6 +1934,7 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
                 strcasecmp(ext, ".ape") == 0)) return false;
     (void) clock_gettime(CLOCK_MONOTONIC, &started);
     last_yield = started;
+    waveform_cancel_context_t cancel_context = { .cancel = cancel, .user = user, .started = started };
     scratch = calloc(1, sizeof(*scratch));
     if (!scratch) return false;
     if (!decoder_open(&dec, path)) goto done;
@@ -1868,62 +1947,100 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
         goto done;
 
     uint64_t frame = 0;
-    size_t bin = 0;
+    bool can_sparse_seek = dec.type == DECODER_WAV || dec.type == DECODER_AIFF ||
+                           dec.type == DECODER_CAF || dec.type == DECODER_AAC ||
+                           dec.type == DECODER_ALAC || dec.type == DECODER_WAVPACK ||
+                           dec.type == DECODER_OPUS || dec.type == DECODER_FLAC ||
+                           dec.type == DECODER_VORBIS || dec.type == DECODER_MP3;
+    uint64_t window_frames = ((uint64_t)dec.sample_rate * WAVEFORM_WINDOW_MS) / 1000;
+    if (window_frames == 0) window_frames = 1;
+    bool sparse_seek = can_sparse_seek && dec.total_frames > (uint64_t)count * window_frames;
+    if (sparse_seek && dec.type == DECODER_MP3) {
+        bool index_cancelled = false;
+        if (!waveform_prepare_mp3_seek_table(&dec, path, &cancel_context, &index_cancelled)) {
+            if (index_cancelled || waveform_cancel_or_expired(&cancel_context)) goto done;
+            sparse_seek = false; /* A private index failure leaves the original decoder untouched. */
+        }
+    }
     unsigned consecutive_errors = 0;
-    while (frame < dec.total_frames && bin < count) {
+    bool reached_eof = false;
+    bool decoded_samples = false;
+    for (size_t bin = 0; bin < count && !reached_eof; ++bin) {
+        uint64_t bin_start = (dec.total_frames * (uint64_t)bin + count - 1) / count;
         uint64_t bin_end = (dec.total_frames * (uint64_t)(bin + 1) + count - 1) / count;
-        if (bin_end <= frame) {
-            bin++;
-            continue;
+        if (bin_end <= bin_start) continue;
+        uint64_t read_start = bin_start;
+        uint64_t read_end = bin_end;
+        if (sparse_seek && bin_end - bin_start > window_frames) {
+            read_start = bin_start + ((bin_end - bin_start) - window_frames) / 2;
+            read_end = read_start + window_frames;
         }
-        if (cancel && cancel(user)) goto done;
-        (void) clock_gettime(CLOCK_MONOTONIC, &now);
-        uint64_t elapsed = (uint64_t)(now.tv_sec - started.tv_sec) * UINT64_C(1000000000);
-        if (now.tv_nsec >= started.tv_nsec) elapsed += (uint64_t)(now.tv_nsec - started.tv_nsec);
-        else elapsed -= (uint64_t)(started.tv_nsec - now.tv_nsec);
-        if (elapsed > budget_ns) goto done;
-
-        uint64_t want = bin_end - frame;
-        if (want > WAVEFORM_READ_FRAMES) want = WAVEFORM_READ_FRAMES;
-        decoder_read_result_t read = decoder_read_s16(&dec, want, scratch->pcm);
-        if (read.status == DECODER_READ_FATAL_ERROR) goto done;
-        if (read.status == DECODER_READ_RECOVERABLE_ERROR) {
-            if (++consecutive_errors >= WAVEFORM_MAX_CONSECUTIVE_ERRORS) goto done;
-            if (read.frames == 0) continue;
-        } else {
-            consecutive_errors = 0;
-        }
-        if (read.frames == 0) {
-            /* Container estimates can outlive a truncated or damaged stream.
-             * A clean EOF is useful when earlier bins contain real samples. */
-            if (read.status == DECODER_READ_EOF && frame > 0) break;
-            goto done;
-        }
-        if (read.frames > want) goto done;
-
-        for (uint64_t i = 0; i < read.frames; ++i) {
-            for (unsigned ch = 0; ch < dec.channels; ++ch) {
-                int64_t sample = scratch->pcm[i * dec.channels + ch];
-                scratch->sums[bin] += (uint64_t)(sample * sample);
-                scratch->sample_counts[bin]++;
-            }
-        }
-        frame += read.frames;
-        if (frame >= bin_end) bin++;
-        if (read.status == DECODER_READ_EOF) {
-            /* A decoder may report real samples with EOF on its final read.
-             * Preserve those bins and leave the remaining estimate empty. */
-            break;
-        }
-
-        (void) clock_gettime(CLOCK_MONOTONIC, &now);
-        int64_t since_yield_ns =
-            (int64_t)(now.tv_sec - last_yield.tv_sec) * INT64_C(1000000000) +
-            (int64_t)now.tv_nsec - (int64_t)last_yield.tv_nsec;
-        if (since_yield_ns >= (int64_t)WAVEFORM_YIELD_INTERVAL_MS * 1000000) {
+        if (sparse_seek) {
+            if ((cancel && cancel(user)) || !decoder_seek(&dec, read_start)) goto done;
+            frame = read_start;
             if (cancel && cancel(user)) goto done;
-            usleep(WAVEFORM_YIELD_SLEEP_US);
-            last_yield = now;
+            (void) clock_gettime(CLOCK_MONOTONIC, &now);
+            uint64_t elapsed = (uint64_t)(now.tv_sec - started.tv_sec) * UINT64_C(1000000000);
+            if (now.tv_nsec >= started.tv_nsec) elapsed += (uint64_t)(now.tv_nsec - started.tv_nsec);
+            else elapsed -= (uint64_t)(started.tv_nsec - now.tv_nsec);
+            if (elapsed > budget_ns) goto done;
+        }
+        uint64_t target_end = sparse_seek ? read_end : bin_end;
+        if (frame > target_end) continue;
+        while (frame < target_end) {
+            if (waveform_cancel_or_expired(&cancel_context)) goto done;
+            (void) clock_gettime(CLOCK_MONOTONIC, &now);
+            uint64_t elapsed = (uint64_t)(now.tv_sec - started.tv_sec) * UINT64_C(1000000000);
+            if (now.tv_nsec >= started.tv_nsec) elapsed += (uint64_t)(now.tv_nsec - started.tv_nsec);
+            else elapsed -= (uint64_t)(started.tv_nsec - now.tv_nsec);
+            if (elapsed > budget_ns) goto done;
+
+            uint64_t want = target_end - frame;
+            if (want > WAVEFORM_READ_FRAMES) want = WAVEFORM_READ_FRAMES;
+            decoder_read_result_t read = decoder_read_s16(&dec, want, scratch->pcm);
+            if (read.status == DECODER_READ_FATAL_ERROR) goto done;
+            if (read.status == DECODER_READ_RECOVERABLE_ERROR) {
+                if (++consecutive_errors >= WAVEFORM_MAX_CONSECUTIVE_ERRORS) goto done;
+                if (read.frames == 0) continue;
+            } else {
+                consecutive_errors = 0;
+            }
+            if (read.frames == 0) {
+                /* Container estimates can outlive a truncated or damaged stream.
+                 * A clean EOF is useful when earlier bins contain real samples. */
+                if (read.status == DECODER_READ_EOF && decoded_samples) {
+                    reached_eof = true;
+                    break;
+                }
+                goto done;
+            }
+            if (read.frames > want) goto done;
+
+            decoded_samples = true;
+            for (uint64_t i = 0; i < read.frames; ++i) {
+                for (unsigned ch = 0; ch < dec.channels; ++ch) {
+                    int32_t sample = scratch->pcm[i * dec.channels + ch];
+                    scratch->sums[bin] += (uint64_t)(sample * sample);
+                    scratch->sample_counts[bin]++;
+                }
+            }
+            frame += read.frames;
+            if (read.status == DECODER_READ_EOF) {
+                /* A decoder may report real samples with EOF on its final read.
+                 * Preserve those bins and leave the remaining estimate empty. */
+                reached_eof = true;
+                break;
+            }
+
+            (void) clock_gettime(CLOCK_MONOTONIC, &now);
+            int64_t since_yield_ns =
+                (int64_t)(now.tv_sec - last_yield.tv_sec) * INT64_C(1000000000) +
+                (int64_t)now.tv_nsec - (int64_t)last_yield.tv_nsec;
+            if (since_yield_ns >= (int64_t)WAVEFORM_YIELD_INTERVAL_MS * 1000000) {
+                if (waveform_cancel_or_expired(&cancel_context)) goto done;
+                usleep(WAVEFORM_YIELD_SLEEP_US);
+                last_yield = now;
+            }
         }
     }
 
@@ -1932,7 +2049,7 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
         uint64_t elapsed = (uint64_t)(now.tv_sec - started.tv_sec) * UINT64_C(1000000000);
         if (now.tv_nsec >= started.tv_nsec) elapsed += (uint64_t)(now.tv_nsec - started.tv_nsec);
         else elapsed -= (uint64_t)(started.tv_nsec - now.tv_nsec);
-        if (elapsed > budget_ns || frame == 0 || (cancel && cancel(user))) goto done;
+        if (elapsed > budget_ns || !decoded_samples || waveform_cancel_or_expired(&cancel_context)) goto done;
     }
     for (size_t i = 0; i < count; ++i) {
         if (!scratch->sample_counts[i]) {
@@ -2770,7 +2887,7 @@ static void * ab_switch_prepare_worker(void * opaque) {
             uint64_t index_generation = atomic_load_explicit(&mp3_index_active_generation, memory_order_relaxed);
             drmp3_uint32 count = mp3_build_seek_points_cancellable(scan, job->decoder.total_frames,
                                         (drmp3_uint32) desired, index_generation, points, &cancelled,
-                                        &ab_switch_cancel_token, job->cancel_token);
+                                        &ab_switch_cancel_token, job->cancel_token, NULL, NULL);
             if (count && !cancelled && drmp3_bind_seek_table(job->decoder.as.mp3, count, points)) {
                 job->decoder.mp3_seek_points = points;
                 job->decoder.mp3_seek_point_count = count;

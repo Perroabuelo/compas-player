@@ -237,6 +237,8 @@ bool audio_probe_file_format(const char * path, audio_current_format_info_t * ou
 
 /* Extract per-time-bin RMS levels from a local regular audio file, normalized
  * relative to the loudest bin (which is 255; silence stays 0).
+ * Long seekable tracks use centered 80 ms amplitude samples per bin; short
+ * tracks retain full-bin RMS. Isolated transients between windows may be missed.
  * Uses a private decoder instance and never changes playback state. `count`
  * must be in 1..256; `cancel`, when provided, is polled between decode reads.
  * Requires a known complete duration, sample rate <=192kHz, and duration <=2h;

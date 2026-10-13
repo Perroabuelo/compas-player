@@ -323,11 +323,8 @@ static void publish_result(uint64_t generation, const char * path, const uint8_t
 
 static void set_worker_background_priority(void) {
     (void) setpriority(PRIO_PROCESS, 0, 10);
-#ifdef SCHED_IDLE
-    struct sched_param param;
-    memset(&param, 0, sizeof(param));
-    (void) pthread_setschedparam(pthread_self(), SCHED_IDLE, &param);
-#endif
+    /* Remain below playback/UI, but eligible to use spare CPU during normal
+     * scheduling. SCHED_IDLE starves previews during unrelated background work. */
 }
 
 static void * waveform_worker(void * unused) {
