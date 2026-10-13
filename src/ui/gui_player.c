@@ -150,6 +150,12 @@ lv_obj_t * song_count_label = NULL;
 lv_obj_t * song_title_label = NULL;
 lv_obj_t * quality_pill = NULL;
 lv_obj_t * format_badge_label = NULL;
+typedef struct {
+    bool valid;
+    int32_t count_x, count_width;
+    int32_t pill_x, pill_width, gap;
+} player_count_row_geometry_t;
+static player_count_row_geometry_t player_count_row_geometry;
 lv_obj_t * play_mode_img = NULL;
 static lv_obj_t * order_icon = NULL;
 lv_obj_t * favorite_circle = NULL;
@@ -165,6 +171,119 @@ lv_obj_t * volume_slider = NULL;
 
 static lv_obj_t * pos_label = NULL;
 static lv_obj_t * dur_label = NULL;
+
+static void player_count_row_refresh(void);
+
+/* Keep the original count and badge geometry as the baseline. Each update is
+ * recomputed from that snapshot so changing queue or format text cannot cause
+ * cumulative position or width drift. */
+static void player_set_song_count(int index, int total) {
+    if (!song_count_label) return;
+    char text[48];
+    snprintf(text, sizeof(text), "%d/%d", index + 1, total);
+    if (strcmp(lv_label_get_text(song_count_label), text) == 0) return;
+    lv_label_set_text(song_count_label, text);
+    player_count_row_refresh();
+}
+
+static void player_set_format_badge_text(const char * text) {
+    if (!format_badge_label) return;
+    if (strcmp(lv_label_get_text(format_badge_label), text) == 0) return;
+    lv_label_set_text(format_badge_label, text);
+    player_count_row_refresh();
+}
+
+static int32_t player_label_text_width(lv_obj_t * label) {
+    if (!label) return 0;
+    const char * text = lv_label_get_text(label);
+    const lv_font_t * font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+    if (!text || !font || !text[0]) return 0;
+    lv_point_t size;
+    lv_text_get_size(&size, text, font,
+                     lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
+                     lv_obj_get_style_text_line_space(label, LV_PART_MAIN),
+                     LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    return size.x > 0 ? size.x : 0;
+}
+
+static void player_count_row_refresh(void) {
+    player_count_row_geometry_t * g = &player_count_row_geometry;
+    if (!g->valid || !song_count_label || !quality_pill || !format_badge_label) return;
+
+    const int32_t count_text_width = player_label_text_width(song_count_label);
+    const int32_t count_content_width = count_text_width + (count_text_width > 0 ? 1 : 0) +
+        lv_obj_get_style_pad_left(song_count_label, LV_PART_MAIN) +
+        lv_obj_get_style_pad_right(song_count_label, LV_PART_MAIN) +
+        2 * lv_obj_get_style_border_width(song_count_label, LV_PART_MAIN);
+    int32_t badge_text_width = player_label_text_width(format_badge_label);
+    if (badge_text_width == 0) {
+        /* An empty badge keeps the full authored slot available for a later
+         * format update, avoiding a needless jump when metadata arrives. */
+        badge_text_width = g->pill_width;
+    } else {
+        badge_text_width += lv_obj_get_style_pad_left(format_badge_label, LV_PART_MAIN) +
+                            lv_obj_get_style_pad_right(format_badge_label, LV_PART_MAIN) +
+                            2 * lv_obj_get_style_border_width(format_badge_label, LV_PART_MAIN) +
+                            lv_obj_get_style_pad_left(quality_pill, LV_PART_MAIN) +
+                            lv_obj_get_style_pad_right(quality_pill, LV_PART_MAIN) +
+                            2 * lv_obj_get_style_border_width(quality_pill, LV_PART_MAIN);
+    }
+
+    int32_t count_width = count_content_width > g->count_width ? count_content_width : g->count_width;
+    int32_t growth_limit = g->pill_width > badge_text_width ? g->pill_width - badge_text_width : 0;
+    if (count_width > g->count_width + growth_limit)
+        count_width = g->count_width + growth_limit;
+
+    int32_t pill_x = g->count_x + count_width + g->gap;
+    int32_t pill_width = g->pill_x + g->pill_width - pill_x;
+    lv_obj_set_width(song_count_label, count_width);
+    lv_obj_set_x(quality_pill, pill_x);
+    lv_obj_set_width(quality_pill, pill_width);
+}
+
+static void player_count_row_capture(lv_obj_t * count, lv_obj_t * pill, lv_obj_t * badge) {
+    player_count_row_geometry = (player_count_row_geometry_t){0};
+    if (!count || !pill || !badge || lv_obj_get_parent(count) != lv_obj_get_parent(pill) ||
+        lv_obj_get_parent(badge) != pill || lv_obj_get_child_count(pill) != 1) return;
+    lv_obj_t * parent = lv_obj_get_parent(count);
+    if (!parent || lv_obj_get_style_layout(parent, LV_PART_MAIN) != LV_LAYOUT_NONE) return;
+    lv_align_t count_align = lv_obj_get_style_align(count, LV_PART_MAIN);
+    lv_align_t pill_align = lv_obj_get_style_align(pill, LV_PART_MAIN);
+    lv_align_t badge_align = lv_obj_get_style_align(badge, LV_PART_MAIN);
+    if ((count_align != LV_ALIGN_DEFAULT && count_align != LV_ALIGN_TOP_LEFT) ||
+        (pill_align != LV_ALIGN_DEFAULT && pill_align != LV_ALIGN_TOP_LEFT) ||
+        (badge_align != LV_ALIGN_DEFAULT && badge_align != LV_ALIGN_TOP_LEFT) ||
+        lv_obj_get_style_x(count, LV_PART_MAIN) != lv_obj_get_x(count) ||
+        lv_obj_get_style_y(count, LV_PART_MAIN) != lv_obj_get_y(count) ||
+        lv_obj_get_style_x(pill, LV_PART_MAIN) != lv_obj_get_x(pill) ||
+        lv_obj_get_style_y(pill, LV_PART_MAIN) != lv_obj_get_y(pill) ||
+        !LV_COORD_IS_PX(lv_obj_get_style_x(count, LV_PART_MAIN)) ||
+        !LV_COORD_IS_PX(lv_obj_get_style_y(count, LV_PART_MAIN)) ||
+        !LV_COORD_IS_PX(lv_obj_get_style_x(pill, LV_PART_MAIN)) ||
+        !LV_COORD_IS_PX(lv_obj_get_style_y(pill, LV_PART_MAIN)) ||
+        lv_obj_get_style_x(badge, LV_PART_MAIN) != 0 ||
+        !LV_COORD_IS_PCT(lv_obj_get_style_width(badge, LV_PART_MAIN)) ||
+        LV_COORD_GET_PCT(lv_obj_get_style_width(badge, LV_PART_MAIN)) != 100) return;
+    int32_t count_authored_width = lv_obj_get_style_width(count, LV_PART_MAIN);
+    int32_t pill_authored_width = lv_obj_get_style_width(pill, LV_PART_MAIN);
+    if (!LV_COORD_IS_PX(count_authored_width) || count_authored_width <= 0 ||
+        !LV_COORD_IS_PX(pill_authored_width) || pill_authored_width <= 0) return;
+    int32_t count_x = lv_obj_get_x(count), pill_x = lv_obj_get_x(pill);
+    int32_t count_width = lv_obj_get_width(count), pill_width = lv_obj_get_width(pill);
+    int32_t gap = pill_x - (count_x + count_width);
+    if (count_width <= 0 || pill_width <= 0 || gap < 0 ||
+        lv_obj_get_y(count) + lv_obj_get_height(count) <= lv_obj_get_y(pill) ||
+        lv_obj_get_y(pill) + lv_obj_get_height(pill) <= lv_obj_get_y(count)) return;
+
+    player_count_row_geometry = (player_count_row_geometry_t){
+        .valid = true,
+        .count_x = count_x,
+        .count_width = count_width,
+        .pill_x = pill_x,
+        .pill_width = pill_width,
+        .gap = gap,
+    };
+}
 
 /* Player layout state, see the layout section above build_player_screen().
  * Declared here because the metadata and lyrics code read it. */
@@ -2168,7 +2287,7 @@ static void request_track_metadata(int index, bool notify, bool probe, bool audi
     if (dur_label) lv_label_set_text(dur_label, "--:--");
 
     if (song_count_label) {
-        lv_label_set_text_fmt(song_count_label, "%d/%d", index + 1, playlist_count);
+        player_set_song_count(index, playlist_count);
         lv_obj_remove_flag(song_count_label, LV_OBJ_FLAG_HIDDEN);
     }
     player_transition_mark_dirty(); /* title/artist/format badge/progress reset above all just changed player_screen's own content -- see the cache's own doc comment */
@@ -4448,6 +4567,7 @@ static void player_screen_loaded_cb(lv_event_t * e) {
  * caller can discard the tree and fall back to the built-in layout. */
 static bool player_bind_widgets(lv_obj_t * scr) {
     const bool builtin = player_layout_builtin;
+    player_count_row_geometry = (player_count_row_geometry_t){0};
 
     /* Everything that can fail comes first. */
     lv_obj_t * r_cover_card = player_find_role(scr, "cover_card", NULL);
@@ -4657,6 +4777,10 @@ static bool player_bind_widgets(lv_obj_t * scr) {
         if (lv_obj_get_style_width(r_count, LV_PART_MAIN) != LV_SIZE_CONTENT)
             lv_label_set_long_mode(r_count, LV_LABEL_LONG_SCROLL_CIRCULAR);
     }
+
+    lv_obj_update_layout(scr);
+    player_count_row_capture(r_count, r_pill, r_badge);
+    player_count_row_refresh();
 
     lv_obj_add_flag(r_cover_img, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(r_cover_img, cover_img_tap_cb, LV_EVENT_CLICKED, NULL);
@@ -4909,6 +5033,7 @@ static void player_reset_widget_globals(void) {
     song_title_label = NULL;
     quality_pill = NULL;
     format_badge_label = NULL;
+    player_count_row_geometry = (player_count_row_geometry_t){0};
     order_icon = NULL;
     favorite_circle = NULL;
     favorite_icon = NULL;
@@ -5033,7 +5158,7 @@ static const char * stream_format_hint_name(const char * hint) {
 void refresh_format_badge(void) {
     const char * path = playlist_index >= 0 ? playlist_path_at(playlist_index) : NULL;
     if (!path || !path[0]) {
-        if (format_badge_label) lv_label_set_text(format_badge_label, "");
+        player_set_format_badge_text("");
         gui_shell_update_quick_drawer_format("");
         return;
     }
@@ -5084,8 +5209,7 @@ void refresh_format_badge(void) {
         snprintf(text, sizeof(text), "%s", ext);
     }
     /* Polling unchanged text must not restart its marquee every tick. */
-    if (format_badge_label && strcmp(lv_label_get_text(format_badge_label), text) != 0)
-        lv_label_set_text(format_badge_label, text);
+    player_set_format_badge_text(text);
     gui_shell_update_quick_drawer_format(text);
 }
 
@@ -5934,7 +6058,7 @@ bool gui_player_queue_try_add_many(const char * const * paths, int count) {
     queued_pending_count += count;
     queue_next_insert_index = pos + count;
     queue_shuffle_insert(pos, count);
-    if (song_count_label) lv_label_set_text_fmt(song_count_label, "%d/%d", playlist_index + 1, playlist_count);
+    player_set_song_count(playlist_index, playlist_count);
     arm_next_track_for_audio(playlist_index);
 
     char msg[128];
@@ -5960,7 +6084,7 @@ void queue_remove_song_at_offset(int offset) {
     playlist_count--;
     queued_pending_count--;
     queue_next_insert_index = queued_pending_count > 0 ? playlist_index + 1 + queued_pending_count : -1;
-    if (song_count_label) lv_label_set_text_fmt(song_count_label, "%d/%d", playlist_index + 1, playlist_count);
+    player_set_song_count(playlist_index, playlist_count);
     arm_next_track_for_audio(playlist_index);
     show_info_toast(TR("Removed from queue"));
 }
@@ -6599,7 +6723,7 @@ void gui_player_init(uint32_t screen_width, uint32_t screen_height) {
     displayed_position_second = -1;
     displayed_duration_second = -1;
     if (song_count_label && gui_player_has_active_track()) {
-        lv_label_set_text_fmt(song_count_label, "%d/%d", playlist_index + 1, playlist_count);
+        player_set_song_count(playlist_index, playlist_count);
         lv_obj_remove_flag(song_count_label, LV_OBJ_FLAG_HIDDEN);
     }
     if (gui_player_has_active_track()) {
