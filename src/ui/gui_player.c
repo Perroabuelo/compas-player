@@ -4644,6 +4644,20 @@ static bool player_bind_widgets(lv_obj_t * scr) {
         if (!lv_image_get_src(r_cover_img)) lv_image_set_src(r_cover_img, asset_path("playing_plane/default_cover_565.png"));
     }
 
+    /* Queue counts must stay on one line even when an XML layout gives the
+     * label a narrow fixed width. Keep content-width labels content-sized so
+     * their existing layout behavior is preserved. */
+    if (r_count) {
+        const lv_font_t * count_font = lv_obj_get_style_text_font(r_count, LV_PART_MAIN);
+        int32_t line_height = count_font ? lv_font_get_line_height(count_font) : 0;
+        int32_t vertical_padding = lv_obj_get_style_pad_top(r_count, LV_PART_MAIN) +
+                                   lv_obj_get_style_pad_bottom(r_count, LV_PART_MAIN);
+        if (line_height > 0) lv_obj_set_height(r_count, line_height + vertical_padding);
+
+        if (lv_obj_get_style_width(r_count, LV_PART_MAIN) != LV_SIZE_CONTENT)
+            lv_label_set_long_mode(r_count, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    }
+
     lv_obj_add_flag(r_cover_img, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(r_cover_img, cover_img_tap_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(r_cover_card, player_cover_size_changed_cb, LV_EVENT_SIZE_CHANGED, NULL);
