@@ -245,8 +245,8 @@ bool ui_fonts_init(void)
 
     /* Validate every member before creating a single LVGL font object. The
      * streaming preflight uses a fixed 4 KiB buffer; the later parse pass
-     * holds at most one asset (max 156 KiB) at a time to bind the parser to
-     * the exact bytes checked against the manifest. */
+     * holds at most one asset at a time, bounded by its manifest size, to
+     * bind the parser to the exact bytes checked against the manifest. */
     for(size_t i = 0; i < UI_FONT_COUNT; i++) {
         const ui_font_manifest_entry_t * entry = &ui_font_manifest[i];
         if(!build_disk_path(root, entry->filename, disk_path)) {

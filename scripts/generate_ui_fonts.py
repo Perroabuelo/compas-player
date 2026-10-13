@@ -22,11 +22,14 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 TOOL_VERSION = "1.5.3"
 MONTSERRAT_SIZES = (12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 40)
-LATIN_RANGE = (
-    "0x20-0x7F,0xA0-0xFF,0x100-0x17F,0x2013,0x2014,0x2018,0x2019,"
+TEXT_RANGE = (
+    "0x20-0x7F,0xA0-0xFF,0x100-0x17F,0x401,0x404,0x406,0x407,"
+    "0x410-0x44F,0x451,0x454,0x456,0x457,0x490,0x491,0x1E9E,"
+    "0x2013,0x2014,0x2018,0x2019,"
     "0x201A,0x201C,0x201D,0x201E,0x2026"
 )
-# Keep the range exactly as recorded in the generated C font headers.
+# Include both Cyrillic alphabets in Montserrat so Russian and Ukrainian
+# text use consistent glyph shapes. Keep this range in the generated headers.
 ICON_RANGE = (
     "61441,61448,61451,61452,61452,61453,61457,61459,61461,61465,61468,"
     "61473,61478,61479,61480,61502,61507,61512,61515,61516,61517,61521,"
@@ -71,7 +74,7 @@ def montserrat_args(size: int, output: Path, output_format: str) -> list[str]:
         "--font",
         str(ROOT / "lvgl/scripts/built_in_font/Montserrat-Medium.ttf"),
         "-r",
-        LATIN_RANGE,
+        TEXT_RANGE,
         "--font",
         str(ROOT / "lvgl/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff"),
         "-r",
@@ -105,7 +108,12 @@ def unscii_args(output: Path, output_format: str) -> list[str]:
 
 
 def run(tool: str, args: list[str]) -> None:
-    subprocess.run([tool, *args], check=True)
+    node = shutil.which("node")
+    if node is None:
+        raise SystemExit("Node.js is required to regenerate UI fonts")
+    subprocess.run(
+        [node, str(ROOT / "scripts/ui_font_conv.js"), tool, *args], check=True
+    )
 
 
 def write_manifest() -> None:
