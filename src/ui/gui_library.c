@@ -1105,6 +1105,17 @@ static void group_song_row_click_cb(lv_event_t * e) {
 static lv_obj_t * playlist_start_popup, * playlist_start_backdrop;
 static int playlist_start_source;
 
+/* Starting a collection sequentially should keep an active repeat mode. */
+static play_mode_t collection_play_mode(play_mode_t requested_mode) {
+    if (requested_mode == PLAY_MODE_SHUFFLE) return PLAY_MODE_SHUFFLE;
+    if (requested_mode == PLAY_MODE_SEQUENTIAL &&
+        (current_settings.play_mode == PLAY_MODE_REPEAT_ALL ||
+         current_settings.play_mode == PLAY_MODE_REPEAT_ONE)) {
+        return (play_mode_t) current_settings.play_mode;
+    }
+    return requested_mode;
+}
+
 static void playlist_start_cancel(lv_event_t * e) {
     (void) e;
     lv_obj_add_flag(playlist_start_popup, LV_OBJ_FLAG_HIDDEN);
@@ -1123,7 +1134,7 @@ static void playlist_start_selected(lv_event_t * e, bool shuffle) {
         if (fd >= 0) { ssize_t n = read(fd, &value, sizeof(value)); (void) n; close(fd); }
         index = (int) (value % (unsigned int) count);
     }
-    gui_player_set_play_mode(shuffle ? PLAY_MODE_SHUFFLE : PLAY_MODE_SEQUENTIAL);
+    gui_player_set_play_mode(collection_play_mode(shuffle ? PLAY_MODE_SHUFFLE : PLAY_MODE_SEQUENTIAL));
     if (playlist_start_source == PLAY_ALL_SOURCE_RECENTLY_ADDED) {
         set_player_source_recently_added(index);
         on_file_selected_lazy_recently_added(index);
@@ -9130,6 +9141,7 @@ static bool play_current_group(play_mode_t mode) {
             return false;
         }
     }
+    mode = collection_play_mode(mode);
     int start = mode == PLAY_MODE_SHUFFLE ? rand() % group_songs_count : 0;
     gui_player_set_play_mode(mode);
     set_player_source_group_songs(start);
