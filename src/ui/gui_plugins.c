@@ -1325,13 +1325,18 @@ bool gui_plugin_open_file_manager(const char * folder) {
     return gui_file_manager_open(folder);
 }
 
+static void plugin_picker_back_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!file_browser_go_up_for_screen(plugin_picker_screen)) nav_pop();
+}
+
 bool gui_plugin_pick_file(const char * folder) {
     if (plugin_picker_active) return false;
     if (!plugin_picker_screen) {
         plugin_picker_screen = lv_obj_create(NULL);
         if (!plugin_picker_screen) return false;
         lv_obj_add_style(plugin_picker_screen, &style_theme_screen_bg, 0);
-        build_screen_header(plugin_picker_screen, TR("Select a file"), generic_back_cb, NULL, NULL);
+        build_screen_header(plugin_picker_screen, TR("Select a file"), plugin_picker_back_cb, NULL, NULL);
     }
     plugin_picker_finishing = false;
     plugin_picker_result[0] = '\0';

@@ -354,6 +354,9 @@ static void build_collection_menus(void);
 static lv_obj_t * music_screen = NULL;
 static lv_obj_t * files_screen = NULL;
 static lv_obj_t * files_search_list = NULL;
+static file_browser_t * music_files_browser = NULL;
+static lv_obj_t * files_title_label = NULL;
+static lv_obj_t * files_options_btn = NULL;
 
 static lv_obj_t * all_songs_screen = NULL;
 static lv_obj_t * all_songs_list = NULL;
@@ -397,6 +400,19 @@ static lv_obj_t * cue_tracks_title_label = NULL;
 
 static lv_obj_t * add_to_playlist_screen = NULL;
 static lv_obj_t * add_to_playlist_list = NULL;
+static lv_obj_t * file_folder_menu_popup = NULL;
+static lv_obj_t * file_folder_menu_backdrop = NULL;
+static lv_obj_t * file_folder_menu_page_row = NULL;
+static char file_folder_menu_path[PATH_MAX];
+static char add_to_playlist_target_dir[PATH_MAX];
+static uint64_t add_to_playlist_target_generation;
+typedef enum {
+    FILE_FOLDER_PLAY_SEQUENTIAL,
+    FILE_FOLDER_PLAY_SHUFFLE,
+    FILE_FOLDER_QUEUE,
+    FILE_FOLDER_PLAYLIST_APPEND,
+    FILE_FOLDER_PLAYLIST_CREATE,
+} file_folder_action_t;
 
 static lv_obj_t * collection_menu_popup = NULL;
 static lv_obj_t * collection_menu_backdrop = NULL;
@@ -433,31 +449,151 @@ extern void unregister_static_snapshot(lv_obj_t * screen);
  * row, not just the player's own "..." menu). */
 static char add_to_playlist_target_path[600] = ""; /* 600, matching song_row_t.path's own bound (metadata_db.h) */
 static void populate_playlists_screen(void);
-static bool standalone_playlist_create;
+typedef enum {
+    PLAYLIST_NAME_TARGET_NONE,
+    PLAYLIST_NAME_TARGET_STANDALONE,
+    PLAYLIST_NAME_TARGET_SONG,
+    PLAYLIST_NAME_TARGET_FOLDER,
+} playlist_name_target_mode_t;
+static playlist_name_target_mode_t playlist_name_target_mode;
+static uint64_t playlist_name_target_generation;
+static void populate_add_to_playlist_screen(void);
+static bool file_folder_job_start(file_folder_action_t action, const char * source_dir,
+                                  const char * destination, const char * playlist_name);
+
+typedef struct {
+    file_browser_index_t * index;
+    char path[PATH_MAX];
+    unsigned count;
+    atomic_int * progress;
+    atomic_bool * cancel;
+} folder_playlist_provider_t;
+
+static bool folder_playlist_path_at(void * context, int item, const char ** path) {
+    folder_playlist_provider_t * provider = context;
+    if (!provider || item < 0 || (provider->cancel && atomic_load(provider->cancel)) ||
+        !file_browser_index_playable_path_at(provider->index, (unsigned)item,
+                                             provider->path, sizeof(provider->path))) return false;
+    *path = provider->path;
+    if (provider->progress && provider->count)
+        atomic_store(provider->progress, 20 + (int)(((uint64_t)(unsigned)item + 1) * 70u / provider->count));
+    return true;
+}
+
+static bool folder_playlist_write(const char * source_dir, const char * name, const char * existing_path,
+                                  char * out_path, size_t out_size, atomic_bool * cancel,
+                                  atomic_int * progress) {
+    file_browser_index_t * index = NULL;
+    unsigned listed_count = 0;
+    if (!source_dir || !source_dir[0] ||
+        !file_browser_index_open_cancelable(source_dir, &index, &listed_count, cancel)) {
+        if (index) file_browser_index_close(index);
+        return false;
+    }
+    unsigned count = file_browser_index_playable_count(index);
+    if (!count || count > INT_MAX) { file_browser_index_close(index); return false; }
+    if (progress) atomic_store(progress, 20);
+    folder_playlist_provider_t provider = {
+        .index = index, .count = count, .progress = progress, .cancel = cancel
+    };
+    bool ok;
+    if (existing_path) {
+        ok = playlist_files_append_stream(existing_path, (int)count, folder_playlist_path_at, &provider);
+        if (ok && out_path && strlen(existing_path) < out_size)
+            snprintf(out_path, out_size, "%s", existing_path);
+        else if (ok && out_path) ok = false;
+    } else {
+        ok = playlist_files_write_new_stream(PLAYLISTS_DIR, name, (int)count,
+                                             folder_playlist_path_at, &provider,
+                                             out_path, out_size);
+    }
+    if (progress && ok) atomic_store(progress, 95);
+    file_browser_index_close(index);
+    return ok;
+}
+
+static void remove_covered_add_to_playlist_screen(void) {
+    int depth = gui_navigation_get_depth();
+    for (int i = 0; i < depth - 1; i++) {
+        if (gui_navigation_get_screen_at(i) == add_to_playlist_screen) {
+            nav_remove_stack_slot(i);
+            return;
+        }
+    }
+}
 
 static void new_playlist_name_done_cb(const char * text, void * user_data) {
     (void) user_data;
     if (text[0] == '\0') return;
+    playlist_name_target_mode_t mode = playlist_name_target_mode;
+    bool mode_target_current =
+        (mode == PLAYLIST_NAME_TARGET_FOLDER && add_to_playlist_target_dir[0]) ||
+        (mode == PLAYLIST_NAME_TARGET_SONG && add_to_playlist_target_path[0]) ||
+        (mode == PLAYLIST_NAME_TARGET_STANDALONE &&
+         !add_to_playlist_target_dir[0] && !add_to_playlist_target_path[0]);
+    bool request_current = playlist_name_target_generation == add_to_playlist_target_generation &&
+                           mode_target_current;
+    if (!request_current) {
+        if (mode == PLAYLIST_NAME_TARGET_FOLDER &&
+            !add_to_playlist_target_dir[0] && !add_to_playlist_target_path[0])
+            remove_covered_add_to_playlist_screen();
+        show_error_toast(TR("Playlist selection expired"));
+        return;
+    }
+    if (strlen(text) > 200) {
+        show_error_toast(TR("Playlist name is too long"));
+        return;
+    }
 
     char created_path[512];
-    bool ok = playlist_files_create(PLAYLISTS_DIR, text, add_to_playlist_target_path, created_path, sizeof(created_path));
+    if (mode == PLAYLIST_NAME_TARGET_FOLDER) {
+        (void)file_folder_job_start(FILE_FOLDER_PLAYLIST_CREATE,
+                                    add_to_playlist_target_dir, NULL, text);
+        return;
+    }
+    const char * song_path = mode == PLAYLIST_NAME_TARGET_SONG
+        ? add_to_playlist_target_path : "";
+    bool ok = playlist_files_create(PLAYLISTS_DIR, text, song_path,
+                                    created_path, sizeof(created_path));
     if (ok) metadata_db_playlist_insert_one(created_path);
     show_error_toast(ok ? TR("Playlist created") : TR("Failed to create playlist"));
     if (!ok) return;
-    if (standalone_playlist_create) populate_playlists_screen();
+    add_to_playlist_target_dir[0] = '\0';
+    add_to_playlist_target_generation++;
+    playlist_name_target_mode = PLAYLIST_NAME_TARGET_NONE;
+    if (mode == PLAYLIST_NAME_TARGET_STANDALONE) populate_playlists_screen();
     else nav_pop();
 }
 
 static void new_playlist_row_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
-    standalone_playlist_create = lv_event_get_user_data(e) != NULL;
-    if (standalone_playlist_create) add_to_playlist_target_path[0] = '\0';
+    bool standalone = lv_event_get_user_data(e) != NULL;
+    if (standalone) {
+        add_to_playlist_target_path[0] = '\0';
+        add_to_playlist_target_dir[0] = '\0';
+        add_to_playlist_target_generation++;
+        playlist_name_target_mode = PLAYLIST_NAME_TARGET_STANDALONE;
+    } else if (add_to_playlist_target_dir[0]) {
+        playlist_name_target_mode = PLAYLIST_NAME_TARGET_FOLDER;
+    } else if (add_to_playlist_target_path[0]) {
+        playlist_name_target_mode = PLAYLIST_NAME_TARGET_SONG;
+    } else {
+        playlist_name_target_mode = PLAYLIST_NAME_TARGET_NONE;
+        return;
+    }
+    playlist_name_target_generation = add_to_playlist_target_generation;
     show_text_entry(TR("Playlist Name"), "", false, false, new_playlist_name_done_cb, NULL);
 }
 
 static void existing_playlist_row_cb(lv_event_t * e) {
     const char * path = (const char *) lv_event_get_user_data(e);
-    if (add_to_playlist_target_path[0] == '\0') return;
+    if (add_to_playlist_target_path[0] == '\0' && add_to_playlist_target_dir[0] == '\0') return;
+
+    if (add_to_playlist_target_dir[0]) {
+        (void)file_folder_job_start(FILE_FOLDER_PLAYLIST_APPEND,
+                                    add_to_playlist_target_dir, path, NULL);
+        return;
+    }
 
     /* Check for duplicates before appending to avoid adding the same track twice. */
     if (playlist_files_contains(path, add_to_playlist_target_path)) {
@@ -469,6 +605,407 @@ static void existing_playlist_row_cb(lv_event_t * e) {
     bool ok = playlist_files_append(path, add_to_playlist_target_path);
     show_error_toast(ok ? TR("Added to playlist") : TR("Failed to add to playlist"));
     nav_pop();
+}
+
+static void hide_file_folder_menu(void) {
+    if (file_folder_menu_popup) lv_obj_add_flag(file_folder_menu_popup, LV_OBJ_FLAG_HIDDEN);
+    if (file_folder_menu_backdrop) lv_obj_add_flag(file_folder_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void invalidate_file_folder_menu(void) {
+    hide_file_folder_menu();
+    file_folder_menu_path[0] = '\0';
+}
+
+static void file_folder_menu_screen_unloaded_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_SCREEN_UNLOADED) invalidate_file_folder_menu();
+}
+
+#define FILE_FOLDER_QUEUE_BUDGET (512u * 1024u)
+#define FILE_FOLDER_QUEUE_MAX_SONGS 4096u
+
+typedef struct {
+    pthread_t thread;
+    atomic_bool done;
+    file_folder_action_t action;
+    char source_dir[PATH_MAX];
+    char destination[PATH_MAX];
+    char playlist_name[201];
+    char created_path[PATH_MAX];
+    bool ok;
+    bool oversized;
+    bool playback_changed;
+    file_browser_index_t * index;
+    unsigned playable_count;
+    const char ** paths;
+    size_t staging_bytes;
+    atomic_bool cancel;
+    atomic_int progress;
+    gui_busy_handle_t busy_handle;
+    lv_obj_t * return_screen;
+    uint64_t playback_intent_epoch;
+    uint64_t playlist_target_generation;
+    bool picker_storage_invalidated;
+    uint64_t picker_storage_invalidation_generation;
+} file_folder_job_t;
+
+static file_folder_job_t * file_folder_job;
+static lv_timer_t * file_folder_job_timer;
+static bool file_folder_job_storage_invalidated(void);
+
+static void invalidate_folder_playlist_target_for_storage(void) {
+    if (!add_to_playlist_target_dir[0]) return;
+
+    uint64_t invalidated_generation = add_to_playlist_target_generation + 1;
+    if (file_folder_job &&
+        (file_folder_job->action == FILE_FOLDER_PLAYLIST_APPEND ||
+         file_folder_job->action == FILE_FOLDER_PLAYLIST_CREATE) &&
+        file_folder_job->playlist_target_generation == add_to_playlist_target_generation &&
+        strcmp(add_to_playlist_target_dir, file_folder_job->source_dir) == 0) {
+        file_folder_job->picker_storage_invalidated = true;
+        file_folder_job->picker_storage_invalidation_generation = invalidated_generation;
+    }
+    add_to_playlist_target_dir[0] = '\0';
+    add_to_playlist_target_generation = invalidated_generation;
+}
+
+static void invalidate_file_folder_storage_targets(void) {
+    invalidate_file_folder_menu();
+    invalidate_folder_playlist_target_for_storage();
+}
+
+static void file_folder_job_cancel(void) {
+    if (file_folder_job) atomic_store_explicit(&file_folder_job->cancel, true, memory_order_release);
+}
+static void file_folder_play_sequential_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_file_folder_menu();
+    (void)file_folder_job_start(FILE_FOLDER_PLAY_SEQUENTIAL, file_folder_menu_path, NULL, NULL);
+}
+
+static void file_folder_play_shuffle_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_file_folder_menu();
+    (void)file_folder_job_start(FILE_FOLDER_PLAY_SHUFFLE, file_folder_menu_path, NULL, NULL);
+}
+
+static void file_folder_job_free(file_folder_job_t * job) {
+    if (!job) return;
+    for (unsigned i = 0; i < job->playable_count && job->paths; i++) free((void *)job->paths[i]);
+    free(job->paths);
+    if (job->index) file_browser_index_close(job->index);
+    free(job);
+}
+
+static void * file_folder_job_worker(void * argument) {
+    file_folder_job_t * job = argument;
+    if (job->action == FILE_FOLDER_PLAYLIST_APPEND) {
+        job->ok = folder_playlist_write(job->source_dir, NULL, job->destination, NULL, 0,
+                                        &job->cancel, &job->progress);
+        atomic_store_explicit(&job->done, true, memory_order_release);
+        return NULL;
+    }
+    if (job->action == FILE_FOLDER_PLAYLIST_CREATE) {
+        job->ok = folder_playlist_write(job->source_dir, job->playlist_name, NULL,
+                                        job->created_path, sizeof(job->created_path),
+                                        &job->cancel, &job->progress);
+        atomic_store_explicit(&job->done, true, memory_order_release);
+        return NULL;
+    }
+    unsigned listed_count = 0;
+    if (!file_browser_index_open_cancelable(job->source_dir, &job->index, &listed_count,
+                                            &job->cancel)) goto done;
+    atomic_store(&job->progress, 10);
+    job->playable_count = file_browser_index_playable_count(job->index);
+    if (!job->playable_count || job->playable_count > INT_MAX) goto done;
+
+    if (job->action == FILE_FOLDER_QUEUE) {
+        if (job->playable_count > FILE_FOLDER_QUEUE_MAX_SONGS ||
+            (size_t)job->playable_count > FILE_FOLDER_QUEUE_BUDGET /
+                (3 * sizeof(char *) + sizeof(int))) {
+            job->oversized = true;
+            goto done;
+        }
+        size_t path_bytes = 0;
+        for (unsigned i = 0; i < job->playable_count; i++) {
+            if (atomic_load(&job->cancel)) goto done;
+            char path[PATH_MAX];
+            if (!file_browser_index_playable_path_at(job->index, i, path, sizeof(path))) goto done;
+            size_t len = strlen(path) + 1;
+            if (len > FILE_FOLDER_QUEUE_BUDGET / 2 || path_bytes > FILE_FOLDER_QUEUE_BUDGET / 2 - len) {
+                job->oversized = true;
+                goto done;
+            }
+            path_bytes += len;
+        }
+        /* Staging path pointers + queue copies/growth + lazy-order growth. */
+        size_t pointers = (size_t)job->playable_count * (4 * sizeof(char *) + sizeof(int));
+        if (path_bytes * 2 + pointers > FILE_FOLDER_QUEUE_BUDGET) { job->oversized = true; goto done; }
+        job->staging_bytes = path_bytes + (size_t)job->playable_count * sizeof(char *);
+        job->paths = calloc(job->playable_count, sizeof(*job->paths));
+        if (!job->paths) goto done;
+        for (unsigned i = 0; i < job->playable_count; i++) {
+            if (atomic_load(&job->cancel)) goto done;
+            char path[PATH_MAX];
+            if (!file_browser_index_playable_path_at(job->index, i, path, sizeof(path)) ||
+                !(job->paths[i] = strdup(path))) goto done;
+            atomic_store(&job->progress,
+                         10 + (int)(((uint64_t)(i + 1) * 80u) / job->playable_count));
+        }
+        job->ok = true;
+    } else {
+        atomic_store(&job->progress, 95);
+        job->ok = true; /* Keep the retained index for the UI thread to install. */
+    }
+done:
+    if (job->action == FILE_FOLDER_QUEUE || !job->ok) {
+        if (job->index) { file_browser_index_close(job->index); job->index = NULL; }
+    }
+    atomic_store_explicit(&job->done, true, memory_order_release);
+    return NULL;
+}
+
+static void file_folder_job_complete(void) {
+    file_folder_job_t * job = file_folder_job;
+    if (!job) return;
+    if (file_folder_job_timer) { lv_timer_delete(file_folder_job_timer); file_folder_job_timer = NULL; }
+    pthread_join(job->thread, NULL);
+    bool stale = atomic_load_explicit(&job->cancel, memory_order_acquire) ||
+                 file_folder_job_storage_invalidated();
+    bool ok = job->ok && !stale;
+    bool playlist_action = job->action == FILE_FOLDER_PLAYLIST_APPEND ||
+                           job->action == FILE_FOLDER_PLAYLIST_CREATE;
+    bool play_folder_action = job->action == FILE_FOLDER_PLAY_SEQUENTIAL ||
+                              job->action == FILE_FOLDER_PLAY_SHUFFLE;
+    bool same_picker_request = !stale && playlist_action &&
+        job->playlist_target_generation == add_to_playlist_target_generation &&
+        strcmp(add_to_playlist_target_dir, job->source_dir) == 0;
+    bool stale_storage_picker_request = stale && playlist_action &&
+        job->picker_storage_invalidated &&
+        job->picker_storage_invalidation_generation == add_to_playlist_target_generation &&
+        !add_to_playlist_target_dir[0] && !add_to_playlist_target_path[0];
+    bool dismiss_picker = (ok && same_picker_request) || stale_storage_picker_request;
+    /* A successful playlist action consumes its picker request. Remove a
+     * covered picker even when a lock or another screen covers busy. An
+     * active picker must be dismissed with nav_pop(), never removed from
+     * beneath the active LVGL screen. */
+    bool dismiss_active_picker = false;
+    if (dismiss_picker) {
+        int depth = gui_navigation_get_depth();
+        for (int i = 0; i < depth; i++) {
+            if (gui_navigation_get_screen_at(i) != job->return_screen) continue;
+            if (i == depth - 1 && lv_screen_active() == job->return_screen) {
+                dismiss_active_picker = true;
+            } else if (i < depth - 1) {
+                nav_remove_stack_slot(i);
+            }
+            break;
+        }
+    }
+    if (play_folder_action && ok) {
+        bool context_current = gui_player_playback_intent_epoch() == job->playback_intent_epoch &&
+            gui_navigation_is_top(gui_busy_get_screen()) &&
+            gui_navigation_contains(job->return_screen);
+        if (context_current) {
+            /* Busy dismissal loads Files synchronously before the player is
+             * pushed; no pending slide can later reload Files over it. */
+            gui_busy_hide_immediate(job->busy_handle);
+            if (lv_screen_active() != job->return_screen) {
+                ok = false;
+                job->playback_changed = true;
+            }
+        } else {
+            gui_busy_hide(job->busy_handle);
+            ok = false;
+            job->playback_changed = true;
+        }
+        if (ok) {
+            file_browser_index_t * index = job->index;
+            job->index = NULL;
+            ok = gui_player_play_folder_index(index, job->playable_count,
+                job->action == FILE_FOLDER_PLAY_SHUFFLE ? PLAY_MODE_SHUFFLE : PLAY_MODE_SEQUENTIAL);
+        }
+    } else {
+        gui_busy_hide(job->busy_handle);
+    }
+    if (dismiss_picker && dismiss_active_picker &&
+        gui_navigation_is_top(job->return_screen) &&
+        lv_screen_active() == job->return_screen) {
+        nav_pop();
+    }
+    if (ok && job->action == FILE_FOLDER_QUEUE) {
+        ok = gui_player_queue_try_add_many_bounded(job->paths, (int)job->playable_count,
+                                                   job->staging_bytes,
+                                                   FILE_FOLDER_QUEUE_BUDGET);
+    }
+    if (ok && job->action == FILE_FOLDER_PLAYLIST_CREATE)
+        metadata_db_playlist_insert_one(job->created_path);
+
+    if (job->action == FILE_FOLDER_PLAYLIST_APPEND || job->action == FILE_FOLDER_PLAYLIST_CREATE) {
+        if (!stale)
+            show_error_toast(ok ? (job->action == FILE_FOLDER_PLAYLIST_CREATE
+                                      ? TR("Playlist created") : TR("Added folder to playlist"))
+                                : TR("Failed to add folder to playlist"));
+        if (ok && same_picker_request) {
+            add_to_playlist_target_dir[0] = '\0';
+            add_to_playlist_target_generation++;
+        }
+    } else if (!ok && !stale) {
+        show_error_toast(job->oversized ? TR("Folder is too large to add to queue")
+            : (job->playback_changed ? TR("Playback changed before folder was ready")
+            : (job->action == FILE_FOLDER_QUEUE ? TR("Cannot add folder within queue memory limit")
+                                                : TR("Cannot play this folder"))));
+    }
+    file_folder_job = NULL;
+    file_folder_job_free(job);
+}
+
+static void file_folder_job_poll(lv_timer_t * timer) {
+    (void)timer;
+    if (!file_folder_job) return;
+    if (file_folder_job_storage_invalidated()) {
+        invalidate_file_folder_storage_targets();
+        file_folder_job_cancel();
+    }
+    gui_busy_set_progress(file_folder_job->busy_handle, atomic_load(&file_folder_job->progress));
+    if (atomic_load_explicit(&file_folder_job->done, memory_order_acquire) &&
+        !gui_navigation_transition_in_progress()) file_folder_job_complete();
+}
+
+static bool file_folder_job_start(file_folder_action_t action, const char * source_dir,
+                                  const char * destination, const char * playlist_name) {
+    if (file_folder_job) { show_info_toast(TR("Folder action is still running")); return false; }
+    file_folder_job_t * job = calloc(1, sizeof(*job));
+    if (!job) { show_error_toast(TR("Cannot start folder action")); return false; }
+    job->action = action;
+    snprintf(job->source_dir, sizeof(job->source_dir), "%s", source_dir ? source_dir : "");
+    snprintf(job->destination, sizeof(job->destination), "%s", destination ? destination : "");
+    snprintf(job->playlist_name, sizeof(job->playlist_name), "%s", playlist_name ? playlist_name : "");
+    atomic_init(&job->done, false);
+    atomic_init(&job->cancel, false);
+    atomic_init(&job->progress, 0);
+    job->playback_intent_epoch = gui_player_playback_intent_epoch();
+    job->playlist_target_generation = add_to_playlist_target_generation;
+    job->return_screen = (action == FILE_FOLDER_PLAYLIST_APPEND ||
+                          action == FILE_FOLDER_PLAYLIST_CREATE)
+        ? add_to_playlist_screen : lv_screen_active();
+    if (!job->source_dir[0]) {
+        file_folder_job_free(job);
+        show_error_toast(TR("Cannot start folder action"));
+        return false;
+    }
+    if (action == FILE_FOLDER_PLAYLIST_APPEND || action == FILE_FOLDER_PLAYLIST_CREATE)
+        job->return_screen = add_to_playlist_screen;
+    file_folder_job = job;
+    const char * busy_title = action == FILE_FOLDER_QUEUE ? TR("Adding folder to queue")
+        : (action == FILE_FOLDER_PLAYLIST_APPEND || action == FILE_FOLDER_PLAYLIST_CREATE)
+            ? TR("Adding folder to playlist") : TR("Preparing folder playback");
+    job->busy_handle = gui_busy_show(busy_title, TR("Scanning playable files"));
+    gui_busy_set_progress(job->busy_handle, 0);
+    file_folder_job_timer = lv_timer_create(file_folder_job_poll, 100, NULL);
+    if (!file_folder_job_timer) {
+        file_folder_job = NULL;
+        gui_busy_hide(job->busy_handle);
+        file_folder_job_free(job);
+        show_error_toast(TR("Cannot start folder action"));
+        return false;
+    }
+    if (pthread_create(&job->thread, NULL, file_folder_job_worker, job) != 0) {
+        lv_timer_delete(file_folder_job_timer);
+        file_folder_job_timer = NULL;
+        file_folder_job = NULL;
+        gui_busy_hide(job->busy_handle);
+        file_folder_job_free(job);
+        show_error_toast(TR("Cannot start folder action"));
+        return false;
+    }
+    return true;
+}
+
+static void file_folder_add_queue_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_file_folder_menu();
+    (void)file_folder_job_start(FILE_FOLDER_QUEUE, file_folder_menu_path, NULL, NULL);
+}
+
+static void file_folder_add_playlist_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_file_folder_menu();
+    snprintf(add_to_playlist_target_dir, sizeof(add_to_playlist_target_dir), "%s", file_folder_menu_path);
+    add_to_playlist_target_path[0] = '\0';
+    add_to_playlist_target_generation++;
+    populate_add_to_playlist_screen();
+    nav_push(add_to_playlist_screen);
+}
+
+static void file_folder_page_jump_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_file_folder_menu();
+    if (!music_files_browser ||
+        strcmp(file_folder_menu_path, file_browser_current_dir(music_files_browser)) != 0 ||
+        !file_browser_can_jump_pages(music_files_browser)) return;
+    file_browser_show_page_jump(music_files_browser);
+}
+
+static void file_folder_menu_backdrop_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) hide_file_folder_menu();
+}
+
+static void file_browser_long_press(const char * path, bool is_dir) {
+    if (!is_dir) {
+        if (!path || strlen(path) >= sizeof(add_to_playlist_target_path)) {
+            show_error_toast(TR("File path is too long"));
+            return;
+        }
+        open_song_context_menu(path);
+        return;
+    }
+    snprintf(file_folder_menu_path, sizeof(file_folder_menu_path), "%s", path);
+    if (!file_folder_menu_popup || !file_folder_menu_backdrop) return;
+    bool show_page_jump = music_files_browser &&
+        strcmp(file_folder_menu_path, file_browser_current_dir(music_files_browser)) == 0 &&
+        file_browser_can_jump_pages(music_files_browser);
+    if (file_folder_menu_page_row) {
+        if (show_page_jump) lv_obj_remove_flag(file_folder_menu_page_row, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(file_folder_menu_page_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_remove_flag(file_folder_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(file_folder_menu_popup, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(file_folder_menu_backdrop);
+    lv_obj_move_foreground(file_folder_menu_popup);
+}
+
+static void files_current_folder_options_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED || !music_files_browser) return;
+    file_browser_long_press(file_browser_current_dir(music_files_browser), true);
+}
+
+static void files_screen_delete_cb(lv_event_t * e) {
+    if (lv_event_get_target(e) != files_screen) return;
+    music_files_browser = NULL;
+    files_title_label = NULL;
+    files_options_btn = NULL;
+}
+
+static void files_header_back_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (search_close_if_active_for_screen(files_screen)) return;
+    if (!file_browser_go_up_for_screen(files_screen)) nav_pop();
+}
+
+static void build_file_folder_menu(void) {
+    const menu_popup_row_t rows[] = {
+        { TR("Play All (Sequential)"), file_folder_play_sequential_cb, false },
+        { TR("Play All (Shuffle)"), file_folder_play_shuffle_cb, false },
+        { TR("Add to Queue"), file_folder_add_queue_cb, false },
+        { TR("Add to Playlist"), file_folder_add_playlist_cb, false },
+        { TR("Go to page"), file_folder_page_jump_cb, false },
+        { TR("Cancel"), file_folder_menu_backdrop_cb, false, true },
+    };
+    file_folder_menu_popup = build_menu_popup(rows, (int)(sizeof(rows) / sizeof(rows[0])),
+                                              file_folder_menu_backdrop_cb,
+                                              &file_folder_menu_backdrop);
+    file_folder_menu_page_row = file_folder_menu_popup ? lv_obj_get_child(file_folder_menu_popup, 4) : NULL;
 }
 
 static void playlist_picker_path_free_cb(lv_event_t * e) {
@@ -536,7 +1073,9 @@ static lv_obj_t * build_add_to_playlist_screen(void) {
  * rest of that popup further down) both reach this screen for whatever
  * song path they have, not necessarily the currently-playing one. */
 void open_add_to_playlist_for(const char * path) {
+    add_to_playlist_target_dir[0] = '\0';
     snprintf(add_to_playlist_target_path, sizeof(add_to_playlist_target_path), "%s", path);
+    add_to_playlist_target_generation++;
     populate_add_to_playlist_screen();
     nav_push(add_to_playlist_screen);
 }
@@ -546,16 +1085,22 @@ void on_cue_file_selected(const char * cue_path);
 static lv_obj_t * build_files_screen(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_theme_screen_bg, 0);
+    lv_obj_add_event_cb(scr, files_screen_delete_cb, LV_EVENT_DELETE, NULL);
+    lv_obj_add_event_cb(scr, file_folder_menu_screen_unloaded_cb,
+                        LV_EVENT_SCREEN_UNLOADED, NULL);
 
-    build_screen_header(scr, TR("Files"), generic_back_cb, NULL, NULL);
+    files_title_label = build_screen_header(scr, TR("Files"), files_header_back_cb, NULL, NULL);
+    files_options_btn = build_top_right_icon_button(scr, asset_path("playing_plane/ic_more.png"),
+                                                    files_current_folder_options_cb);
 
     file_browser_set_sort_mode((file_browser_sort_mode_t) current_settings.file_sort_mode);
     const file_browser_options_t options = {
         .on_select = on_file_browser_selected,
         .on_cue_select = on_cue_file_selected,
         .on_index_select = on_file_browser_index_selected,
+        .on_long_press = file_browser_long_press,
     };
-    file_browser_create(scr, MUSIC_ROOT_DIR, &options);
+    music_files_browser = file_browser_create(scr, MUSIC_ROOT_DIR, &options);
 
     finalize_screen_navigation(scr);
     return scr;
@@ -5615,6 +6160,8 @@ static void search_open(search_binding_t * b) {
      * Files/Subsonic still scan the in-memory name_of/count_ptr arrays. */
     lv_obj_add_flag(b->search_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(b->search_bar, LV_OBJ_FLAG_HIDDEN);
+    if (b == &search_bindings[SEARCH_BINDING_FILES] && files_options_btn)
+        lv_obj_add_flag(files_options_btn, LV_OBJ_FLAG_HIDDEN);
 
     if (b->is_overlay_list) lv_obj_remove_flag(b->list, LV_OBJ_FLAG_HIDDEN);
 
@@ -5659,6 +6206,8 @@ static void search_close_internal(search_binding_t * b, bool restore_provider) {
 
     lv_obj_add_flag(b->search_bar, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(b->search_btn, LV_OBJ_FLAG_HIDDEN);
+    if (b == &search_bindings[SEARCH_BINDING_FILES] && files_options_btn)
+        lv_obj_remove_flag(files_options_btn, LV_OBJ_FLAG_HIDDEN);
 
     az_index_binding_t * az = find_az_binding_for_screen(b->screen);
     if (az) lv_obj_remove_flag(az->strip, LV_OBJ_FLAG_HIDDEN);
@@ -5791,6 +6340,12 @@ void register_search(search_binding_id_t id, lv_obj_t * screen, lv_obj_t * list,
     lv_obj_t * search_btn = build_top_right_icon_button(screen, asset_path("sub_back/btn_search.png"), NULL);
     lv_obj_add_event_cb(search_btn, search_btn_click_cb, LV_EVENT_CLICKED, (void *) (intptr_t) id);
     lv_obj_add_flag(search_btn, LV_OBJ_FLAG_GESTURE_BUBBLE); /* added after finalize_screen_navigation()'s one-time pass, needs this set explicitly -- see screen_gesture_event_cb()'s own comment */
+    if (id == SEARCH_BINDING_FILES) {
+        /* Keep Files search beside its folder action, with the options icon
+         * at the right edge. The title ends before Search. */
+        lv_obj_align(search_btn, LV_ALIGN_TOP_RIGHT, -TITLE_ROW_HEIGHT, STATUS_BAR_CLEARANCE);
+        if (files_title_label) reserve_title_width_before(files_title_label, search_btn);
+    }
 
     /* Sized to bg_search.png native dimensions (440x80) and aligned to
      * cover the title row. Includes close button and text input. */
@@ -6822,7 +7377,9 @@ static bool library_prompt_has_manual_overlay(void) {
            (collection_menu_backdrop && !lv_obj_has_flag(collection_menu_backdrop, LV_OBJ_FLAG_HIDDEN)) ||
            (album_collection_menu_popup && !lv_obj_has_flag(album_collection_menu_popup, LV_OBJ_FLAG_HIDDEN)) ||
            (album_collection_menu_backdrop &&
-            !lv_obj_has_flag(album_collection_menu_backdrop, LV_OBJ_FLAG_HIDDEN));
+            !lv_obj_has_flag(album_collection_menu_backdrop, LV_OBJ_FLAG_HIDDEN)) ||
+           (file_folder_menu_popup && !lv_obj_has_flag(file_folder_menu_popup, LV_OBJ_FLAG_HIDDEN)) ||
+           (file_folder_menu_backdrop && !lv_obj_has_flag(file_folder_menu_backdrop, LV_OBJ_FLAG_HIDDEN));
 }
 
 #define BOOT_SETTLE_MS 8000
@@ -7776,6 +8333,14 @@ static void show_sd_mount_failed_popup(void); /* defined below, alongside its po
 static bool sd_mount_fail_notified = false;
 static bool sd_handoff_pending = false;
 
+static bool file_folder_job_storage_invalidated(void) {
+#ifdef HOST_BUILD
+    return false;
+#else
+    return sd_handoff_pending || sd_repair_in_progress() || !sd_card_root_is_mounted();
+#endif
+}
+
 #ifndef HOST_BUILD
 
 /* Periodic polling for SD card mount state changes.
@@ -7929,6 +8494,10 @@ static void library_prompt_prepare_cache_load_card(void) {
 }
 
 static void clear_removed_sd_library(void) {
+    /* Signal the worker without joining on the hotplug/repair path. Its UI
+     * completion joins later and rejects even an already-finished result. */
+    invalidate_file_folder_storage_targets();
+    file_folder_job_cancel();
     file_op_cancel(); /* a File Manager copy must not continue on a new card */
     quiesce_album_artwork_workers();
     gui_player_handle_sd_unmount();
@@ -8008,6 +8577,10 @@ void poll_sd_card_hotplug(void) {
         }
     }
     show_sd_repair_note();
+    if (sd_handoff_pending || sd_repair_in_progress()) {
+        invalidate_file_folder_storage_targets();
+        file_folder_job_cancel();
+    }
     /* Only an attached mount that the kernel probes proved stale may bypass
      * the normal two-poll absence debounce. If the initial mount stat was
      * inconclusive, a successful retry is not evidence of a stale mount. */
@@ -8061,6 +8634,8 @@ void poll_sd_card_hotplug(void) {
 
     group_probe_storage_available = mounted;
     if (!mounted) {
+        invalidate_file_folder_storage_targets();
+        file_folder_job_cancel();
         if (group_probe_job && group_probe_job_generation == group_probe_generation)
             cancel_group_song_probes();
         gui_player_notify_sd_unmounted_immediate();
@@ -8182,6 +8757,7 @@ void poll_sd_card_hotplug(void) {
     if (sd_handoff_pending && !library_rescan_active) {
         if (was_mounted) clear_removed_sd_library();
         was_mounted = false;
+        invalidate_file_folder_storage_targets();
         file_browser_reset_to_root();
         fallback_font_on_sd_mounted();
         reload_library_on_sd_reinsert(true);
@@ -8191,6 +8767,7 @@ void poll_sd_card_hotplug(void) {
         boot_library_recheck_done = true;
         fallback_font_on_sd_mounted();
         if (metadata_db_get_load_outcome() == METADATA_DB_LOAD_UNMOUNTED && !library_rescan_active) {
+            invalidate_file_folder_storage_targets();
             file_browser_reset_to_root();
             reload_library_on_sd_reinsert(false);
         }
@@ -8346,6 +8923,7 @@ void poll_sd_format(void) {
         sd_mount_fail_notified = false; /* give the freshly-formatted card a clean slate */
         if (!library_rescan_active) {
             start_library_auto_rescan();
+            invalidate_file_folder_storage_targets();
             file_browser_reset_to_root();
         }
     } else {
@@ -9664,6 +10242,7 @@ void gui_library_init(void) {
     now_playing_lookup_applied_valid = false;
     pthread_mutex_unlock(&now_playing_lookup_mutex);
     atomic_store(&artist_thumbnail_work_enabled, current_settings.show_artist_images);
+    build_file_folder_menu();
     library_teardown_diag("az_index_drag_timer before");
     if (!az_index_drag_timer) az_index_drag_timer = lv_timer_create(poll_az_index_drag, LV_DEF_REFR_PERIOD, NULL);
     library_teardown_diag("build_files_screen before");
@@ -9844,12 +10423,30 @@ void gui_library_teardown(void) {
     now_playing_lookup_result_valid = false;
     now_playing_lookup_applied_valid = false;
     pthread_mutex_unlock(&now_playing_lookup_mutex);
+    if (file_folder_job_timer) { lv_timer_delete(file_folder_job_timer); file_folder_job_timer = NULL; }
+    if (file_folder_job) {
+        file_folder_job_t * job = file_folder_job;
+        atomic_store_explicit(&job->cancel, true, memory_order_release);
+        pthread_join(job->thread, NULL);
+        gui_busy_hide(job->busy_handle);
+        if (job->ok && job->action == FILE_FOLDER_PLAYLIST_CREATE)
+            metadata_db_playlist_insert_one(job->created_path);
+        file_folder_job = NULL;
+        file_folder_job_free(job);
+    }
     library_setup_scan_complete = NULL;
     cancel_album_load();
     cancel_group_song_probes();
     reset_az_index_bindings();
     library_prompt_requeue_visible();
     gui_popup_teardown(&library_update_prompt_popup);
+    if (file_folder_menu_popup) { lv_obj_delete(file_folder_menu_popup); file_folder_menu_popup = NULL; }
+    file_folder_menu_page_row = NULL;
+    if (file_folder_menu_backdrop) { lv_obj_delete(file_folder_menu_backdrop); file_folder_menu_backdrop = NULL; }
+    file_folder_menu_path[0] = '\0';
+    add_to_playlist_target_dir[0] = '\0';
+    add_to_playlist_target_generation++;
+    playlist_name_target_mode = PLAYLIST_NAME_TARGET_NONE;
     gui_popup_teardown(&refresh_all_metadata_popup);
     gui_popup_teardown(&refresh_all_covers_popup);
     library_update_prompt_title = NULL;
@@ -10970,7 +11567,7 @@ void gui_library_start_boot_thumbnail_warmup(void) {
 }
 
 bool gui_library_has_background_work(void) {
-    return library_rescan_active || library_rescan_success_pending ||
+    return file_folder_job || library_rescan_active || library_rescan_success_pending ||
            album_load_job || album_load_pending || atomic_load(&album_thumbnail_active) ||
            atomic_load(&album_thumb_gen_active) || sd_format_active || search_job_active ||
            (group_probe_job && !track_probe_job_done(group_probe_job));
@@ -10980,7 +11577,7 @@ bool gui_library_navigation_blocked(void) {
     /* These operations use a modal progress/completion screen. Thumbnail
      * decoding, post-scan cache warming, and search are deliberately absent:
      * they are cancellable/optional workers and do not own the active screen. */
-    return library_rescan_active || library_rescan_success_pending || sd_format_active;
+    return file_folder_job || library_rescan_active || library_rescan_success_pending || sd_format_active;
 }
 
 void gui_library_prepare_for_ui_reload(bool preserve_artwork) {
