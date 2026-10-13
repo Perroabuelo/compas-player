@@ -97,6 +97,9 @@ static lv_obj_t * language_choice_list;
 static lv_obj_t * settings_power_screen;
 static lv_obj_t * settings_system_screen;
 static lv_obj_t * about_screen;
+static lv_obj_t * creator_help_menu_screen;
+static lv_obj_t * creator_plugin_help_screen;
+static lv_obj_t * creator_theme_help_screen;
 static lv_obj_t * buy_me_a_coffee_screen;
 static lv_obj_t * dev_options_screen;
 static lv_obj_t * accent_color_screen;
@@ -896,6 +899,24 @@ static void buy_me_a_coffee_row_cb(lv_event_t * e) {
     nav_push(buy_me_a_coffee_screen);
 }
 
+static void creator_plugin_help_row_cb(lv_event_t * e);
+static void creator_theme_help_row_cb(lv_event_t * e);
+
+static void creator_help_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!creator_help_menu_screen) {
+        static pill_list_item_t items[2];
+        items[0] = (pill_list_item_t){ TR("Create a plugin"), PILL_ACCESSORY_CHEVRON, false,
+                                       creator_plugin_help_row_cb, NULL, NULL };
+        items[1] = (pill_list_item_t){ TR("Create a theme"), PILL_ACCESSORY_CHEVRON, false,
+                                       creator_theme_help_row_cb, NULL, NULL };
+        creator_help_menu_screen = build_pill_list_screen(TR("Creator guides"), generic_back_cb,
+                                                          items, 2, gui_theme_accent_style(), GUI_ROW_GAP, 100);
+        finalize_screen_navigation(creator_help_menu_screen);
+    }
+    nav_push(creator_help_menu_screen);
+}
+
 static lv_obj_t * build_buy_me_a_coffee_screen(void) {
     lv_obj_t * title_label;
     lv_obj_t * list;
@@ -927,16 +948,79 @@ static lv_obj_t * build_buy_me_a_coffee_screen(void) {
     return scr;
 }
 
+static void creator_help_add_text(lv_obj_t * parent, const char * text, bool muted) {
+    lv_obj_t * label = lv_label_create(parent);
+    lv_label_set_text(label, text);
+    lv_obj_set_width(label, lv_pct(90));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(label, muted ? &style_theme_text_muted : &style_theme_text_primary, 0);
+    lv_obj_set_style_text_font(label, gui_theme_font(GUI_FONT_ROLE_BODY), 0);
+}
+
+static lv_obj_t * build_creator_help_screen(const char * title, const char * url,
+                                             const char * instructions, const char * extra) {
+    lv_obj_t * title_label;
+    lv_obj_t * list;
+    lv_obj_t * scr = build_subsonic_list_screen(title, &title_label, &list);
+    lv_obj_set_style_pad_row(list, BOARD_SCALE_PX(12), 0);
+    creator_help_add_text(list, instructions, false);
+    if (extra) creator_help_add_text(list, extra, false);
+
+    /* A square white quiet zone keeps the QR readable on every theme. The
+     * list remains scrollable when the 720px panel cannot fit all guidance. */
+    lv_obj_t * qr = lv_qrcode_create(list);
+    lv_qrcode_set_size(qr, BOARD_SCALE_PX(240));
+    lv_qrcode_set_dark_color(qr, lv_color_black());
+    lv_qrcode_set_light_color(qr, lv_color_white());
+    lv_qrcode_set_quiet_zone(qr, true);
+    lv_obj_set_style_border_width(qr, 4, 0);
+    lv_obj_set_style_border_color(qr, lv_color_white(), 0);
+    lv_qrcode_update(qr, url, strlen(url));
+    creator_help_add_text(list, TR("Scan for the full guide"), true);
+    creator_help_add_text(list, TR("github.com/Starnished66/compas-player"), true);
+    creator_help_add_text(list, TR("Guide: docs/CREATING.md"), true);
+    lv_obj_set_style_pad_bottom(list, BOARD_SCALE_PX(24), 0);
+    enable_gesture_bubble_recursive(scr);
+    return scr;
+}
+
+static void creator_plugin_help_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!creator_plugin_help_screen) {
+        creator_plugin_help_screen = build_creator_help_screen(
+            TR("Create a plugin"),
+            "https://github.com/Starnished66/compas-player/blob/main/docs/CREATING.md#plugins",
+            TR("Write a Lua plugin on your computer. Copy its .lua file to the .plugins folder on your SD card."),
+            TR("Open More > Plugins > Refresh Plugins. Scan for a working example and the full API guide."));
+    }
+    nav_push(creator_plugin_help_screen);
+}
+
+static void creator_theme_help_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!creator_theme_help_screen) {
+        creator_theme_help_screen = build_creator_help_screen(
+            TR("Create a theme"),
+            "https://github.com/Starnished66/compas-player/blob/main/docs/CREATING.md#themes",
+            TR("Edit a .theme text file on your computer. Copy it to the Themes folder on your SD card, then select it in More > Themes."),
+            TR("Scan for a starter theme and instructions. To redesign the player screen, see the XML layout guide linked there."));
+    }
+    nav_push(creator_theme_help_screen);
+}
+
 static lv_obj_t * build_about_screen(void) {
-    static pill_list_item_t items[3];
+    static pill_list_item_t items[4];
     lv_obj_t * version_row = NULL;
     items[0] = (pill_list_item_t){ TR("Compás Player"), PILL_ACCESSORY_NONE, false, NULL, NULL, NULL };
     items[0].out_row = &version_row;
     items[1] = (pill_list_item_t){ TR("Buy Me a Coffee"), PILL_ACCESSORY_CHEVRON, false,
                                     buy_me_a_coffee_row_cb, NULL, NULL };
-    items[2] = (pill_list_item_t){ TR("Developer Options"), PILL_ACCESSORY_CHEVRON, false,
+    items[2] = (pill_list_item_t){ TR("Create plugins & themes"), PILL_ACCESSORY_CHEVRON, false,
+                                    creator_help_row_cb, NULL, NULL };
+    items[3] = (pill_list_item_t){ TR("Developer Options"), PILL_ACCESSORY_CHEVRON, false,
                                     dev_options_row_cb, NULL, NULL };
-    lv_obj_t * scr = build_pill_list_screen(TR("About"), generic_back_cb, items, 3, gui_theme_accent_style(), GUI_ROW_GAP, 100);
+    lv_obj_t * scr = build_pill_list_screen(TR("About"), generic_back_cb, items, 4, gui_theme_accent_style(), GUI_ROW_GAP, 100);
     lv_label_set_text(settings_add_summary(version_row), app_version_label());
     finalize_screen_navigation(scr);
     return scr;
@@ -5395,6 +5479,9 @@ void gui_settings_teardown(void) {
     gui_popup_teardown(&hostname_reboot_popup);
 
     if (about_screen) { lv_obj_delete(about_screen); about_screen = NULL; }
+    if (creator_help_menu_screen) { lv_obj_delete(creator_help_menu_screen); creator_help_menu_screen = NULL; }
+    if (creator_plugin_help_screen) { lv_obj_delete(creator_plugin_help_screen); creator_plugin_help_screen = NULL; }
+    if (creator_theme_help_screen) { lv_obj_delete(creator_theme_help_screen); creator_theme_help_screen = NULL; }
     if (buy_me_a_coffee_screen) { lv_obj_delete(buy_me_a_coffee_screen); buy_me_a_coffee_screen = NULL; }
     if (dev_options_screen) { lv_obj_delete(dev_options_screen); dev_options_screen = NULL; }
     adb_switch = NULL; /* owned by the screen just deleted; sync runs off the USB poll, not this screen's lifetime */
