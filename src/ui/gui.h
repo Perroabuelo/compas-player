@@ -364,6 +364,7 @@ typedef struct {
     lv_event_cb_t cb;
     bool destructive;
     bool cancel;
+    void * user_data;
 } menu_popup_row_t;
 
 lv_obj_t * build_menu_popup(const menu_popup_row_t * rows, int row_count, lv_event_cb_t backdrop_cb, lv_obj_t ** out_backdrop);

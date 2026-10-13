@@ -304,6 +304,13 @@ lv_obj_t * volume_popup_backdrop = NULL;
 lv_obj_t * more_menu_popup = NULL;
 lv_obj_t * more_menu_popup_backdrop = NULL;
 
+typedef struct {
+    uint32_t registry_generation;
+    int index;
+} player_plugin_menu_callback_t;
+
+static player_plugin_menu_callback_t player_plugin_menu_callbacks[PLUGIN_MAX_PLAYER_LIST_ITEMS];
+
 static lv_obj_t * volume_popup_track = NULL;
 static lv_obj_t * volume_popup_speaker_icon = NULL;
 static lv_obj_t * volume_popup_value_label = NULL;
@@ -2312,6 +2319,14 @@ static void more_menu_information_cb(lv_event_t * e) {
     gui_track_info_open();
 }
 
+static void more_menu_plugin_item_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_more_menu_popup();
+    player_plugin_menu_callback_t * callback = lv_event_get_user_data(e);
+    if (!callback || callback->registry_generation != plugin_manager_get_list_registry_generation()) return;
+    plugin_manager_player_list_item_clicked(callback->index);
+}
+
 static void more_menu_eq_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     hide_more_menu_popup();
@@ -2327,10 +2342,15 @@ static void more_menu_delete_cb(lv_event_t * e) {
     gui_popup_show(&delete_song_popup);
 }
 
+static void build_more_menu_popup(void);
+
 static void more_icon_event_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     if (playlist_index < 0) return;
 
+    /* Plugin availability can change after a reload. Rebuild the popup from
+     * the current registry each time it opens. */
+    build_more_menu_popup();
     lv_obj_remove_flag(more_menu_popup_backdrop, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(more_menu_popup, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(more_menu_popup_backdrop);
@@ -2338,16 +2358,31 @@ static void more_icon_event_cb(lv_event_t * e) {
 }
 
 static void build_more_menu_popup(void) {
-    const menu_popup_row_t rows[] = {
-        { TR("Queue"), more_menu_queue_cb, false },
-        { TR("Add to Playlist"), more_menu_add_to_playlist_cb, false },
-        { TR("Information"), more_menu_information_cb, false },
-        { TR("EQ"), more_menu_eq_cb, false },
-        { TR("Delete"), more_menu_delete_cb, true },
-        { TR("Cancel"), more_menu_popup_backdrop_cb, false, true },
-    };
-    more_menu_popup = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])), more_menu_popup_backdrop_cb,
-                                        &more_menu_popup_backdrop);
+    if (more_menu_popup) { lv_obj_delete(more_menu_popup); more_menu_popup = NULL; }
+    if (more_menu_popup_backdrop) { lv_obj_delete(more_menu_popup_backdrop); more_menu_popup_backdrop = NULL; }
+
+    menu_popup_row_t rows[6 + PLUGIN_MAX_PLAYER_LIST_ITEMS];
+    int row_count = 0;
+    rows[row_count++] = (menu_popup_row_t) { TR("Queue"), more_menu_queue_cb, false };
+    rows[row_count++] = (menu_popup_row_t) { TR("Add to Playlist"), more_menu_add_to_playlist_cb, false };
+    rows[row_count++] = (menu_popup_row_t) { TR("Information"), more_menu_information_cb, false };
+
+    int plugin_count = plugin_manager_get_player_list_item_count();
+    if (plugin_count > PLUGIN_MAX_PLAYER_LIST_ITEMS) plugin_count = PLUGIN_MAX_PLAYER_LIST_ITEMS;
+    uint32_t generation = plugin_manager_get_list_registry_generation();
+    for (int i = 0; i < plugin_count; i++) {
+        player_plugin_menu_callbacks[i].registry_generation = generation;
+        player_plugin_menu_callbacks[i].index = i;
+        rows[row_count++] = (menu_popup_row_t) {
+            plugin_manager_get_player_list_item_label(i), more_menu_plugin_item_cb, false,
+            false, &player_plugin_menu_callbacks[i]
+        };
+    }
+
+    rows[row_count++] = (menu_popup_row_t) { TR("EQ"), more_menu_eq_cb, false };
+    rows[row_count++] = (menu_popup_row_t) { TR("Delete"), more_menu_delete_cb, true };
+    rows[row_count++] = (menu_popup_row_t) { TR("Cancel"), more_menu_popup_backdrop_cb, false, true };
+    more_menu_popup = build_menu_popup(rows, row_count, more_menu_popup_backdrop_cb, &more_menu_popup_backdrop);
 }
 
 /* Song context menu moved to gui_queue.c. */

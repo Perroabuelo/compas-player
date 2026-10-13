@@ -238,7 +238,7 @@ static const char * check_plugin_external_path(lua_State * L, int index, const c
 
 /* Registries for plugin.register_list_item(list_id, ...) -- native screens
  * (books, settings, display, playback, music_audio, music_controls,
- * music_timers, music_library, power, system) append their plugin rows
+ * music_timers, music_library, power, system, player) append their plugin rows
  * after built-in items. Storage is organized into a shared 2D array indexed
  * by target descriptor, while enforcing each target's individual max_items. */
 typedef enum {
@@ -252,6 +252,7 @@ typedef enum {
     PLUGIN_LIST_TARGET_MUSIC_LIBRARY,
     PLUGIN_LIST_TARGET_POWER,
     PLUGIN_LIST_TARGET_SYSTEM,
+    PLUGIN_LIST_TARGET_PLAYER,
     PLUGIN_LIST_TARGET_COUNT
 } plugin_list_target_t;
 
@@ -272,6 +273,7 @@ static const plugin_list_target_desc_t plugin_list_targets[PLUGIN_LIST_TARGET_CO
     [PLUGIN_LIST_TARGET_MUSIC_LIBRARY] = { "music_library", "music_library list item", PLUGIN_MAX_MUSIC_LIBRARY_LIST_ITEMS },
     [PLUGIN_LIST_TARGET_POWER] = { "power", "power list item", PLUGIN_MAX_POWER_LIST_ITEMS },
     [PLUGIN_LIST_TARGET_SYSTEM] = { "system", "system list item", PLUGIN_MAX_SYSTEM_LIST_ITEMS },
+    [PLUGIN_LIST_TARGET_PLAYER] = { "player", "player menu item", PLUGIN_MAX_PLAYER_LIST_ITEMS },
 };
 
 /* Keep physical registry storage at least as large as every per-list limit.
@@ -288,8 +290,15 @@ _Static_assert(PLUGIN_MAX_MUSIC_TIMERS_LIST_ITEMS <= PLUGIN_LIST_REGISTRY_CAPACI
 _Static_assert(PLUGIN_MAX_MUSIC_LIBRARY_LIST_ITEMS <= PLUGIN_LIST_REGISTRY_CAPACITY, "music_library registry capacity");
 _Static_assert(PLUGIN_MAX_POWER_LIST_ITEMS <= PLUGIN_LIST_REGISTRY_CAPACITY, "power registry capacity");
 _Static_assert(PLUGIN_MAX_SYSTEM_LIST_ITEMS <= PLUGIN_LIST_REGISTRY_CAPACITY, "system registry capacity");
+_Static_assert(PLUGIN_MAX_PLAYER_LIST_ITEMS <= PLUGIN_LIST_REGISTRY_CAPACITY, "player registry capacity");
 static plugin_list_item_t plugin_list_items[PLUGIN_LIST_TARGET_COUNT][PLUGIN_LIST_REGISTRY_CAPACITY];
 static int plugin_list_item_counts[PLUGIN_LIST_TARGET_COUNT];
+static uint32_t plugin_list_registry_generation = 1;
+
+static void advance_list_registry_generation(void) {
+    ++plugin_list_registry_generation;
+    if (plugin_list_registry_generation == 0) ++plugin_list_registry_generation;
+}
 
 /* Separate registry for plugin.register_stream_media_tile() -- same
  * plugin_tile_t shape, different surface (gui.c's Stream Media screen).
@@ -788,7 +797,7 @@ static int l_plugin_register_list_item(lua_State * L) {
         }
     }
 
-    return luaL_error(L, "plugin.register_list_item: unknown list_id '%s' (expected \"books\", \"settings\", \"display\", \"playback\", \"music_audio\", \"music_controls\", \"music_timers\", \"music_library\", \"power\", or \"system\")", list_id);
+    return luaL_error(L, "plugin.register_list_item: unknown list_id '%s' (expected \"books\", \"settings\", \"display\", \"playback\", \"music_audio\", \"music_controls\", \"music_timers\", \"music_library\", \"power\", \"system\", or \"player\")", list_id);
 }
 
 /* Registers a Stream Media tile, appended after the built-in Subsonic tile.
@@ -4800,7 +4809,7 @@ static const char * const plugin_capabilities[] = {
     "playback.format", "playback.output_info", "playback.silent_volume", "audio.peq.transient",
     "playback.output_events", "playback.settings", "playback.ab_loop", "playback.ab_switch", "playback.http_seek",
     "audio.peq.state", "library.track_metadata", "playback.transient_volume",
-    "filesystem.file_ops", "ui.file_manager"
+    "filesystem.file_ops", "ui.file_manager", "ui.player_menu"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -6077,12 +6086,14 @@ static void discard_failed_plugin_intervals(lua_State * L, bool aborted) {
 static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
     if (failed_load_owner_matches(plugin_progress_owner, L, aborted))
         plugin_progress_reset();
+    bool removed_list_item = false;
     for (int target = 0; target < PLUGIN_LIST_TARGET_COUNT; target++) {
         int out = 0;
         for (int i = 0; i < plugin_list_item_counts[target]; i++) {
             plugin_list_item_t item = plugin_list_items[target][i];
             if (failed_load_owner_matches(item.L, L, aborted)) {
                 if (!aborted) luaL_unref(L, LUA_REGISTRYINDEX, item.open_ref);
+                removed_list_item = true;
                 continue;
             }
             plugin_list_items[target][out++] = item;
@@ -6091,6 +6102,7 @@ static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
                (size_t)(plugin_list_item_counts[target] - out) * sizeof(plugin_list_items[target][0]));
         plugin_list_item_counts[target] = out;
     }
+    if (removed_list_item) advance_list_registry_generation();
 
 #define COMPACT_FAILED_LOAD_TILES(array, count) do { \
     int out = 0; \
@@ -6584,6 +6596,7 @@ static void plugin_manager_mark_disposing(void) {
 }
 
 void plugin_manager_deinit(void) {
+    advance_list_registry_generation();
     plugin_manager_mark_disposing();
     plugin_progress_reset();
     deinit_diag("plugin_manager_deinit: reset_home_layout before");
@@ -6872,6 +6885,11 @@ int plugin_manager_get_system_list_item_count(void) { return generic_list_item_c
 const char * plugin_manager_get_system_list_item_label(int index) { return generic_list_item_label(PLUGIN_LIST_TARGET_SYSTEM, index); }
 void plugin_manager_system_list_item_clicked(int index) { generic_list_item_clicked(PLUGIN_LIST_TARGET_SYSTEM, index); }
 void plugin_manager_get_system_list_item_options(int index, const char ** out_icon, int32_t * out_height, int32_t * out_width, const char ** out_text_size) { generic_list_item_options(PLUGIN_LIST_TARGET_SYSTEM, index, out_icon, out_height, out_width, out_text_size); }
+
+int plugin_manager_get_player_list_item_count(void) { return generic_list_item_count(PLUGIN_LIST_TARGET_PLAYER); }
+const char * plugin_manager_get_player_list_item_label(int index) { return generic_list_item_label(PLUGIN_LIST_TARGET_PLAYER, index); }
+void plugin_manager_player_list_item_clicked(int index) { generic_list_item_clicked(PLUGIN_LIST_TARGET_PLAYER, index); }
+uint32_t plugin_manager_get_list_registry_generation(void) { return plugin_list_registry_generation; }
 
 /* Shared by plugin_manager_stream_tile_clicked() below (the only remaining
  * caller now that plugin_manager_tile_clicked() -- the old, single-slot

@@ -117,6 +117,7 @@ loop is stopped. File reads through Lua's own file handles do count.
 | Entry point | Function | Limit |
 | --- | --- | --- |
 | A row in a native list | `register_list_item` | 16 in Playback & Controls or Sound; 8 in other lists, all plugins together |
+| An action in the now-playing menu | `register_list_item` | 8 actions, all plugins together; requires `ui.player_menu` |
 | A tile in Stream Media | `register_stream_media_tile` | 5 tiles |
 | A tile on Home | `register_home_tile` | 6 tiles, shown only when a Home layout lists them |
 | An on/off tile in the quick drawer | `register_quick_toggle` | 4 tiles |
@@ -125,6 +126,7 @@ The lists that accept rows:
 
 | `list_id` | Where the row appears | Good for |
 | --- | --- | --- |
+| `"player"` | Now Playing > three-dot menu, after Information | Track tools and playback actions |
 | `"books"` | Books | Readers, audiobooks, reference tools |
 | `"settings"` | Settings > System > Additional Tools | General plugin settings |
 | `"display"` | Settings > Display | Themes and visual tools |
@@ -139,6 +141,12 @@ The lists that accept rows:
 Rows from different plugins share a list, up to 16 in `playback` or
 `music_audio` and 8 in other lists, and the list
 scrolls. Any other `list_id` is an error.
+
+Use `plugin.has_capability("ui.player_menu")` before registering a `"player"`
+row. Its callback runs when the action is tapped and may open a plugin screen
+or perform an action. The player menu scrolls when its built-in and plugin
+actions exceed the available height. This is additive and does not require a
+newer API version.
 
 ## Identity and compatibility
 

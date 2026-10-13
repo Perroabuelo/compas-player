@@ -202,7 +202,7 @@ lv_obj_t * build_menu_popup(const menu_popup_row_t * rows, int row_count, lv_eve
         lv_obj_t * row = lv_obj_create(popup);
         style_popup_action_row(row);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(row, rows[i].cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(row, rows[i].cb, LV_EVENT_CLICKED, rows[i].user_data);
 
         lv_obj_t * label = lv_label_create(row);
         lv_obj_set_width(label, lv_pct(100));
