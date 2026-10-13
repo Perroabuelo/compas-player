@@ -123,6 +123,48 @@ static int last_selected_row = -1;
 static void rebuild_list(file_browser_t * fb);
 static void scan_current_dir(file_browser_t * fb);
 
+/* Keep the browser's heading useful on the small display while leaving the
+ * actual paths in current_dir untouched for navigation and callbacks. */
+static void set_path_label(file_browser_t *fb) {
+    char friendly[PATH_MAX + 8];
+    const char *root = fb->root_dir;
+    const char *current = fb->current_dir;
+    size_t root_len = strlen(root);
+    while (root_len > 1 && root[root_len - 1] == '/') root_len--;
+
+    size_t current_len = strlen(current);
+    while (current_len > 1 && current[current_len - 1] == '/') current_len--;
+
+    const char *relative = NULL;
+    if (root_len > 0 && current_len >= root_len && memcmp(current, root, root_len) == 0 &&
+        (current_len == root_len || root[root_len - 1] == '/' || current[root_len] == '/')) {
+        relative = current + root_len;
+        while (*relative == '/') relative++;
+    }
+
+    if (relative && !*relative) {
+        snprintf(friendly, sizeof(friendly), "SD/");
+    } else if (relative) {
+        snprintf(friendly, sizeof(friendly), "SD/%.*s", (int)(current_len - (size_t)(relative - current)), relative);
+    } else {
+        snprintf(friendly, sizeof(friendly), "%.*s", (int)current_len, current);
+    }
+
+    const lv_font_t *font = lv_obj_get_style_text_font(fb->path_label, LV_PART_MAIN);
+    int32_t letter_space = lv_obj_get_style_text_letter_space(fb->path_label, LV_PART_MAIN);
+    lv_obj_update_layout(fb->path_label);
+    int32_t available = lv_obj_get_content_width(fb->path_label);
+    lv_point_t text_size;
+    lv_text_get_size(&text_size, friendly, font, letter_space, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    if (text_size.x > available) {
+        const char *end = current + current_len;
+        const char *base = end;
+        while (base > current && base[-1] != '/') base--;
+        snprintf(friendly, sizeof(friendly), "./%.*s", (int)(end - base), base);
+    }
+    lv_label_set_text(fb->path_label, friendly);
+}
+
 /* Kept in sync with audio.c's decoder dispatch. */
 static const char * const PLAYABLE_EXTENSIONS[] = {
     ".flac", ".mp3", ".wav", ".rf64", ".w64", ".aiff", ".aif", ".aifc", ".dsf", ".dff", ".aac", ".m4a", ".m4b", ".mp4", ".alac", ".wv", ".caf", ".ape", ".wma", ".opus", ".ogg", ".oga",
@@ -1022,7 +1064,7 @@ static lv_obj_t * add_file_row(file_browser_t * fb, const char * label_text, con
 
 static void rebuild_list(file_browser_t * fb) {
     lv_obj_clean(fb->list);
-    lv_label_set_text(fb->path_label, fb->current_dir);
+    set_path_label(fb);
     if (fb->entry_count < 0) {
         add_file_row(fb, atomic_load(&fb->index_worker_oversized)
                      ? TR("Folder too large to index (tap Back)")
@@ -1194,8 +1236,9 @@ file_browser_t * file_browser_create(lv_obj_t * parent, const char * root,
                                      BOARD_SCALE_PX(20));
     lv_label_set_long_mode(fb->path_label, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(fb->path_label, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
+    lv_obj_set_height(fb->path_label, lv_font_get_line_height(gui_theme_font(GUI_FONT_ROLE_SUBTEXT)));
     lv_obj_align(fb->path_label, LV_ALIGN_TOP_LEFT, 10, STATUS_BAR_CLEARANCE + TITLE_ROW_HEIGHT + 4);
-    lv_label_set_text(fb->path_label, fb->current_dir);
+    set_path_label(fb);
 
     /* Plain flex-column container, not lv_list -- rows are hand-built pill
      * shapes (add_file_row), not lv_list's own button/text item API. */
