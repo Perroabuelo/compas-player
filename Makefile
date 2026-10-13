@@ -232,6 +232,9 @@ endif
 # tracked golden copy) than a plain clone does.
 LVGL_PATCH := patches/lvgl_fbdev_compositor.patch
 LVGL_RUNTIME_FIXES_PATCH := patches/lvgl_runtime_fixes.patch
+LVGL_BINFONT_SAFETY_PATCH := patches/lvgl_binfont_safety.patch
+LVGL_BINFONT_LOADER := $(LVGL_DIR)/src/font/binfont_loader/lv_binfont_loader.c
+LVGL_FS_CORE := $(LVGL_DIR)/src/misc/lv_fs.c
 LVGL_EVDEV_FRAMES_PATCH := patches/lvgl_evdev_frames.patch
 LVGL_EVDEV_C := $(LVGL_DIR)/src/drivers/evdev/lv_evdev.c
 LVGL_GENERATED_FONTS_DIR := patches/lvgl_generated_fonts
@@ -528,8 +531,13 @@ BUILD_STAMP_DEFINE = -DBUILD_STAMP=\"$(shell date +%Y-%m-%d_%H:%M)\"
 # ships no execinfo.h/backtrace() of its own, which is what main.c's SIGSEGV
 # handler needs. Host build doesn't need this -- glibc already provides it.
 TARGET_CFLAGS = $(CFLAGS) -I$(LIBEXECINFO_DIR) -I$(LVGL_DIR)/src -I$(TINYALSA_DIR)/include -Idbus_vendor_config -I$(DBUS_DIR) $(BOARD_DEFINE) $(TEST_BUILD_TAG_DEFINE) $(RELEASE_LABEL_DEFINE) $(UI_PERF_TRACE_DEFINE) $(UI_GESTURE_TRACE_DEFINE) $(UI_HITBOX_DEBUG_DEFINE) $(BUILD_STAMP_DEFINE) -I$(TINFL_DIR) -DMINIZ_NO_DEFLATE_APIS -DMINIZ_NO_ARCHIVE_APIS
-TARGET_CFLAGS += $(TARGET_CPU_FLAGS)
+# Compile target translation units into per-function/data sections so the
+# target linker's existing --gc-sections can discard unused library code.
+# Override with TARGET_CODE_SECTION_FLAGS= for staged linker-GC comparisons.
+TARGET_CODE_SECTION_FLAGS ?= -ffunction-sections -fdata-sections
+TARGET_CFLAGS += $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS)
 TARGET_CXXFLAGS = $(CXXFLAGS) -I$(LIBEXECINFO_DIR) -I$(LVGL_DIR)/src -I$(TINYALSA_DIR)/include -Idbus_vendor_config -I$(DBUS_DIR) $(BOARD_DEFINE) $(TEST_BUILD_TAG_DEFINE) $(RELEASE_LABEL_DEFINE) $(UI_PERF_TRACE_DEFINE) $(UI_GESTURE_TRACE_DEFINE) $(UI_HITBOX_DEBUG_DEFINE) $(BUILD_STAMP_DEFINE) -I$(TINFL_DIR) -DMINIZ_NO_DEFLATE_APIS -DMINIZ_NO_ARCHIVE_APIS $(TARGET_CPU_FLAGS)
+TARGET_CXXFLAGS += $(TARGET_CODE_SECTION_FLAGS)
 TINYALSA_CFLAGS = -O3 -g -Wall -I$(TINYALSA_DIR)/include -I$(TINYALSA_DIR)/src
 # DBUS_COMPILATION/DBUS_STATIC_BUILD: libdbus's own headers gate some
 # declarations on these (matching how its own build always defines them
@@ -640,7 +648,7 @@ LUA_CFLAGS = -O2 -g -Wall -I$(LUA_DIR)/src
 
 # Link flags
 HOST_LDFLAGS = $(shell sdl2-config --libs) -lpthread -lm
-TARGET_LDFLAGS = -static -no-pie -lpthread -lm
+TARGET_LDFLAGS = -static -no-pie -lpthread -lm -Wl,--gc-sections
 
 # Record target CPU flags in the board-specific object directory. The FORCE
 # prerequisite checks the requested string on every invocation, but only
@@ -653,6 +661,18 @@ FORCE_TARGET_CPU_FLAGS:
 $(TARGET_CPU_FLAGS_STAMP): FORCE_TARGET_CPU_FLAGS
 	@mkdir -p $(dir $@)
 	@printf '%s\n' '$(TARGET_CPU_FLAGS)' > $@.tmp
+	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
+
+# Like CPU flags, target section flags are an input to every target object.
+# Record even an empty override consistently so staged builds can switch
+# between sectioned and unsectioned objects without a clean build.
+TARGET_CODE_SECTION_FLAGS_STAMP = $(BUILD_TARGET_DIR)/.target_code_section_flags
+.PHONY: FORCE_TARGET_CODE_SECTION_FLAGS
+FORCE_TARGET_CODE_SECTION_FLAGS:
+
+$(TARGET_CODE_SECTION_FLAGS_STAMP): FORCE_TARGET_CODE_SECTION_FLAGS
+	@mkdir -p $(dir $@)
+	@printf '%s\n' '$(TARGET_CODE_SECTION_FLAGS)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 
 # Source files -- organized under src/ by category: audio/ (playback engine +
@@ -669,6 +689,7 @@ APP_SRCS += src/ui/lyrics_layout.c src/ui/transition_compositor.c src/ui/frosted
 APP_SRCS += src/core/ui_wake.c src/library/cover_raster_cache.c src/library/track_metadata_worker.c
 APP_SRCS += src/core/firmware_image.c
 APP_SRCS += src/core/boot_trace.c
+APP_SRCS += src/ui/ui_fonts.c
 APP_SRCS += src/core/storage_migration.c src/core/sd_fsck.c src/core/sd_fsck_run.c
 APP_SRCS += src/plugins/plugin_json.c src/plugins/plugin_storage.c src/plugins/plugin_disabled_list.c
 APP_SRCS += src/ui/gui_plugin_manage.c src/ui/gui_plugin_store.c src/ui/gui_lock_screen.c
@@ -818,6 +839,10 @@ TARGET_OBJS = $(BUILD_TARGET_DIR)/sonic/sonic.o $(APP_SRCS:src/%.c=$(BUILD_TARGE
               $(JPEG_SRCS:$(JPEG_DIR)/%.c=$(BUILD_TARGET_DIR)/jpeg/%.o) \
               $(TINFL_SRCS:$(TINFL_DIR)/%.c=$(BUILD_TARGET_DIR)/tinfl/%.o)
 
+# Make flag changes invalidate every target object, including vendor rules
+# whose compiler flags are assembled separately from TARGET_CFLAGS.
+$(TARGET_OBJS): $(TARGET_CODE_SECTION_FLAGS_STAMP)
+
 # Use upstream configuration for these libraries, including libsndfile's
 # built-in CAF/ALAC support. No firmware shared libraries are loaded.
 AUDIO_VENDOR_OPTIONS = -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
@@ -834,7 +859,7 @@ $(BUILD_HOST_DIR)/.audio_vendor_config: FORCE_AUDIO_VENDOR_CONFIG
 	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 $(BUILD_TARGET_DIR)/.audio_vendor_config: FORCE_AUDIO_VENDOR_CONFIG
 	@mkdir -p $(dir $@)
-	@printf '%s\n' '$(CROSS_CC) $(TARGET_CPU_FLAGS) $(WAVPACK_OPTIONS) $(SNDFILE_OPTIONS)' > $@.tmp
+	@printf '%s\n' '$(CROSS_CC) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) $(WAVPACK_OPTIONS) $(SNDFILE_OPTIONS)' > $@.tmp
 	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 
 $(BUILD_HOST_DIR)/libwavpack/libwavpack.a: $(BUILD_HOST_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt $(WAVPACK_CMAKE_STAMP)
@@ -844,10 +869,10 @@ $(BUILD_HOST_DIR)/libsndfile/libsndfile.a: $(BUILD_HOST_DIR)/.audio_vendor_confi
 	cmake -S $(SNDFILE_DIR) -B $(dir $@) $(SNDFILE_OPTIONS) -DCMAKE_C_COMPILER=$(CC)
 	+cmake --build $(dir $@) --target sndfile
 $(BUILD_TARGET_DIR)/libwavpack/libwavpack.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(WAVPACK_DIR)/CMakeLists.txt $(WAVPACK_CMAKE_STAMP)
-	cmake -S $(WAVPACK_DIR) -B $(dir $@) $(WAVPACK_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS)'
+	cmake -S $(WAVPACK_DIR) -B $(dir $@) $(WAVPACK_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS)'
 	+cmake --build $(dir $@) --target wavpack
 $(BUILD_TARGET_DIR)/libsndfile/libsndfile.a: $(BUILD_TARGET_DIR)/.audio_vendor_config $(SNDFILE_DIR)/CMakeLists.txt $(SNDFILE_CMAKE_STAMP)
-	cmake -S $(SNDFILE_DIR) -B $(dir $@) $(SNDFILE_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS)'
+	cmake -S $(SNDFILE_DIR) -B $(dir $@) $(SNDFILE_OPTIONS) -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=mipsel -DCMAKE_C_COMPILER=$(CROSS_CC) -DCMAKE_C_FLAGS='$(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS)'
 	+cmake --build $(dir $@) --target sndfile
 
 .PHONY: all host target bootloader clean compile_commands.json FORCE_VERSION
@@ -856,7 +881,11 @@ $(BUILD_TARGET_DIR)/libsndfile/libsndfile.a: $(BUILD_TARGET_DIR)/.audio_vendor_c
 all: host compile_commands.json
 
 # Build for host (Arch Linux PC)
-host: $(HOST_BIN) compile_commands.json
+host: check-ui-fonts $(HOST_BIN) compile_commands.json
+
+.PHONY: check-ui-fonts
+check-ui-fonts:
+	python3 scripts/generate_ui_fonts.py --verify
 
 $(HOST_BIN): $(HOST_OBJS) $(HOST_AUDIO_LIBS)
 	$(CXX) -o $@ $(HOST_OBJS) $(HOST_AUDIO_LIBS) $(HOST_LDFLAGS)
@@ -870,6 +899,7 @@ $(HOST_BIN): $(HOST_OBJS) $(HOST_AUDIO_LIBS)
 $(LVGL_PATCH_STAMP): $(LVGL_FBDEV_C) $(LVGL_FBDEV_H) $(LVGL_PATCH) \
                      $(LVGL_TINY_TTF) $(LVGL_TJPGDCNF) $(LVGL_LRU_RB) $(LVGL_LODEPNG) $(LVGL_OBJ_POS) $(LVGL_DRAW_IMAGE) $(LVGL_SW_TRANSFORM) $(LVGL_RUNTIME_FIXES_PATCH) \
                      $(LVGL_EVDEV_C) $(LVGL_EVDEV_FRAMES_PATCH) \
+                     $(LVGL_BINFONT_LOADER) $(LVGL_FS_CORE) $(LVGL_BINFONT_SAFETY_PATCH) scripts/apply-tracked-patch.sh \
                      $(LVGL_FONT_TARGETS) $(LVGL_FONT_GOLDEN)
 	@set -e; \
 	actual_commit=$$(git -C $(LVGL_DIR) rev-parse HEAD 2>/dev/null || echo ""); \
@@ -939,6 +969,7 @@ $(LVGL_PATCH_STAMP): $(LVGL_FBDEV_C) $(LVGL_FBDEV_H) $(LVGL_PATCH) \
 	  echo "       Remove $(LVGL_DIR) and re-run make to start from a clean pinned checkout."; \
 	  exit 1; \
 	fi; \
+	scripts/apply-tracked-patch.sh $(LVGL_DIR) $(LVGL_BINFONT_SAFETY_PATCH); \
 	for f in $(LVGL_GENERATED_FONTS); do \
 	  target=$(LVGL_DIR)/src/font/$$f; golden=$(LVGL_GENERATED_FONTS_DIR)/$$f; \
 	  if cmp -s "$$target" "$$golden"; then \
@@ -1020,9 +1051,9 @@ $(BUILD_HOST_DIR)/lua/%.o: $(LUA_DIR)/src/%.c
 	$(CC) $(LUA_CFLAGS) -DHOST_BUILD=1 -c $< -o $@
 
 # Build for target (MIPS HiBy Device)
-target: $(TARGET_BIN) compile_commands.json
+target: check-ui-fonts $(TARGET_BIN) compile_commands.json
 
-$(TARGET_BIN): $(TARGET_OBJS) $(TARGET_CPU_FLAGS_STAMP) $(TARGET_AUDIO_LIBS)
+$(TARGET_BIN): $(TARGET_OBJS) $(TARGET_CPU_FLAGS_STAMP) $(TARGET_AUDIO_LIBS) Makefile
 	$(CROSS_CXX) $(TARGET_CPU_FLAGS) -o $(BUILD_TARGET_DIR)/$(TARGET_BIN)_unstripped $(TARGET_OBJS) $(TARGET_AUDIO_LIBS) $(TARGET_LDFLAGS)
 	$(CROSS_STRIP) -s -o $@ $(BUILD_TARGET_DIR)/$(TARGET_BIN)_unstripped
 	@echo "Target build complete: File ready at '$(TARGET_BIN)'"
@@ -1088,19 +1119,19 @@ $(BUILD_TARGET_DIR)/lv_xml/%.o: $(LV_XML_DIR)/%.c $(LVGL_PATCH_STAMP) $(TARGET_C
 
 $(BUILD_TARGET_DIR)/tinyalsa/%.o: $(TINYALSA_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(TINYALSA_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(TINYALSA_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/faad2/%.o: $(FAAD2_DIR)/libfaad/%.c $(FAAD2_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(FAAD2_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(FAAD2_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.c $(ALAC_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(ALAC_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(ALAC_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/alac/%.o: $(ALAC_DIR)/codec/%.cpp $(ALAC_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CXX) $(ALAC_CXXFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CXX) $(ALAC_CXXFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/mbedtls/%.o: $(MBEDTLS_DIR)/library/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
@@ -1116,19 +1147,19 @@ $(BUILD_TARGET_DIR)/stb_vorbis/%.o: $(STB_VORBIS_DIR)/%.c $(TARGET_CPU_FLAGS_STA
 
 $(BUILD_TARGET_DIR)/dbus/%.o: $(DBUS_DIR)/dbus/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(DBUS_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(DBUS_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/opus/%.o: $(OPUS_DIR)/%.c $(OPUS_WARNING_STAMP) $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opus_config
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(TARGET_OPUS_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(TARGET_OPUS_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/libogg/%.o: $(OGG_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opusfile_config
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(OGG_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(OGG_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/opusfile/%.o: $(OPUSFILE_DIR)/src/%.c libogg_vendor_config/ogg/config_types.h $(TARGET_CPU_FLAGS_STAMP) $(BUILD_TARGET_DIR)/.opusfile_config $(OPUSFILE_PATCH_STAMP) $(OPUSFILE_WARN_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(OPUSFILE_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(OPUSFILE_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/tinfl/%.o: $(TINFL_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
@@ -1136,15 +1167,15 @@ $(BUILD_TARGET_DIR)/tinfl/%.o: $(TINFL_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 
 $(BUILD_TARGET_DIR)/jpeg/%.o: $(JPEG_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(JPEG_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(JPEG_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/lua/%.o: $(LUA_DIR)/src/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(LUA_CFLAGS) $(TARGET_CPU_FLAGS) -c $< -o $@
+	$(CROSS_CC) $(LUA_CFLAGS) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -c $< -o $@
 
 $(BUILD_TARGET_DIR)/libexecinfo/%.o: $(LIBEXECINFO_DIR)/%.c $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(dir $@)
-	$(CROSS_CC) $(TARGET_CPU_FLAGS) -O2 -g -Wall -Wno-frame-address -I$(LIBEXECINFO_DIR) -c $< -o $@
+	$(CROSS_CC) $(TARGET_CPU_FLAGS) $(TARGET_CODE_SECTION_FLAGS) -O2 -g -Wall -Wno-frame-address -I$(LIBEXECINFO_DIR) -c $< -o $@
 
 # Generate compile_commands.json for Zed/clangd LSP autofill and hover popups
 compile_commands.json:
