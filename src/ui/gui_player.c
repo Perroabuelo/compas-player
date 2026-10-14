@@ -4354,7 +4354,14 @@ lv_obj_t * player_layout_create_builtin(lv_obj_t * scr) {
      * back arrow on the Player. Retain the transparent hit target so the
      * established tap-to-dismiss behavior remains available. */
     lv_obj_t * dismiss_arrow = lv_obj_get_child(dismiss, 0);
-    if (dismiss_arrow) lv_obj_add_flag(dismiss_arrow, LV_OBJ_FLAG_HIDDEN);
+    if (dismiss_arrow) {
+        /* The Now Playing dismiss target intentionally retains its original
+         * hidden stock back asset; the visible navigation back glyph is for
+         * standard screen headers only. */
+        lv_image_set_src(dismiss_arrow, asset_path("sub_back/btn_back.png"));
+        lv_obj_set_style_image_recolor_opa(dismiss_arrow, LV_OPA_TRANSP, 0);
+        lv_obj_add_flag(dismiss_arrow, LV_OBJ_FLAG_HIDDEN);
+    }
 
     /* Quality pill */
     lv_obj_t * pill = lv_obj_create(scr);

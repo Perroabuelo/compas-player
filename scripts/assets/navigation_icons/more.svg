@@ -1,2 +1,0 @@
-<!-- Source: @phosphor-icons/core@2.1.1/assets/regular/dots-three-vertical.svg (MIT). Violet Compas gradient added. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="url(#tint)"><defs><linearGradient id="tint" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d7a9fa"/><stop offset="1" stop-color="#a36be4"/></linearGradient></defs><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm-12-44a12,12,0,1,0-12-12A12,12,0,0,0,128,84Zm0,88a12,12,0,1,0,12,12A12,12,0,0,0,128,172Z"/></svg>

@@ -685,12 +685,14 @@ void gui_plugin_set_text_color(const char * slot, uint32_t rgb) {
 
     if (strcmp(slot, "primary") == 0) {
         lv_style_set_text_color(&style_theme_text_primary, color);
+        lv_style_set_image_recolor(&style_theme_text_primary, color);
         lv_obj_report_style_change(&style_theme_text_primary);
         lv_style_set_text_color(&list_row_style, color);
         lv_obj_report_style_change(&list_row_style);
         gui_theme_update_surface_contrast();
     } else if (strcmp(slot, "muted") == 0) {
         lv_style_set_text_color(&style_theme_text_muted, color);
+        lv_style_set_image_recolor(&style_theme_text_muted, color);
         lv_obj_report_style_change(&style_theme_text_muted);
     }
     /* Else: unreachable -- see gui_plugin_set_background_color()'s own

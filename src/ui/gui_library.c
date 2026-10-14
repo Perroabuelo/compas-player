@@ -6357,7 +6357,8 @@ void register_search(search_binding_id_t id, lv_obj_t * screen, lv_obj_t * list,
     if (id == SEARCH_BINDING_FILES) {
         /* Keep Files search beside its folder action, with the options icon
          * at the right edge. The title ends before Search. */
-        lv_obj_align(search_btn, LV_ALIGN_TOP_RIGHT, -TITLE_ROW_HEIGHT, STATUS_BAR_CLEARANCE);
+        lv_obj_align(search_btn, LV_ALIGN_TOP_RIGHT, -HEADER_BUTTON_WIDTH,
+                     STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
         if (files_title_label) reserve_title_width_before(files_title_label, search_btn);
     }
 
@@ -6891,11 +6892,7 @@ static lv_obj_t * add_playlist_row_base(lv_obj_t * parent, const char * label_te
     lv_obj_align(label, LV_ALIGN_LEFT_MID, LIST_ROW_LABEL_INSET, 0);
     configure_scrolling_row_label(label, LIST_ROW_WIDTH_WIDE - LIST_ROW_LABEL_INSET - BOARD_SCALE_PX(60));
     if (parent == playlists_list) {
-        lv_obj_t * chevron = lv_label_create(row);
-        lv_label_set_text(chevron, ">");
-        lv_obj_add_style(chevron, &style_theme_text_muted, 0);
-        lv_obj_set_style_text_font(chevron, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
-        lv_obj_align(chevron, LV_ALIGN_RIGHT_MID, -GUI_TEXT_INSET, 0);
+        build_navigation_chevron(row, GUI_TEXT_INSET, false, 0);
     }
     return row;
 }
@@ -9423,10 +9420,12 @@ static lv_obj_t * build_music_screen(void) {
                                                 &launcher_layout_config.music);
     lv_obj_t * sound = build_top_right_icon_button(scr, asset_path("settings/sound.png"),
                                                    music_screen_sound_settings_cb);
-    lv_obj_align(sound, LV_ALIGN_TOP_RIGHT, -2 * TITLE_ROW_HEIGHT, STATUS_BAR_CLEARANCE);
+    lv_obj_align(sound, LV_ALIGN_TOP_RIGHT, -2 * HEADER_BUTTON_WIDTH,
+                 STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
     lv_obj_t * playback = build_top_right_icon_button(scr, asset_path("settings/playback.png"),
                                                      music_screen_playback_settings_cb);
-    lv_obj_align(playback, LV_ALIGN_TOP_RIGHT, -TITLE_ROW_HEIGHT, STATUS_BAR_CLEARANCE);
+    lv_obj_align(playback, LV_ALIGN_TOP_RIGHT, -HEADER_BUTTON_WIDTH,
+                 STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
     build_top_right_icon_button(scr, asset_path("submenu/music_database.png"), music_screen_library_settings_cb);
     /* Reserve the title against the leftmost of the three 64px touch targets. */
     for (uint32_t i = 0; i < lv_obj_get_child_count(scr); ++i) {
