@@ -67,6 +67,10 @@ static lv_obj_t * settings_sorting_options[5];
 static lv_obj_t * settings_sound_effects_screen;
 static lv_obj_t * settings_eq_profiles_menu_screen;
 static lv_obj_t * settings_appearance_screen;
+static lv_obj_t * settings_topbar_screen;
+static lv_obj_t * settings_topbar_list;
+static lv_obj_t * settings_topbar_clock_position_screen;
+static lv_obj_t * settings_topbar_clock_position_list;
 static lv_obj_t * settings_player_layout_screen;
 static lv_obj_t * settings_gestures_screen;
 static lv_obj_t * settings_charging_screen;
@@ -3397,6 +3401,144 @@ static void themes_row_cb(lv_event_t * e) {
     gui_themes_open_picker();
 }
 
+typedef struct {
+    const char * label;
+    uint32_t hidden_bit;
+} topbar_visibility_option_t;
+
+static const topbar_visibility_option_t topbar_visibility_options[] = {
+    { N_("Volume"), TOPBAR_HIDE_VOLUME },
+    { N_("Clock"), TOPBAR_HIDE_CLOCK },
+    { N_("Wi-Fi"), TOPBAR_HIDE_WIFI },
+    { N_("Bluetooth"), TOPBAR_HIDE_BLUETOOTH },
+    { N_("Wired Headphones"), TOPBAR_HIDE_HEADPHONES },
+    { N_("Bluetooth Audio (A2DP)"), TOPBAR_HIDE_A2DP },
+    { N_("USB Audio"), TOPBAR_HIDE_USB_AUDIO },
+    { N_("Playback Status"), TOPBAR_HIDE_PLAYBACK },
+    { N_("Bluetooth Codec"), TOPBAR_HIDE_CODEC },
+    { N_("Battery Icon"), TOPBAR_HIDE_BATTERY },
+};
+
+static void populate_topbar_settings_screen(void);
+static void populate_topbar_clock_position_screen(void);
+static void topbar_clock_position_rebuild_async_cb(void * user_data) {
+    (void)user_data;
+    populate_topbar_clock_position_screen();
+}
+
+static void topbar_set_clicked_row_switch(lv_event_t * e, bool checked) {
+    lv_obj_t * row = lv_event_get_target(e);
+    uint32_t child_count = lv_obj_get_child_count(row);
+    for (uint32_t i = 0; i < child_count; ++i) {
+        lv_obj_t * child = lv_obj_get_child(row, i);
+        if (!lv_obj_check_type(child, &lv_switch_class)) continue;
+        if (checked) lv_obj_add_state(child, LV_STATE_CHECKED);
+        else lv_obj_remove_state(child, LV_STATE_CHECKED);
+        return;
+    }
+}
+
+static void topbar_visibility_toggle_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    uint32_t bit = (uint32_t)(uintptr_t)lv_event_get_user_data(e);
+    current_settings.topbar_hidden_elements ^= bit;
+    current_settings.topbar_hidden_elements &= TOPBAR_HIDE_ALL;
+    settings_save_async(&current_settings);
+    gui_shell_apply_topbar_settings();
+    topbar_set_clicked_row_switch(e,
+        (current_settings.topbar_hidden_elements & bit) == 0);
+}
+
+static void topbar_battery_percentage_toggle_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    current_settings.show_battery_percent = !current_settings.show_battery_percent;
+    settings_save_async(&current_settings);
+    gui_shell_apply_topbar_settings();
+    topbar_set_clicked_row_switch(e, current_settings.show_battery_percent);
+}
+
+typedef struct {
+    int position;
+    const char * label;
+} topbar_clock_position_option_t;
+
+static const topbar_clock_position_option_t topbar_clock_position_options[] = {
+    { TOPBAR_CLOCK_LEFT, N_("Left") },
+    { TOPBAR_CLOCK_CENTER, N_("Center") },
+    { TOPBAR_CLOCK_RIGHT, N_("Right") },
+};
+
+static void topbar_clock_position_option_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    int index = (int)(intptr_t)lv_event_get_user_data(e);
+    if (index < 0 || (size_t)index >= sizeof(topbar_clock_position_options) / sizeof(topbar_clock_position_options[0])) return;
+    current_settings.topbar_clock_position = topbar_clock_position_options[index].position;
+    settings_save_async(&current_settings);
+    gui_shell_apply_topbar_settings();
+    lv_async_call(topbar_clock_position_rebuild_async_cb, NULL);
+}
+
+static void populate_topbar_clock_position_screen(void) {
+    if (!settings_topbar_clock_position_list) return;
+    lv_obj_clean(settings_topbar_clock_position_list);
+    for (size_t i = 0; i < sizeof(topbar_clock_position_options) / sizeof(topbar_clock_position_options[0]); ++i) {
+        add_pill_option_row(settings_topbar_clock_position_list,
+                            TR(topbar_clock_position_options[i].label),
+                            current_settings.topbar_clock_position == topbar_clock_position_options[i].position,
+                            topbar_clock_position_option_cb, (void *)(intptr_t)i);
+    }
+}
+
+static lv_obj_t * build_topbar_clock_position_screen(void) {
+    lv_obj_t * title_label;
+    settings_topbar_clock_position_screen = build_subsonic_list_screen(
+        TR("Clock Position"), &title_label, &settings_topbar_clock_position_list);
+    populate_topbar_clock_position_screen();
+    finalize_screen_navigation(settings_topbar_clock_position_screen);
+    return settings_topbar_clock_position_screen;
+}
+
+static void topbar_clock_position_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!settings_topbar_clock_position_screen)
+        settings_topbar_clock_position_screen = build_topbar_clock_position_screen();
+    else populate_topbar_clock_position_screen();
+    if (settings_topbar_clock_position_screen) nav_push(settings_topbar_clock_position_screen);
+}
+
+static void populate_topbar_settings_screen(void) {
+    if (!settings_topbar_list) return;
+    lv_obj_clean(settings_topbar_list);
+    for (size_t i = 0; i < sizeof(topbar_visibility_options) / sizeof(topbar_visibility_options[0]); ++i) {
+        lv_obj_t * row = add_pill_toggle_row(settings_topbar_list,
+            TR(topbar_visibility_options[i].label),
+            (current_settings.topbar_hidden_elements & topbar_visibility_options[i].hidden_bit) == 0,
+            NULL);
+        lv_obj_add_event_cb(row, topbar_visibility_toggle_cb, LV_EVENT_CLICKED,
+                            (void *)(uintptr_t)topbar_visibility_options[i].hidden_bit);
+    }
+    add_pill_toggle_row(settings_topbar_list, TR("Battery Percentage"),
+                        current_settings.show_battery_percent,
+                        topbar_battery_percentage_toggle_cb);
+    add_pill_chevron_row(settings_topbar_list, TR("Clock Position"), topbar_clock_position_row_cb);
+}
+
+static lv_obj_t * build_topbar_settings_screen(void) {
+    lv_obj_t * title_label;
+    settings_topbar_screen = build_subsonic_list_screen(TR("Top Bar"), &title_label,
+                                                         &settings_topbar_list);
+    populate_topbar_settings_screen();
+    finalize_screen_navigation(settings_topbar_screen);
+    return settings_topbar_screen;
+}
+
+static void topbar_settings_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!settings_topbar_screen) settings_topbar_screen = build_topbar_settings_screen();
+    else populate_topbar_settings_screen();
+    if (settings_topbar_screen) nav_push(settings_topbar_screen);
+}
+
 static lv_obj_t * build_settings_appearance_screen(void) {
     static pill_list_item_t items[8 + PLUGIN_MAX_DISPLAY_LIST_ITEMS];
     items[0] = (pill_list_item_t){ TR("Accent Color"), PILL_ACCESSORY_CHEVRON, false, accent_color_row_cb, NULL, NULL };
@@ -3406,9 +3548,8 @@ static lv_obj_t * build_settings_appearance_screen(void) {
     items[4] = (pill_list_item_t){ TR("Drawer Volume Slider"), PILL_ACCESSORY_TOGGLE,
                                     current_settings.quick_drawer_volume_visible, NULL,
                                     quick_drawer_volume_visible_switch_event_cb, NULL };
-    items[5] = (pill_list_item_t){ TR("Battery Percentage"), PILL_ACCESSORY_TOGGLE,
-                                    current_settings.show_battery_percent, NULL,
-                                    battery_percent_switch_event_cb, NULL };
+    items[5] = (pill_list_item_t){ TR("Top Bar"), PILL_ACCESSORY_CHEVRON, false,
+                                    topbar_settings_row_cb, NULL, NULL };
     items[6] = (pill_list_item_t){ TR("Artist Images"), PILL_ACCESSORY_TOGGLE,
                                     current_settings.show_artist_images, NULL,
                                     artist_images_switch_event_cb, NULL };
@@ -5585,6 +5726,13 @@ void gui_settings_teardown(void) {
     if (settings_sound_effects_screen) { lv_obj_delete(settings_sound_effects_screen); settings_sound_effects_screen = NULL; }
     if (settings_eq_profiles_menu_screen) { lv_obj_delete(settings_eq_profiles_menu_screen); settings_eq_profiles_menu_screen = NULL; }
     if (settings_appearance_screen) { lv_obj_delete(settings_appearance_screen); settings_appearance_screen = NULL; }
+    if (settings_topbar_screen) { lv_obj_delete(settings_topbar_screen); settings_topbar_screen = NULL; }
+    settings_topbar_list = NULL;
+    if (settings_topbar_clock_position_screen) {
+        lv_obj_delete(settings_topbar_clock_position_screen);
+        settings_topbar_clock_position_screen = NULL;
+    }
+    settings_topbar_clock_position_list = NULL;
     if (settings_player_layout_screen) { lv_obj_delete(settings_player_layout_screen); settings_player_layout_screen = NULL; }
     if (settings_gestures_screen) { lv_obj_delete(settings_gestures_screen); settings_gestures_screen = NULL; }
     if (settings_charging_screen) { lv_obj_delete(settings_charging_screen); settings_charging_screen = NULL; }

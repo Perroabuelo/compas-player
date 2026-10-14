@@ -71,6 +71,21 @@ static bool parse_button_action(const char *value, button_mapping_action_t *out)
     return true;
 }
 
+/* Parse an unsigned decimal setting without accepting signs, trailing text,
+ * or values that overflow uint32_t. */
+static bool parse_u32_setting(const char *value, uint32_t *out) {
+    if (!value || !value[0] || !out) return false;
+    uint32_t parsed = 0;
+    for (const unsigned char *p = (const unsigned char *)value; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+        uint32_t digit = (uint32_t)(*p - '0');
+        if (parsed > (UINT32_MAX - digit) / 10u) return false;
+        parsed = parsed * 10u + digit;
+    }
+    *out = parsed;
+    return true;
+}
+
 static bool parse_button_binding_key(const char *key, int *button, int *gesture) {
     if (!key || !button || !gesture) return false;
     static const char * const setting_gesture_names[] = { "tap", "double", "hold" };
@@ -231,6 +246,8 @@ static void set_defaults(player_settings_t * out) {
     out->screen_dimming_enabled = true;
     out->screen_dim_delay_seconds = 10;
     out->hide_player_topbar = false;
+    out->topbar_hidden_elements = 0;
+    out->topbar_clock_position = TOPBAR_CLOCK_CENTER;
     out->screen_upside_down = false;
     out->led_indicator_enabled = true;
     out->db_logging_enabled = false; /* opt-in developer diagnostic, off by default */
@@ -582,6 +599,14 @@ bool settings_load(player_settings_t * out) {
             out->screen_dim_delay_seconds = atoi(value);
         } else if (strcmp(key, "hide_player_topbar") == 0) {
             out->hide_player_topbar = (strcmp(value, "1") == 0);
+        } else if (strcmp(key, "topbar_hidden_elements") == 0) {
+            uint32_t parsed;
+            if (parse_u32_setting(value, &parsed))
+                out->topbar_hidden_elements = parsed & TOPBAR_HIDE_ALL;
+        } else if (strcmp(key, "topbar_clock_position") == 0) {
+            uint32_t parsed;
+            if (parse_u32_setting(value, &parsed) && parsed <= TOPBAR_CLOCK_RIGHT)
+                out->topbar_clock_position = (int)parsed;
         } else if (strcmp(key, "screen_upside_down") == 0) {
             out->screen_upside_down = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "led_indicator_enabled") == 0) {
@@ -821,6 +846,11 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "screen_dimming_enabled=%d\n", settings->screen_dimming_enabled ? 1 : 0);
     fprintf(f, "screen_dim_delay_seconds=%d\n", settings->screen_dim_delay_seconds);
     fprintf(f, "hide_player_topbar=%d\n", settings->hide_player_topbar ? 1 : 0);
+    fprintf(f, "topbar_hidden_elements=%u\n", settings->topbar_hidden_elements & TOPBAR_HIDE_ALL);
+    fprintf(f, "topbar_clock_position=%d\n",
+            settings->topbar_clock_position >= TOPBAR_CLOCK_CENTER &&
+            settings->topbar_clock_position <= TOPBAR_CLOCK_RIGHT
+                ? settings->topbar_clock_position : TOPBAR_CLOCK_CENTER);
     fprintf(f, "screen_upside_down=%d\n", settings->screen_upside_down ? 1 : 0);
     fprintf(f, "led_indicator_enabled=%d\n", settings->led_indicator_enabled ? 1 : 0);
     fprintf(f, "db_logging_enabled=%d\n", settings->db_logging_enabled ? 1 : 0);
