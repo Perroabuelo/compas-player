@@ -191,6 +191,7 @@
 /assets/fonts/korean.ttf
 
 # Build outputs
+/build/
 /build_host/
 /build_ui_test*/
 /build_layouts_test*/
@@ -474,3 +475,6 @@ __pycache__/
 !/scripts/test_settings_defaults.sh
 !/scripts/test_compas_zram.sh
 !/src/core/settings_defaults_test.c
+
+# Plugin payloads belong in the compas-plugins repository.
+/plugins_examples/

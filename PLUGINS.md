@@ -8,7 +8,8 @@ Ready-made plugins live in the
 [compas-plugins repository](https://github.com/Starnished66/compas-plugins).
 The in-app **Plugin Store** (Settings > System > Plugin Manager > Plugin
 Store) installs from it. Browse it for real examples, or contribute your own.
-More examples are in `plugins_examples/` in this repository.
+Browse [published plugins](https://github.com/Starnished66/compas-plugins/tree/main/plugins)
+and [standalone examples](https://github.com/Starnished66/compas-plugins/tree/main/examples).
 
 This guide describes the API in `src/plugins/plugin_manager.c`. If the two
 ever disagree, the code is right.
@@ -502,8 +503,9 @@ player versions and store catalog classification. On current versions of the
 player, `Themes.lua` is recognized as a legacy theme loader and suppressed at
 load time, as native theme management handles `.theme` files directly.
 
-The script `plugins_examples/Themes.lua` remains available as a historical
-reference format for custom theme application and programmatic UI styling.
+The [Themes plugin source](https://github.com/Starnished66/compas-plugins/tree/main/plugins/Themes)
+shows the historical reference format for custom theme application and
+programmatic UI styling.
 
 | To apply... | Call |
 | --- | --- |
@@ -749,8 +751,9 @@ text_muted=0x9FB3C8
 icon_root=theme2
 ```
 
-The bundled themes in `plugins_examples/Themes/` (for example `White.theme`
-and `MountainSunset.theme`) are complete examples to copy from.
+The [published theme packages](https://github.com/Starnished66/compas-plugins/tree/main/plugins)
+include complete examples such as [White](https://github.com/Starnished66/compas-plugins/tree/main/plugins/ThemeWhite)
+and [Mountain Sunset](https://github.com/Starnished66/compas-plugins/tree/main/plugins/ThemeMountainSunset).
 
 ## Playback
 
@@ -1109,8 +1112,8 @@ recreate the stock firmware's Low and High Gain modes. `curve` is a table of
 exactly 101 integers (volume 0% to 100%), each a raw register value from 0
 (loudest) to 255 (quietest). `nil` restores the built-in curve. It applies
 immediately but isn't saved, so set it again on every load. It affects only
-the headphone and line output, not Bluetooth or USB. See
-`plugins_examples/GainMode.lua`.
+the headphone and line output, not Bluetooth or USB. See the
+[Gain Mode plugin](https://github.com/Starnished66/compas-plugins/tree/main/plugins/GainMode).
 
 ## Device
 
@@ -1378,35 +1381,36 @@ them quick.
 
 ## Examples
 
-Files in this table are in `plugins_examples/`, except ListenBrainz Scrobbler and Radio Browser, which are installed from the plugin store.
+Plugin links point to the canonical compas-plugins repository. The separate
+examples are in its [`examples/` directory](https://github.com/Starnished66/compas-plugins/tree/main/examples).
 
 | Example | Shows |
 | --- | --- |
-| `Audiobooks.lua` | Books row, folder scanning, resume, bookmarks, chapters, sleep timer |
-| `Podcasts.lua` | RSS and OPML, episode downloads, resume |
-| `NetRadio.lua` | Stream Media tile and radio streams from `Radio.txt` |
-| `HiByStockPlayer.lua` | A Player layout in the style of the stock HiBy OS player, with its own lyrics area, offered in Settings and applied from a row |
-| `Themes.lua` | Historical reference format: icons, colors, Home layout, saved choice, `refresh_theme` |
-| `SoundProfiles.lua` | Switching EQ profiles |
-| `MSEB.lua` | Chained settings screens, sliders sharing EQ bands, backup and restore |
-| `GainMode.lua` | Low/High Gain volume curves |
-| `PlaybackExtras.lua` | Toggles, sliders, nested settings, row icons |
-| `PlayThrough.lua` | Continuing into the next folder or album when a queue ends |
-| `ExtendedSleepTimer.lua` | A longer sleep timer with `stop()` |
-| `LastFmScrobbler.lua` | Events, timers, text input, MD5, async HTTP |
-| `AsyncHttp.lua` | `http_request` and `cancel` |
-| `PluginApiInfo.lua` | Version and capability checks |
-| `NestedLists.lua` | Stacked lists and busy text input |
-| `EpubReader.lua` | ZIP and HTML helpers, paged reading, saved position |
-| `LyricsFetcher.lua` | LRCLIB synced `.lrc` sidecar for the current local track |
-| `CoverArtFetcher.lua` | MusicBrainz + Cover Art Archive `cover.jpg` for the current album folder |
-| `AlbumShuffle.lua` | Random albums with in-album track order, continued on `queue_exhausted` |
-| `ListenBrainzScrobbler.lua` | ListenBrainz user-token scrobble and offline queue (plugin store) |
-| `RadioBrowser.lua` | Radio Browser search and `Radio.txt` favorites (plugin store) |
+| [Audiobooks](https://github.com/Starnished66/compas-plugins/tree/main/plugins/Audiobooks) | Books row, folder scanning, resume, bookmarks, chapters, sleep timer |
+| [Podcasts](https://github.com/Starnished66/compas-plugins/tree/main/plugins/Podcasts) | RSS and OPML, episode downloads, resume |
+| [NetRadio](https://github.com/Starnished66/compas-plugins/tree/main/plugins/NetRadio) | Stream Media tile and radio streams from `Radio.txt` |
+| [HiByStockPlayer](https://github.com/Starnished66/compas-plugins/tree/main/examples/HiByStockPlayer) | A Player layout in the style of the stock HiBy OS player, with its own lyrics area, offered in Settings and applied from a row |
+| [Themes](https://github.com/Starnished66/compas-plugins/tree/main/plugins/Themes) | Historical reference format: icons, colors, Home layout, saved choice, `refresh_theme` |
+| [SoundProfiles](https://github.com/Starnished66/compas-plugins/tree/main/plugins/SoundProfiles) | Switching EQ profiles |
+| [MSEB](https://github.com/Starnished66/compas-plugins/tree/main/plugins/MSEB) | Chained settings screens, sliders sharing EQ bands, backup and restore |
+| [GainMode](https://github.com/Starnished66/compas-plugins/tree/main/plugins/GainMode) | Low/High Gain volume curves |
+| [PlaybackExtras](https://github.com/Starnished66/compas-plugins/tree/main/plugins/PlaybackExtras) | Toggles, sliders, nested settings, row icons |
+| [PlayThrough](https://github.com/Starnished66/compas-plugins/tree/main/plugins/PlayThrough) | Continuing into the next folder or album when a queue ends |
+| [ExtendedSleepTimer](https://github.com/Starnished66/compas-plugins/tree/main/plugins/ExtendedSleepTimer) | A longer sleep timer with `stop()` |
+| [LastFmScrobbler](https://github.com/Starnished66/compas-plugins/tree/main/plugins/LastFmScrobbler) | Events, timers, text input, MD5, async HTTP |
+| [AsyncHttp](https://github.com/Starnished66/compas-plugins/tree/main/examples/AsyncHttp) | `http_request` and `cancel` |
+| [PluginApiInfo](https://github.com/Starnished66/compas-plugins/tree/main/examples/PluginApiInfo) | Version and capability checks |
+| [NestedLists](https://github.com/Starnished66/compas-plugins/tree/main/examples/NestedLists) | Stacked lists and busy text input |
+| [EpubReader](https://github.com/Starnished66/compas-plugins/tree/main/plugins/EpubReader) | ZIP and HTML helpers, paged reading, saved position |
+| [LyricsFetcher](https://github.com/Starnished66/compas-plugins/tree/main/plugins/LyricsFetcher) | LRCLIB synced `.lrc` sidecar for the current local track |
+| [CoverArtFetcher](https://github.com/Starnished66/compas-plugins/tree/main/plugins/CoverArtFetcher) | MusicBrainz + Cover Art Archive `cover.jpg` for the current album folder |
+| [AlbumShuffle](https://github.com/Starnished66/compas-plugins/tree/main/plugins/AlbumShuffle) | Random albums with in-album track order, continued on `queue_exhausted` |
+| [ListenBrainzScrobbler](https://github.com/Starnished66/compas-plugins/tree/main/plugins/ListenBrainzScrobbler) | ListenBrainz user-token scrobble and offline queue (plugin store) |
+| [RadioBrowser](https://github.com/Starnished66/compas-plugins/tree/main/plugins/RadioBrowser) | Radio Browser search and `Radio.txt` favorites (plugin store) |
 
 ## Example plugins: lyrics, covers, album shuffle
 
-Copy any of these from `plugins_examples/` to `<SD card>/.plugins/`, then **Refresh Plugins**.
+The plugin packages are in the [compas-plugins repository](https://github.com/Starnished66/compas-plugins/tree/main/plugins); standalone snippets are in its [examples](https://github.com/Starnished66/compas-plugins/tree/main/examples). After copying a plugin package's Lua file to `<SD card>/.plugins/`, tap **Refresh Plugins**.
 
 ### Lyrics Fetcher
 
@@ -1435,8 +1439,6 @@ Settings > Playback & Controls > **Album Shuffle**.
 - **Start album shuffle** picks a random album through paged `plugin.library_get_albums`, resolves identity with `plugin.library_get_song(first_song_id)` (preferring `album_artist` so compilations keep every track), loads `plugin.get_album_tracks(artist, album)` in album order, and plays them with `plugin.play_list(paths, 1)`. Requires plugin API 15.
 - When the queue is exhausted forward (`queue_exhausted` with `direction == 1`), or the last track ends naturally, another album is chosen. Immediate repeats are avoided when more than one album exists. An empty library is reported with a toast.
 - Native shuffle would reorder tracks inside the album, so start this while the player is already in **sequential** mode (or select it with `plugin.set_play_mode("sequential")` on builds advertising `playback.settings`). Explicit Stop, picking a different track/queue, or **Stop album shuffle** ends the session so the plugin does not take over playback.
-
-Host-side mocked tests for these three live in `plugins_examples/tests/` (`lua plugins_examples/tests/run.lua`).
 
 ## Testing and debugging
 

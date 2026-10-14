@@ -41,7 +41,7 @@ text_muted=0xAAB8C7
 
 All six fields are required. Colors accept decimal or `0x` hexadecimal values from `0x000000` to `0xFFFFFF`. Each setting is a `key=value` line; lines beginning with `#` are comments. From the player, open **More > Themes** and select your theme. Close and reopen the picker after adding a file so it rescans. A PNG preview is optional: place `MyTheme.png` beside `MyTheme.theme` to have it appear in the picker.
 
-The parser's optional settings cover icon folders, icon replacements, Home tile styles, and launcher appearance. See [Writing a `.theme` file in PLUGINS.md](../PLUGINS.md#writing-a-theme-file) for the full key list and copyable examples in `plugins_examples/Themes/`.
+The parser's optional settings cover icon folders, icon replacements, Home tile styles, and launcher appearance. See [Writing a `.theme` file in PLUGINS.md](../PLUGINS.md#writing-a-theme-file) for the full key list and the [published theme package examples](https://github.com/Starnished66/compas-plugins/tree/main/plugins/Themes/Themes).
 
 To publish a theme in Plugin Store, follow the individual theme packages in the [compas-plugins repository](https://github.com/Starnished66/compas-plugins/tree/main/plugins). For example, `ThemeCobaltSignal` includes `store.json`, `CobaltSignal.theme`, a matching `CobaltSignal.png` preview, and a compatibility Lua stub. The store package installs the theme and preview under `Themes/`; use the package's `store.json` as the format example. Current players handle `.theme` files natively, so the compatibility stub is not needed to apply the theme.
 
