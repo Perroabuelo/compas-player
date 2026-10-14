@@ -28,6 +28,9 @@ void gui_player_refresh_static_assets(void);
 void gui_player_refresh_frosted_background(void);
 void sync_player_topbar_visibility(lv_obj_t * screen);
 void gui_player_poll_track_metadata(void);
+/* Run optional artwork-cache pressure checks and idle maintenance from the
+ * slower system housekeeping timer. */
+void gui_player_service_artwork_cache(void);
 void poll_cover_decode(void);
 void gui_player_update_progress(void);
 void gui_format_time(double seconds, char * buf, size_t buf_size);
@@ -212,6 +215,8 @@ void gui_player_handle_track_finished(void);
 void gui_player_handle_playback_error(audio_error_t err);
 void gui_player_handle_playback_error_ex(audio_error_t err, uint64_t err_generation);
 void gui_player_poll_confirmed_playback(void);
+/* Reconcile current/next waveform jobs independently of display refresh. */
+void gui_player_poll_waveform(void);
 
 void gui_player_sync_topbar_visibility(lv_obj_t * screen);
 void gui_player_refresh_font_geometry(void);

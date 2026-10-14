@@ -1555,17 +1555,13 @@ static void player_artwork_cache_service(lv_timer_t * timer) {
     }
 }
 
-/* Called every tick from update_timer_cb. Applies the finished decode to
+/* Called from the player UI timer. Applies the finished decode to
  * cover_img/player_overlay_panel -- unless playlist_index has already moved
  * on to a different track by the time this lands (another launch_cover_
  * decode() call superseded it via cover_decode_pending, in which case that
  * one is now either running or about to be), in which case the result is
  * just discarded rather than briefly flashing a stale track's art. */
 void poll_cover_decode(void) {
-    /* Pressure checks also run during transitions. The ordinary maintenance
-     * poll starts optional idle work; a short-lived timer continues slices. */
-    player_artwork_cache_service(NULL);
-
     /* Slides display owned snapshots. Applying artwork now cannot update
      * those frames, but image/layout work can delay their presentation.
      * Leave the completed result owned by the worker until the next poll. */
@@ -1741,6 +1737,12 @@ void poll_cover_decode(void) {
         cover_decode_pending.picture_data = NULL;
         cover_decode_pending.picture_size = 0;
     }
+}
+
+/* Keep optional cache pressure checks and idle candidate cleanup on the
+ * slower system timer; decoding completion polling remains cheap. */
+void gui_player_service_artwork_cache(void) {
+    player_artwork_cache_service(NULL);
 }
 
 void gui_player_begin_cover_reload(void) {
@@ -4113,17 +4115,14 @@ static lv_timer_t * pending_progress_seek_timer = NULL;
 static double pending_progress_seek_percent = 0.0;
 /* Best-effort ESTIMATE of where that percent lands, in seconds -- used only
  * by the "has the seek landed yet" poll heuristic below, never passed to
- * audio_seek()/audio_seek_percent() itself. Fine if this is occasionally
- * stale (same track-switch race as above): the only consequence is the
- * progress UI falling back to its normal 8-tick timeout instead of
- * detecting the landed position early, not an incorrect seek. */
+ * audio_seek()/audio_seek_percent() itself. */
 static double pending_progress_seek_seconds = 0.0;
 bool user_seeking = false;
 /* True from finger-up until audio position catches the requested seek, so
- * the 500ms progress poll does not yank the knob back to the pre-seek
+ * the progress poll does not yank the knob back to the pre-seek
  * playhead while the playback thread is applying it. */
 static bool progress_awaiting_seek = false;
-static int progress_awaiting_seek_ticks = 0;
+static uint32_t progress_awaiting_seek_started_ms = 0;
 
 static void cancel_pending_progress_seek(void) {
     if (pending_progress_seek_timer) {
@@ -4215,7 +4214,7 @@ static void progress_slider_event_cb(lv_event_t * e) {
         pending_progress_seek_seconds = duration * ((double) percent / 100.0);
         displayed_progress_percent = percent;
         progress_awaiting_seek = (duration > 0.0);
-        progress_awaiting_seek_ticks = 0;
+        progress_awaiting_seek_started_ms = lv_tick_get();
         cancel_pending_progress_seek();
         pending_progress_seek_timer = lv_timer_create(pending_progress_seek_timer_cb, 150, NULL);
         lv_timer_set_repeat_count(pending_progress_seek_timer, 1);
@@ -6856,12 +6855,29 @@ void gui_player_poll_confirmed_playback(void) {
     }
 }
 
+/* Queue reconciliation must run even with the display off or while seeking.
+ * Only drawing the published result belongs in the visual refresh path. */
+void gui_player_poll_waveform(void) {
+    if (!player_waveform_seekbar || !progress_slider) {
+        waveform_cancel();
+        return;
+    }
+    const char * path = gui_player_get_current_track_path();
+    waveform_request(path);
+    /* Use the same prediction as natural playback, including explicit
+     * queued tracks, shuffle bags and repeat. This also works with
+     * gapless disabled, where audio.c does not have a staged decoder. */
+    int next_index = audio_is_playing() && playlist_index >= 0 &&
+                     playlist_index < playlist_count ?
+                     compute_auto_advance_index(playlist_index) : -1;
+    waveform_prefetch(next_index >= 0 && next_index < playlist_count ?
+                      playlist_path_at(next_index) : NULL);
+}
+
 void gui_player_update_progress(void) {
-    gui_player_poll_confirmed_playback();
     if (player_waveform_seekbar && progress_slider) {
         const char * path = gui_player_get_current_track_path();
         waveform_data_t data;
-        waveform_request(path);
         player_seekbar_update(progress_slider, waveform_copy(path, &data) ? &data : NULL);
     }
     if (deferred_resume_pending) return; /* audio_get_position_seconds()/
@@ -6875,7 +6891,7 @@ void gui_player_update_progress(void) {
 
     if (progress_awaiting_seek) {
         if (fabs(position - pending_progress_seek_seconds) < 0.4 ||
-            ++progress_awaiting_seek_ticks >= 8)
+            lv_tick_elaps(progress_awaiting_seek_started_ms) >= 4000)
             progress_awaiting_seek = false;
         else
             return;

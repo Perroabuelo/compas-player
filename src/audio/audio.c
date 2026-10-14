@@ -1838,6 +1838,167 @@ static bool waveform_cancel_or_expired(void * user) {
     return elapsed > INT64_C(90000000000);
 }
 
+/* Normalize one decoded prefix against its loudest bin. The caller's output
+ * is always a full-count snapshot, so bins after `completed` stay empty. */
+static void waveform_normalize_prefix(uint8_t * bins, size_t count,
+                                      size_t completed, uint64_t * sums,
+                                      uint64_t * sample_counts, double * rms) {
+    double peak_rms = 0.0;
+    for (size_t i = 0; i < completed; ++i) {
+        if (!sample_counts[i]) {
+            rms[i] = 0.0;
+            continue;
+        }
+        rms[i] = sqrt((double)sums[i] / (double)sample_counts[i]);
+        if (rms[i] > peak_rms) peak_rms = rms[i];
+    }
+    if (peak_rms > 0.0) {
+        for (size_t i = 0; i < completed; ++i)
+            bins[i] = (uint8_t)lround((rms[i] / peak_rms) * 255.0);
+    } else {
+        memset(bins, 0, completed);
+    }
+    if (completed < count) memset(bins + completed, 0, count - completed);
+}
+
+/* Local waveform previews can use the compressed file span as an approximate
+ * PCM-to-byte map. dr_flac validates each probe by decoding its candidate
+ * frame and checking CRC; the returned byte offset is the probe location, not
+ * the candidate frame header. At most four interpolated probes tighten both
+ * PCM and byte bounds. If those bounds cannot be anchored and verified, use
+ * the public decoder seek path. Playback never calls this helper. */
+typedef struct {
+    /* A CRC-validated lower point, retained only for this extraction's
+     * monotonically increasing waveform targets. */
+    drflac_uint64 byte;
+    drflac_uint64 pcm;
+    drflac_uint64 target;
+    bool valid;
+} waveform_seek_anchor_t;
+
+static bool waveform_flac_seeded_seek(decoder_t * dec, uint64_t frame,
+                                      uint64_t file_size,
+                                      bool (*cancel)(void *), void * user,
+                                      waveform_seek_anchor_t * anchor) {
+    if (cancel && cancel(user)) return false;
+#if !defined(DR_FLAC_NO_CRC)
+    drflac * flac = dec && dec->type == DECODER_FLAC && !dec->net_stream
+        ? dec->as.flac : NULL;
+    if (flac && flac->container == drflac_container_native &&
+        flac->seekpointCount == 0 &&
+        flac->totalPCMFrameCount > frame && frame > 0 &&
+        file_size > 1 && flac->firstFLACFramePosInBytes < file_size - 1) {
+        uint64_t byte_lo = flac->firstFLACFramePosInBytes;
+        uint64_t byte_hi = file_size - 1;
+        uint64_t pcm_lo = 0;
+        uint64_t pcm_hi = flac->totalPCMFrameCount;
+        uint64_t close_enough = (uint64_t)flac->maxBlockSizeInPCMFrames * 2;
+        if (close_enough == 0) close_enough = 4096;
+        /* Dense samples can reuse the decoder's current frame and move a
+         * short distance forward instead of probing the file again. */
+        if (frame >= flac->currentPCMFrame &&
+            frame - flac->currentPCMFrame <= close_enough) {
+            uint64_t distance = frame - flac->currentPCMFrame;
+            if (drflac__seek_forward_by_pcm_frames(flac, distance) == distance) {
+                uint64_t block_frames = flac->currentFLACFrame.header.blockSizeInPCMFrames;
+                uint64_t remaining = flac->currentFLACFrame.pcmFramesRemaining;
+                if (block_frames > 0 && remaining <= block_frames) {
+                    drflac_uint64 frame_start = 0;
+                    drflac__get_pcm_frame_range_of_current_flac_frame(flac, &frame_start, NULL);
+                    uint64_t consumed = block_frames - remaining;
+                    if (frame_start <= UINT64_MAX - consumed && frame_start + consumed == frame)
+                        return !(cancel && cancel(user));
+                }
+            }
+            if (cancel && cancel(user)) return false;
+            /* Skipping a CRC-bad frame can advance decoded sample counts
+             * without landing at the requested header-based PCM position. */
+            anchor->valid = false;
+            (void)drflac__seek_to_first_frame(flac);
+        }
+        if (anchor->valid && frame >= anchor->target &&
+            anchor->pcm <= frame && anchor->pcm < pcm_hi &&
+            anchor->byte >= byte_lo && anchor->byte < byte_hi) {
+            byte_lo = anchor->byte;
+            pcm_lo = anchor->pcm;
+        }
+
+        for (unsigned attempt = 0; attempt < 4 && byte_lo < byte_hi &&
+             pcm_lo <= frame && pcm_hi > frame; ++attempt) {
+            if (cancel && cancel(user)) return false;
+
+            /* Bias one maximum block earlier so interpolation can settle
+             * on a candidate frame before the exact sample target. */
+            uint64_t bias = close_enough / 2;
+            uint64_t wanted = frame - pcm_lo > bias ? frame - bias : pcm_lo;
+            double fraction = (double)(wanted - pcm_lo) / (double)(pcm_hi - pcm_lo);
+            double scaled = (double)(byte_hi - byte_lo) * fraction;
+            if (!isfinite(scaled) || scaled < 0.0 ||
+                scaled >= (double)(byte_hi - byte_lo)) break;
+
+            uint64_t delta = (uint64_t)scaled;
+            if (delta >= byte_hi - byte_lo) break;
+            uint64_t probe = byte_lo + delta;
+            drflac_uint64 probe_offset = probe;
+            if (!drflac__seek_to_approximate_flac_frame_to_byte(
+                    flac, probe, byte_lo, byte_hi, &probe_offset)) break;
+            if (cancel && cancel(user)) return false;
+
+            uint64_t candidate_pcm = flac->currentPCMFrame;
+            if (candidate_pcm <= frame && probe_offset >= byte_lo &&
+                probe_offset < byte_hi) {
+                anchor->byte = probe_offset;
+                anchor->pcm = candidate_pcm;
+                anchor->target = frame;
+                anchor->valid = true;
+            }
+            if (candidate_pcm <= frame && frame - candidate_pcm <= close_enough) {
+                uint64_t distance = frame - candidate_pcm;
+                if (drflac__seek_forward_by_pcm_frames(flac, distance) == distance) {
+                    flac->currentPCMFrame = frame;
+                    return !(cancel && cancel(user));
+                }
+                break;
+            }
+            if (candidate_pcm <= frame) {
+                if (candidate_pcm <= pcm_lo || probe_offset <= byte_lo ||
+                    probe_offset >= byte_hi) break;
+                byte_lo = probe_offset;
+                pcm_lo = candidate_pcm;
+            } else {
+                if (candidate_pcm >= pcm_hi || probe_offset <= byte_lo ||
+                    probe_offset >= byte_hi) break;
+                byte_hi = probe_offset;
+                pcm_hi = candidate_pcm;
+            }
+        }
+
+        if (cancel && cancel(user)) return false;
+        if (byte_lo < byte_hi && pcm_lo <= frame && pcm_hi > frame) {
+            drflac_uint64 restored_offset = byte_lo;
+            bool anchor_ok = byte_lo == flac->firstFLACFramePosInBytes
+                ? drflac__seek_to_first_frame(flac)
+                : drflac__seek_to_approximate_flac_frame_to_byte(
+                    flac, byte_lo, byte_lo, byte_hi, &restored_offset);
+            if (cancel && cancel(user)) return false;
+            if (anchor_ok && flac->currentPCMFrame == pcm_lo &&
+                restored_offset == byte_lo &&
+                drflac__seek_to_pcm_frame__binary_search_internal(
+                    flac, frame, byte_lo, byte_hi)) {
+                flac->currentPCMFrame = frame;
+                return !(cancel && cancel(user));
+            }
+        }
+    }
+#else
+    (void)file_size;
+#endif
+    if (cancel && cancel(user)) return false;
+    anchor->valid = false;
+    bool ok = decoder_seek(dec, frame);
+    return ok && !(cancel && cancel(user));
+}
+
 /* Build a private dense table on a throwaway decoder. The table is attached
  * only to the waveform decoder and freed by decoder_close(); playback and the
  * production MP3 index worker never see or adopt it. */
@@ -1898,12 +2059,14 @@ static bool waveform_prepare_mp3_seek_table(decoder_t * dec, const char * path,
     return true;
 }
 
-bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
-                            bool (*cancel)(void *), void * user) {
+bool audio_extract_waveform_progress(const char * path, uint8_t * bins, size_t count,
+                                     bool (*cancel)(void *), void * user,
+                                     void (*progress)(const uint8_t *, size_t, size_t, void *),
+                                     void * progress_user) {
     enum {
         WAVEFORM_MAX_BINS = 256,
         WAVEFORM_READ_FRAMES = 4096,
-        WAVEFORM_WINDOW_MS = 80,
+        WAVEFORM_WINDOW_MS = 40,
         WAVEFORM_YIELD_INTERVAL_MS = 100,
         WAVEFORM_YIELD_SLEEP_US = 1000,
         WAVEFORM_MAX_CONSECUTIVE_ERRORS = 10
@@ -1920,7 +2083,8 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
     decoder_t dec;
     struct timespec started = { 0 }, now = { 0 }, last_yield = { 0 };
     bool opened = false, ok = false;
-    double peak_rms = 0.0;
+    uint64_t local_flac_file_size = 0;
+    waveform_seek_anchor_t seek_anchor = { 0 };
 
     if (bins && count <= WAVEFORM_MAX_BINS) memset(bins, 0, count);
     if (!path || !path[0] || !bins || count == 0 || count > WAVEFORM_MAX_BINS ||
@@ -1939,6 +2103,12 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
     if (!scratch) return false;
     if (!decoder_open(&dec, path)) goto done;
     opened = true;
+    if (dec.type == DECODER_FLAC && dec.flac_file) {
+        struct stat opened_file_stat;
+        if (fstat(fileno(dec.flac_file), &opened_file_stat) == 0 &&
+            opened_file_stat.st_size > 0)
+            local_flac_file_size = (uint64_t)opened_file_stat.st_size;
+    }
 
     if ((cancel && cancel(user)) || dec.type == DECODER_DSD || dec.type == DECODER_APE ||
         dec.total_frames == 0 || dec.sample_rate == 0 || dec.sample_rate > 192000 ||
@@ -1965,10 +2135,20 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
     unsigned consecutive_errors = 0;
     bool reached_eof = false;
     bool decoded_samples = false;
+    size_t completed_bins = 0;
     for (size_t bin = 0; bin < count && !reached_eof; ++bin) {
         uint64_t bin_start = (dec.total_frames * (uint64_t)bin + count - 1) / count;
         uint64_t bin_end = (dec.total_frames * (uint64_t)(bin + 1) + count - 1) / count;
-        if (bin_end <= bin_start) continue;
+        if (bin_end <= bin_start) {
+            completed_bins = bin + 1;
+            if (progress && completed_bins % 4 == 0) {
+                if (waveform_cancel_or_expired(&cancel_context)) goto done;
+                waveform_normalize_prefix(bins, count, completed_bins, scratch->sums,
+                                          scratch->sample_counts, scratch->rms);
+                progress(bins, count, completed_bins, progress_user);
+            }
+            continue;
+        }
         uint64_t read_start = bin_start;
         uint64_t read_end = bin_end;
         if (sparse_seek && bin_end - bin_start > window_frames) {
@@ -1976,7 +2156,16 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
             read_end = read_start + window_frames;
         }
         if (sparse_seek) {
-            if ((cancel && cancel(user)) || !decoder_seek(&dec, read_start)) goto done;
+            bool seek_ok = false;
+            if (!(cancel && cancel(user))) {
+                seek_ok = dec.type == DECODER_FLAC
+                    ? waveform_flac_seeded_seek(&dec, read_start,
+                                                local_flac_file_size,
+                                                waveform_cancel_or_expired,
+                                                &cancel_context, &seek_anchor)
+                    : decoder_seek(&dec, read_start);
+            }
+            if (!seek_ok) goto done;
             frame = read_start;
             if (cancel && cancel(user)) goto done;
             (void) clock_gettime(CLOCK_MONOTONIC, &now);
@@ -2042,6 +2231,13 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
                 last_yield = now;
             }
         }
+        completed_bins = bin + 1;
+        if (progress && completed_bins % 4 == 0) {
+            if (waveform_cancel_or_expired(&cancel_context)) goto done;
+            waveform_normalize_prefix(bins, count, completed_bins, scratch->sums,
+                                      scratch->sample_counts, scratch->rms);
+            progress(bins, count, completed_bins, progress_user);
+        }
     }
 
     (void) clock_gettime(CLOCK_MONOTONIC, &now);
@@ -2051,17 +2247,16 @@ bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
         else elapsed -= (uint64_t)(started.tv_nsec - now.tv_nsec);
         if (elapsed > budget_ns || !decoded_samples || waveform_cancel_or_expired(&cancel_context)) goto done;
     }
-    for (size_t i = 0; i < count; ++i) {
-        if (!scratch->sample_counts[i]) {
-            bins[i] = 0;
-            continue;
-        }
-        scratch->rms[i] = sqrt((double)scratch->sums[i] / (double)scratch->sample_counts[i]);
-        if (scratch->rms[i] > peak_rms) peak_rms = scratch->rms[i];
+    waveform_normalize_prefix(bins, count, count, scratch->sums,
+                              scratch->sample_counts, scratch->rms);
+    if (progress && completed_bins && completed_bins % 4 != 0) {
+        if (waveform_cancel_or_expired(&cancel_context)) goto done;
+        /* This is the terminal prefix (possibly shortened by an early EOF). */
+        waveform_normalize_prefix(bins, count, completed_bins, scratch->sums,
+                                  scratch->sample_counts, scratch->rms);
+        progress(bins, count, completed_bins, progress_user);
     }
-    if (peak_rms > 0.0)
-        for (size_t i = 0; i < count; ++i)
-            bins[i] = (uint8_t)lround((scratch->rms[i] / peak_rms) * 255.0);
+    if (waveform_cancel_or_expired(&cancel_context)) goto done;
     ok = true;
 
 done:
@@ -2069,6 +2264,12 @@ done:
     free(scratch);
     if (!ok) memset(bins, 0, count);
     return ok;
+}
+
+bool audio_extract_waveform(const char * path, uint8_t * bins, size_t count,
+                            bool (*cancel)(void *), void * user) {
+    return audio_extract_waveform_progress(path, bins, count, cancel, user,
+                                           NULL, NULL);
 }
 
 #ifndef HOST_BUILD
