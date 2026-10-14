@@ -21,6 +21,7 @@ extern lv_style_t style_button_pressed;
 extern void nav_remove_stack_slot(int depth);
 extern void enable_gesture_bubble_recursive(lv_obj_t * parent);
 extern void search_textarea_value_changed_cb(lv_event_t * e);
+extern void search_textarea_clicked_cb(lv_event_t * e);
 extern void search_keypad_dismissed(void);
 extern void nav_push(lv_obj_t * screen);
 extern void nav_pop(void);
@@ -1365,13 +1366,13 @@ static void text_entry_select_layout(void) {
 
 /* Reparents the shared keypad_group + text_entry_textarea onto
  * target_screen for inline search -- see text_entry_inline_mode_active's
- * own comment. Resets layout/mode/shift/caps-lock/numeric state and clears the
- * textarea the same way show_text_entry() resets it for a fresh modal
- * field, since this is the same shared state machine. Search never needs
+ * own comment. Resets layout/mode/shift/caps-lock/numeric state. clear_text
+ * is true for a new search and false when resuming a dismissed search so its
+ * query and result filter remain intact. Search never needs
  * the password reveal button -- it stays on text_entry_screen, harmless
  * since that screen isn't the active one while this is attached elsewhere. */
 void t9_keypad_attach(lv_obj_t * target_screen, lv_obj_t * textarea_parent, int32_t textarea_x, int32_t textarea_y,
-                              int32_t textarea_w) {
+                              int32_t textarea_w, bool clear_text) {
     text_entry_variant_close();
     text_entry_variant_set_owner(target_screen);
     lv_obj_set_parent(text_entry_keypad_group, target_screen);
@@ -1381,7 +1382,7 @@ void t9_keypad_attach(lv_obj_t * target_screen, lv_obj_t * textarea_parent, int3
     lv_obj_align(text_entry_textarea, LV_ALIGN_TOP_LEFT, textarea_x, textarea_y);
     lv_obj_set_width(text_entry_textarea, textarea_w);
     lv_textarea_set_password_mode(text_entry_textarea, false);
-    lv_textarea_set_text(text_entry_textarea, "");
+    if (clear_text) lv_textarea_set_text(text_entry_textarea, "");
 
     text_entry_kp_mode = TEXT_ENTRY_KP_ABC;
     text_entry_shift = false;
@@ -1447,6 +1448,9 @@ static lv_obj_t * build_text_entry_screen(void) {
      * no-ops unless text_entry_inline_mode_active is set, so this is inert
      * for all 9 existing modal callers. */
     lv_obj_add_event_cb(text_entry_textarea, search_textarea_value_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    /* After Enter dismisses the shared keypad, the query field stays in the
+     * search bar. Let the owning search binding reclaim the keypad on tap. */
+    lv_obj_add_event_cb(text_entry_textarea, search_textarea_clicked_cb, LV_EVENT_CLICKED, NULL);
 
     /* Password unmask toggle button, positioned adjacent to the textarea. */
     text_entry_reveal_btn = lv_image_create(scr);

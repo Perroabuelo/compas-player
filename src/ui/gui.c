@@ -664,7 +664,12 @@ static void physical_button_action(button_mapping_action_t action,
         case BUTTON_MAPPING_ACTION_VOLUME_UP:
         case BUTTON_MAPPING_ACTION_VOLUME_DOWN: {
             int delta = (int)count * (action == BUTTON_MAPPING_ACTION_VOLUME_UP ? 1 : -1);
-            int new_percent = audio_clamp_volume_percent(gui_player_get_volume_percent() + delta);
+            /* Bluetooth accessories can change the effective audio volume
+             * before the next UI reconciliation tick. Step from the audio
+             * state so a physical button never starts from a stale slider. */
+            int current_percent = audio_clamp_volume_percent(
+                (int)(audio_get_volume() * 100.0f + 0.5f));
+            int new_percent = audio_clamp_volume_percent(current_percent + delta);
             gui_player_set_volume_percent(new_percent);
             audio_set_volume((float)new_percent / 100.0f);
             gui_player_remember_volume_percent(new_percent);
@@ -760,6 +765,24 @@ static void player_ui_timer_cb(lv_timer_t * timer) {
         lv_timer_set_period(player_ui_timer, period_ms);
     }
 
+    /* Accessory volume is applied by the BlueALSA monitor thread. Keep its
+     * UI/persisted mirror on this fast player cadence, including while the
+     * screen is off. Leave the pending signal queued during a slider drag;
+     * after the drag, mirror the current audio value so an older queued
+     * accessory percentage cannot roll back a newer local adjustment. */
+    if (!gui_player_volume_is_being_adjusted()) {
+        int ignored_bt_percent;
+        if (bt_control_source_volume_sync_consume_percent(&ignored_bt_percent)) {
+            int bt_volume_percent = audio_clamp_volume_percent(
+                (int)(audio_get_volume() * 100.0f + 0.5f));
+            gui_player_set_volume_percent(bt_volume_percent);
+            gui_player_remember_volume_percent(bt_volume_percent);
+            settings_save_async(&current_settings);
+            show_volume_popup(bt_volume_percent);
+            refresh_volume_topbar(bt_volume_percent);
+        }
+    }
+
     uint64_t playback_err_gen = 0;
     audio_error_t playback_err = audio_consume_error_ex(&playback_err_gen);
     if (playback_err != AUDIO_ERROR_NONE) {
@@ -820,21 +843,6 @@ static void update_timer_cb(lv_timer_t * timer) {
                                  has_track ? gui_player_get_now_playing_track_number() : 0,
                                  audio_get_position_seconds(), audio_get_duration_seconds(), bt_art_url);
 #endif
-
-    /* Accessory-originated AVRCP volume changes arrive on bluealsa's
-     * monitor thread. Mirror the already-applied audio value into every UI
-     * and persisted representation here on the sole LVGL thread, so the
-     * next hardware-button step starts from what the user actually hears. */
-    int bt_synced_volume_percent;
-    if (bt_control_source_volume_sync_consume_percent(&bt_synced_volume_percent) &&
-        !gui_player_volume_is_being_adjusted()) {
-        bt_synced_volume_percent = audio_clamp_volume_percent(bt_synced_volume_percent);
-        gui_player_set_volume_percent(bt_synced_volume_percent);
-        gui_player_remember_volume_percent(bt_synced_volume_percent);
-        settings_save_async(&current_settings);
-        show_volume_popup(bt_synced_volume_percent);
-        refresh_volume_topbar(bt_synced_volume_percent);
-    }
 
     /* Phone remote-control (Phase 2, remote_control.h): same "background
      * thread sets a flag, this is the one thread allowed to touch LVGL/
@@ -1755,7 +1763,6 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
     gui_display_apply_rotation(current_settings.screen_upside_down);
     bt_control_restore_codec_preference(current_settings.bt_codec);
     bt_control_set_speexrate_enabled(current_settings.bt_speexrate_enabled);
-    gui_library_set_covers_during_playback(current_settings.dev_covers_during_playback);
     bt_control_set_sample_rate(current_settings.bt_sample_rate);
     db_log_set_enabled(current_settings.db_logging_enabled);
     hw_buttons_set_screenshot_combo_enabled(current_settings.screenshot_combo_enabled);
@@ -1802,6 +1809,13 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
     boot_checkpoint("USB mode discovery done");
 #endif
     if (detected) current_settings.usb_mode = (int) detected_usb_mode;
+
+    /* A DAC gadget can survive a player restart. Recover its saved Type-C
+     * and charging policy before the first charging poll can enable power. */
+    if (!usb_mode_control_set_dac_charging_disabled(current_settings.usb_dac_disable_charging))
+        fprintf(stderr, "gui: could not apply the USB DAC charging preference\n");
+    if (!usb_mode_control_reconcile_dac_session())
+        fprintf(stderr, "gui: USB DAC session recovery incomplete; retaining conservative power policy\n");
 
     /* ADB is the one mode that survives a restart, because enabling it means
      * going into Developer Options and asking for it. Anything else starts as

@@ -70,6 +70,11 @@ static lv_obj_t * settings_appearance_screen;
 static lv_obj_t * settings_player_layout_screen;
 static lv_obj_t * settings_gestures_screen;
 static lv_obj_t * settings_charging_screen;
+static lv_obj_t * settings_usb_dac_charging_switch;
+static lv_obj_t * settings_usb_dac_charging_row;
+#if !defined(BOARD_R3PROII) && !defined(BOARD_R3II_2025)
+static void usb_dac_charging_switch_event_cb(lv_event_t * e);
+#endif
 static lv_obj_t * settings_maintenance_screen;
 static lv_obj_t * settings_system_maintenance_screen;
 static lv_obj_t * settings_system_updates_screen;
@@ -1044,20 +1049,13 @@ static void screenshot_combo_switch_event_cb(lv_event_t * e) {
     hw_buttons_set_screenshot_combo_enabled(current_settings.screenshot_combo_enabled);
 }
 
-static void dev_covers_during_playback_switch_event_cb(lv_event_t * e) {
-    if (lv_event_get_code(e) != LV_EVENT_VALUE_CHANGED) return;
-    current_settings.dev_covers_during_playback = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
-    settings_save(&current_settings);
-    gui_library_set_covers_during_playback(current_settings.dev_covers_during_playback);
-}
-
 #if defined(BOARD_R3II_2025)
   #define SCREENSHOT_ROW_LABEL TR("Screenshots (Power + Previous)")
 #else
   #define SCREENSHOT_ROW_LABEL TR("Screenshots (Power + Vol Down)")
 #endif
 static lv_obj_t * build_dev_options_screen(void) {
-    static pill_list_item_t items[4];
+    static pill_list_item_t items[3];
     /* ADB lives here rather than on the USB Mode screen: it overrides
      * Storage/DAC while on and persists across a reboot, so it sits behind
      * Developer Options as the explicit opt-in that makes re-applying it on
@@ -1070,10 +1068,7 @@ static lv_obj_t * build_dev_options_screen(void) {
     items[2] = (pill_list_item_t){ SCREENSHOT_ROW_LABEL, PILL_ACCESSORY_TOGGLE,
                                     current_settings.screenshot_combo_enabled, NULL,
                                     screenshot_combo_switch_event_cb, NULL };
-    items[3] = (pill_list_item_t){ TR("Load covers during playback (Experimental)"), PILL_ACCESSORY_TOGGLE,
-                                    current_settings.dev_covers_during_playback, NULL,
-                                    dev_covers_during_playback_switch_event_cb, NULL };
-    lv_obj_t * scr = build_pill_list_screen(TR("Developer Options"), generic_back_cb, items, 4, gui_theme_accent_style(), GUI_ROW_GAP, 100);
+    lv_obj_t * scr = build_pill_list_screen(TR("Developer Options"), generic_back_cb, items, 3, gui_theme_accent_style(), GUI_ROW_GAP, 100);
     finalize_screen_navigation(scr);
     return scr;
 }
@@ -3209,7 +3204,7 @@ static lv_obj_t * build_sorting_screen(void) {
     static const char * labels[] = { N_("Name (A–Z)"), N_("Newest Modified"), N_("Name (A–Z)"),
                                      N_("Recently Added"), N_("Release Year (oldest first)") };
     for (int i = 0; i < 5; i++) {
-        if (i == 2) add_section_header(list, TR("Albums (main list)"));
+        if (i == 2) add_section_header(list, TR("Albums"));
         settings_sorting_options[i] = add_pill_option_row(list, TR(labels[i]), false,
                                             sorting_option_cb, (void *) (intptr_t) i);
         lv_obj_add_style(settings_sorting_options[i], gui_theme_accent_outline_style(), 0);
@@ -3599,12 +3594,50 @@ static lv_obj_t * build_settings_charging_screen(void) {
           current_settings.safe_charging_enabled, NULL, safe_charging_switch_event_cb, NULL },
         { TR("LED charge indicator"), PILL_ACCESSORY_TOGGLE,
           current_settings.led_indicator_enabled, NULL, led_indicator_switch_event_cb, NULL },
+#if !defined(BOARD_R3PROII) && !defined(BOARD_R3II_2025)
+        {
+            .label = TR("Disable charging\nin USB DAC mode"),
+            .accessory = PILL_ACCESSORY_TOGGLE,
+            .toggle_initial_state = current_settings.usb_dac_disable_charging,
+            .on_toggle_change = usb_dac_charging_switch_event_cb,
+            .out_toggle_img = &settings_usb_dac_charging_switch,
+            .row_height = BOARD_SCALE_PY(128),
+            .out_row = &settings_usb_dac_charging_row,
+        },
+#endif
     };
     lv_obj_t * scr = build_pill_list_screen(TR("Charging"), generic_back_cb, items,
                                             (int) (sizeof(items) / sizeof(items[0])),
                                             gui_theme_accent_style(), GUI_ROW_GAP, 100);
+#if !defined(BOARD_R3PROII) && !defined(BOARD_R3II_2025)
+    if (settings_usb_dac_charging_row && settings_usb_dac_charging_switch) {
+        lv_obj_t * label = lv_obj_get_child(settings_usb_dac_charging_row, 0);
+        /* This two-line setting must stay wrapped during font refreshes. */
+        lv_obj_remove_flag(label, LV_OBJ_FLAG_USER_3);
+        lv_obj_set_style_pad_top(label, 0, 0);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_height(label, LV_SIZE_CONTENT);
+        lv_obj_align(label, LV_ALIGN_LEFT_MID, BOARD_SCALE_PX(24), 0);
+    }
+#endif
     finalize_screen_navigation(scr);
     return scr;
+}
+
+#if !defined(BOARD_R3PROII) && !defined(BOARD_R3II_2025)
+static void usb_dac_charging_switch_event_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_VALUE_CHANGED) return;
+    gui_network_set_usb_dac_charging_disabled(
+        lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+#endif
+
+void gui_settings_sync_usb_dac_charging_toggle(void) {
+    if (!settings_usb_dac_charging_switch) return;
+    if (current_settings.usb_dac_disable_charging)
+        lv_obj_add_state(settings_usb_dac_charging_switch, LV_STATE_CHECKED);
+    else
+        lv_obj_clear_state(settings_usb_dac_charging_switch, LV_STATE_CHECKED);
 }
 
 static void settings_charging_row_cb(lv_event_t * e) {
@@ -5519,6 +5552,7 @@ void gui_settings_teardown(void) {
     if (settings_player_layout_screen) { lv_obj_delete(settings_player_layout_screen); settings_player_layout_screen = NULL; }
     if (settings_gestures_screen) { lv_obj_delete(settings_gestures_screen); settings_gestures_screen = NULL; }
     if (settings_charging_screen) { lv_obj_delete(settings_charging_screen); settings_charging_screen = NULL; }
+    settings_usb_dac_charging_switch = settings_usb_dac_charging_row = NULL;
     if (settings_maintenance_screen) { lv_obj_delete(settings_maintenance_screen); settings_maintenance_screen = NULL; }
     if (settings_system_maintenance_screen) { lv_obj_delete(settings_system_maintenance_screen); settings_system_maintenance_screen = NULL; }
     if (settings_system_updates_screen) { lv_obj_delete(settings_system_updates_screen); settings_system_updates_screen = NULL; }

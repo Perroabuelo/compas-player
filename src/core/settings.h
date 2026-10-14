@@ -256,11 +256,6 @@ typedef struct {
      * in a pocket, and nobody who does not know it exists should find the
      * card filling with images. */
     bool screenshot_combo_enabled;
-    /* Developer Options: dev_covers_during_playback lets the cover warmer
-     * keep reading already generated thumbnails while audio plays; extracting
-     * new covers still waits for playback to stop. */
-    bool dev_covers_during_playback;
-
     /* Caps the PMIC's charge-termination voltage to 4.2V to extend battery
      * longevity, rather than a literal state-of-charge cutoff -- see
      * charge_limiter.h for how this is actually enforced. */
@@ -328,6 +323,10 @@ typedef struct {
      * on boot to prevent unexpected USB configurations or blocking local
      * playback. */
     int usb_mode;
+
+    /* USB DAC overlay: leave device charging disabled while connected as a
+     * USB audio accessory. Enabled by default for iPhone compatibility. */
+    bool usb_dac_disable_charging;
 
     /* Player queue play mode -- Sequential/Repeat All/Repeat One/Shuffle.
      * Plain int (values matching gui.c's own play_mode_t), same reasoning as

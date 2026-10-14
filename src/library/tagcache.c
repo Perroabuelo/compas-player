@@ -2727,6 +2727,19 @@ int tagcache_album_group_sorted_offset(int sort, const char *album, const char *
     return sorted;
 }
 
+bool tagcache_album_group_sorted_rank(int sort, int canonical_rank, int *sorted_rank_out) {
+    if (!db_open || !sorted_rank_out || sort < 1 || sort > 2 ||
+        canonical_rank < 0 || canonical_rank >= tagcache_group_count(TAGCACHE_GROUP_ALBUM) ||
+        !tagcache_album_sort_available(sort)) return false;
+    int32_t sorted;
+    int index = sort - 1;
+    if (stats_read_at(reader_album_inverse_fd[index], &sorted, sizeof(sorted),
+                      (off_t)canonical_rank * sizeof(sorted)) != STATS_READ_OK ||
+        sorted < 0 || sorted >= tagcache_group_count(TAGCACHE_GROUP_ALBUM)) return false;
+    *sorted_rank_out = sorted;
+    return true;
+}
+
 int tagcache_group_index(int kind, const char *name, const char *aa) {
     return db_open ? reader_group_index(kind, name, aa) : -1;
 }

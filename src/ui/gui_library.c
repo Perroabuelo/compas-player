@@ -181,6 +181,7 @@ static void refresh_group_song_thumbnails(void);
 static int artists_fetch_page(void * ctx, int offset, int count, compact_list_page_row_t out_rows[]);
 static int albums_fetch_page(void * ctx, int offset, int count, compact_list_page_row_t out_rows[]);
 static bool resolve_album_display_row(int index, group_row_t * out);
+static void populate_artist_albums_view(const char * name, metadata_db_group_kind_t kind);
 static pthread_mutex_t artist_albums_state_mutex;
 static metadata_db_group_kind_t artist_albums_current_kind;
 static char artist_albums_current_name[128];
@@ -284,10 +285,11 @@ static void * now_playing_lookup_worker(void * unused) {
             value = metadata_db_get_song_recency_offset(request.path);
             if (value >= 0 && value <= INT_MAX) result.recently_added_row = (int) value;
             if (request.artist_albums_name[0]) {
-                value = metadata_db_get_album_for_group_offset(request.artist_albums_kind,
-                                                                request.artist_albums_name,
-                                                                song.tags.album,
-                                                                song.tags.album_artist);
+                value = metadata_db_get_album_for_group_sorted_offset(request.artist_albums_kind,
+                                                                       request.artist_albums_name,
+                                                                       request.album_sort,
+                                                                       song.tags.album,
+                                                                       song.tags.album_artist);
                 if (value >= 0 && value < INT_MAX) result.artist_albums_row = (int) value + 1;
             }
         }
@@ -2764,20 +2766,11 @@ static bool album_thumb_gen_thread_joinable;
 static atomic_int album_thumb_gen_done_count;
 static atomic_int album_thumb_gen_total_count;
 static atomic_int album_thumb_gen_cache_epoch;
-/* Experimental (Developer Options): keep reading already generated 72px
- * covers while audio plays. playback_pass_epoch records the cache epoch whose
- * playback-time pass finished, so the retry path does not rerun it every
- * backoff; anything that needs real extraction waits for playback to stop. */
-static atomic_bool album_thumb_gen_covers_during_playback;
+/* playback_pass_epoch records the cache epoch whose playback-time pass
+ * finished, so the retry path does not rerun it every backoff; anything that
+ * needs real extraction waits for playback to stop. */
 static atomic_int album_thumb_gen_playback_pass_epoch = -1;
 
-void gui_library_set_covers_during_playback(bool enabled) {
-    atomic_store(&album_thumb_gen_covers_during_playback, enabled);
-}
-
-static bool album_thumb_gen_paused_for_playback(bool user_visible) {
-    return !user_visible && audio_is_playing() && !atomic_load(&album_thumb_gen_covers_during_playback);
-}
 static atomic_bool album_thumb_gen_retry_pending;
 static uint32_t album_thumb_gen_retry_tick;
 static volatile bool sd_format_active = false;
@@ -4092,9 +4085,9 @@ static void * album_thumb_gen_thread_func(void * arg) {
     for (;;) {
         if (album_thumb_gen_should_cancel(my_generation)) break;
 
-        /* Suspend warmer while audio is playing, visible lazy work is pending, or memory is low */
-        if (album_thumb_gen_paused_for_playback(user_visible) ||
-            (!user_visible && album_thumbnail_lazy_work_pending()) ||
+        /* Yield to visible lazy work or memory pressure. Playback uses the
+         * cache-only branch below rather than extracting new artwork. */
+        if ((!user_visible && album_thumbnail_lazy_work_pending()) ||
             !artwork_check_memory_admission(decode_prio, ALBUM_ART_METADATA_START_BYTES)) {
             if (user_visible) atomic_fetch_add(&album_thumb_gen_error_count, 1);
             else atomic_store(&album_thumb_gen_retry_pending, true);
@@ -4126,8 +4119,7 @@ static void * album_thumb_gen_thread_func(void * arg) {
             }
 
             /* Check suspension before each album */
-            if (album_thumb_gen_paused_for_playback(user_visible) ||
-                (!user_visible && album_thumbnail_lazy_work_pending())) {
+            if (!user_visible && album_thumbnail_lazy_work_pending()) {
                 if (user_visible) atomic_fetch_add(&album_thumb_gen_error_count, 1);
                 else atomic_store(&album_thumb_gen_retry_pending, true);
                 goto done;
@@ -4157,10 +4149,10 @@ static void * album_thumb_gen_thread_func(void * arg) {
             albumart_info_t info;
             albumart_info_from_song_row(&song, &info);
 
-            /* Playing with the experimental switch on: only read a 72px cover
-             * already generated on the card (thumbnail priority, which the
-             * coordinator admits during playback). Anything needing real
-             * extraction is left for the pass after playback stops. */
+            /* During playback, only read an already generated 72px cover
+             * (thumbnail priority, which the coordinator admits during
+             * playback). Anything needing real extraction waits for playback
+             * to stop. */
             if (!user_visible && audio_is_playing()) {
                 if (album_thumb_gen_ram_filled >= ALBUM_THUMBNAIL_CACHE_SIZE) {
                     /* RAM budget full: further reads would be decoded only
@@ -4327,9 +4319,9 @@ static void * album_thumb_gen_thread_func(void * arg) {
             }
     }
     if (!user_visible && !single_album && audio_is_playing()) {
-        /* Playback-time pass (experimental switch) done for this cache
-         * epoch; the artist pass and any skipped extraction wait for
-         * playback to stop. */
+        /* The playback-time cache-only pass is done for this cache epoch;
+         * the artist pass and any skipped extraction wait for playback to
+         * stop. */
         atomic_store(&album_thumb_gen_playback_pass_epoch, atomic_load(&album_thumb_gen_cache_epoch));
         atomic_store(&album_thumb_gen_retry_pending, true);
         goto done;
@@ -6144,6 +6136,19 @@ void search_keypad_dismissed(void) {
     lv_obj_align(b->list, LV_ALIGN_TOP_MID, 0, SEARCH_BAR_Y + SEARCH_BAR_HEIGHT);
 }
 
+/* Enter leaves the query textarea in its search bar while returning the
+ * shared keypad to the modal text-entry screen. A tap in that same field
+ * should restore the inline layout and keypad without resetting the query. */
+void search_textarea_clicked_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED || t9_keypad_is_inline_active()) return;
+    search_binding_t * b = find_search_binding_for_screen(lv_screen_active());
+    if (!b || !b->active || lv_obj_get_parent(lv_event_get_target(e)) != b->search_bar) return;
+
+    lv_obj_set_size(b->list, lv_pct(100), t9_keypad_get_grid_y() - (SEARCH_BAR_Y + SEARCH_BAR_HEIGHT));
+    lv_obj_align(b->list, LV_ALIGN_TOP_MID, 0, SEARCH_BAR_Y + SEARCH_BAR_HEIGHT);
+    t9_keypad_attach(b->screen, b->search_bar, 8, 14, 365, false);
+}
+
 /* Enter's meaning while a search binding owns the keypad: hide just the
  * keypad (search bar, typed query, and the current filter all stay) and
  * give the list back the vertical space the keypad occupied -- matches a
@@ -6176,7 +6181,7 @@ static void search_open(search_binding_t * b) {
 
     /* Spans from near the bar's left edge to just before close_btn (at
      * 440-51-8=381). */
-    t9_keypad_attach(b->screen, b->search_bar, 8, 14, 365);
+    t9_keypad_attach(b->screen, b->search_bar, 8, 14, 365, true);
 
     b->active = true;
     if (b->is_overlay_list && (b->list == files_search_list || b->list == group_songs_search_list)) thumbnail_begin_screen(b->list);
@@ -6274,6 +6279,15 @@ void gui_library_apply_sorting(void) {
         compact_list_scroll_to_index(albums_list, 0);
         az_index_binding_t * az = find_az_binding_for_screen(albums_screen);
         if (az) lv_obj_add_flag(az->strip, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (artist_albums_list) {
+        char name[sizeof(artist_albums_current_name)];
+        metadata_db_group_kind_t kind;
+        pthread_mutex_lock(&artist_albums_state_mutex);
+        snprintf(name, sizeof(name), "%s", artist_albums_current_name);
+        kind = artist_albums_current_kind;
+        pthread_mutex_unlock(&artist_albums_state_mutex);
+        if (name[0]) populate_artist_albums_view(name, kind);
     }
     refresh_now_playing_indicators();
     gui_navigation_invalidate_theme_snapshots();
@@ -8147,8 +8161,7 @@ void poll_library_rescan(void) {
         !album_thumbnail_lazy_work_pending() && !library_rescan_active &&
         !sd_format_active &&
         (!audio_is_playing() ||
-         (atomic_load(&album_thumb_gen_covers_during_playback) &&
-          atomic_load(&album_thumb_gen_playback_pass_epoch) != atomic_load(&album_thumbnail_cache_epoch))) &&
+         atomic_load(&album_thumb_gen_playback_pass_epoch) != atomic_load(&album_thumbnail_cache_epoch)) &&
         lv_tick_elaps(album_thumb_gen_retry_tick) >= 15000 &&
 #ifndef HOST_BUILD
         sd_card_root_is_mounted() &&
@@ -9680,8 +9693,8 @@ static void artist_album_row_click_cb(int index) {
     int group_index = index - 1;
     if (group_index < 0 || group_index >= artist_albums_group_count) return;
     group_row_t group;
-    if (metadata_db_get_albums_for_group(artist_albums_current_kind, artist_albums_current_name,
-                                         group_index, 1, &group) != 1) return;
+    if (metadata_db_get_albums_for_group_sorted(artist_albums_current_kind, artist_albums_current_name,
+                                                effective_album_sort(), group_index, 1, &group) != 1) return;
     (void) show_album_group_filtered(&group, artist_albums_song_filter());
 }
 
@@ -9902,8 +9915,8 @@ static void artist_album_more_click_cb(int index) {
         int group_index = index - 1;
         group_row_t group;
         if (group_index >= 0 && group_index < artist_albums_group_count &&
-            metadata_db_get_albums_for_group(artist_albums_current_kind, artist_albums_current_name,
-                                              group_index, 1, &group) == 1)
+            metadata_db_get_albums_for_group_sorted(artist_albums_current_kind, artist_albums_current_name,
+                                                     effective_album_sort(), group_index, 1, &group) == 1)
             open_album_collection_menu(&group, artist_albums_song_filter());
         return;
     }
@@ -10005,7 +10018,9 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
     }
     if (count <= 0) return prefix;
     group_row_t * rows = malloc(sizeof(*rows) * (size_t) count);
-    int n = rows ? metadata_db_get_albums_for_group(current_kind, current_name, offset, count, rows) : 0;
+    int n = rows ? metadata_db_get_albums_for_group_sorted(current_kind, current_name,
+                                                            effective_album_sort(), offset,
+                                                            count, rows) : 0;
     for (int i = 0; i < n; i++) {
         snprintf(out_rows[prefix + i].label, sizeof(out_rows[prefix + i].label), "%s", rows[i].name);
         out_rows[prefix + i].identity = rows[i].first_song_id;

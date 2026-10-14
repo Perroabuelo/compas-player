@@ -235,7 +235,6 @@ static void set_defaults(player_settings_t * out) {
     out->led_indicator_enabled = true;
     out->db_logging_enabled = false; /* opt-in developer diagnostic, off by default */
     out->screenshot_combo_enabled = false;
-    out->dev_covers_during_playback = false;
     out->charge_limiter_enabled = false; /* opt-in -- caps max charge voltage to 4.2V, a real behavior change the user should choose, not a default surprise */
     out->safe_charging_enabled = false; /* off means leave the PMIC charge-current setting untouched */
     out->show_battery_percent = true; /* on by default -- matches every previous version's always-on behavior */
@@ -251,6 +250,7 @@ static void set_defaults(player_settings_t * out) {
     out->idle_suspend_enabled = true;
     out->idle_suspend_default_migrated = true; /* prevent older releases from re-migrating saved preferences */
     out->usb_mode = 0; /* USB_MODE_STORAGE -- see settings.h's own comment on why this is a plain int */
+    out->usb_dac_disable_charging = true;
     out->play_mode = 0; /* PLAY_MODE_SEQUENTIAL */
     out->swipe_up_home_enabled = true;
     out->quick_drawer_volume_visible = true;
@@ -590,8 +590,6 @@ bool settings_load(player_settings_t * out) {
             out->db_logging_enabled = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "screenshot_combo_enabled") == 0) {
             out->screenshot_combo_enabled = (strcmp(value, "1") == 0);
-        } else if (strcmp(key, "dev_covers_during_playback") == 0) {
-            out->dev_covers_during_playback = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "charge_limiter_enabled") == 0) {
             out->charge_limiter_enabled = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "safe_charging_enabled") == 0) {
@@ -614,6 +612,8 @@ bool settings_load(player_settings_t * out) {
             out->idle_suspend_default_migrated = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "usb_mode") == 0) {
             out->usb_mode = atoi(value);
+        } else if (strcmp(key, "usb_dac_disable_charging") == 0) {
+            out->usb_dac_disable_charging = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "play_mode") == 0) {
             out->play_mode = atoi(value);
         } else if (strcmp(key, "swipe_up_home_enabled") == 0) {
@@ -825,7 +825,6 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "led_indicator_enabled=%d\n", settings->led_indicator_enabled ? 1 : 0);
     fprintf(f, "db_logging_enabled=%d\n", settings->db_logging_enabled ? 1 : 0);
     fprintf(f, "screenshot_combo_enabled=%d\n", settings->screenshot_combo_enabled ? 1 : 0);
-    fprintf(f, "dev_covers_during_playback=%d\n", settings->dev_covers_during_playback ? 1 : 0);
     fprintf(f, "charge_limiter_enabled=%d\n", settings->charge_limiter_enabled ? 1 : 0);
     fprintf(f, "safe_charging_enabled=%d\n", settings->safe_charging_enabled ? 1 : 0);
     fprintf(f, "show_battery_percent=%d\n", settings->show_battery_percent ? 1 : 0);
@@ -837,6 +836,7 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "idle_suspend_enabled=%d\n", settings->idle_suspend_enabled ? 1 : 0);
     fprintf(f, "idle_suspend_default_migrated=%d\n", settings->idle_suspend_default_migrated ? 1 : 0);
     fprintf(f, "usb_mode=%d\n", settings->usb_mode);
+    fprintf(f, "usb_dac_disable_charging=%d\n", settings->usb_dac_disable_charging ? 1 : 0);
     fprintf(f, "play_mode=%d\n", settings->play_mode);
     fprintf(f, "swipe_up_home_enabled=%d\n", settings->swipe_up_home_enabled ? 1 : 0);
     fprintf(f, "quick_drawer_volume_visible=%d\n", settings->quick_drawer_volume_visible ? 1 : 0);
