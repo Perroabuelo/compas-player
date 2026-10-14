@@ -1,0 +1,16 @@
+Navigation icons (2026-10-14)
+Runtime path: /usr/resource/litegui/theme2/navigation/
+Icons: 44x44 RGBA PNG, rendered from @phosphor-icons/core@2.1.1 regular SVG
+glyphs with Compas vertical gradients, rasterized at 176px and Lanczos-scaled
+to 44px by python3 scripts/generate_navigation_icons.py.
+
+search.png uses assets/regular/magnifying-glass.svg with cyan gradient
+(#a0e6f4 to #51bad7).
+more.png uses assets/regular/dots-three-vertical.svg with the violet Settings
+gradient (#d7a9fa to #a36be4).
+
+The original glyph SVGs are tracked in scripts/assets/navigation_icons/.
+Pinned source URLs:
+https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/magnifying-glass.svg
+https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/dots-three-vertical.svg
+MIT terms: assets/theme2/submenu/LICENSE (Phosphor Icons, 2023).

@@ -1092,7 +1092,7 @@ static lv_obj_t * build_files_screen(void) {
                         LV_EVENT_SCREEN_UNLOADED, NULL);
 
     files_title_label = build_screen_header(scr, TR("Files"), files_header_back_cb, NULL, NULL);
-    files_options_btn = build_top_right_icon_button(scr, asset_path("playing_plane/ic_more.png"),
+    files_options_btn = build_top_right_icon_button(scr, asset_path("navigation/more.png"),
                                                     files_current_folder_options_cb);
 
     file_browser_set_sort_mode((file_browser_sort_mode_t) current_settings.file_sort_mode);
@@ -4956,7 +4956,7 @@ static int albums_fetch_page(void * ctx, int offset, int count, compact_list_pag
                 out_rows[i].artwork_key = song_album_thumbnail_key(&representative);
         }
         snprintf(out_rows[i].trailing_asset, sizeof(out_rows[i].trailing_asset),
-                 "%s", "playing_plane/ic_more.png");
+                 "%s", "navigation/more.png");
     }
     free(rows);
     return n;
@@ -6351,7 +6351,7 @@ void register_search(search_binding_id_t id, lv_obj_t * screen, lv_obj_t * list,
     free(b->filtered_indices); /* re-registering (post-rescan rebuild) over a binding left mid-filter would otherwise leak this */
     free(b->filtered_labels);
 
-    lv_obj_t * search_btn = build_top_right_icon_button(screen, asset_path("sub_back/btn_search.png"), NULL);
+    lv_obj_t * search_btn = build_top_right_icon_button(screen, asset_path("navigation/search.png"), NULL);
     lv_obj_add_event_cb(search_btn, search_btn_click_cb, LV_EVENT_CLICKED, (void *) (intptr_t) id);
     lv_obj_add_flag(search_btn, LV_OBJ_FLAG_GESTURE_BUBBLE); /* added after finalize_screen_navigation()'s one-time pass, needs this set explicitly -- see screen_gesture_event_cb()'s own comment */
     if (id == SEARCH_BINDING_FILES) {
@@ -10010,7 +10010,7 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
     if (offset == 0 && count > 0) {
         memset(&out_rows[0], 0, sizeof(out_rows[0]));
         snprintf(out_rows[0].label, sizeof(out_rows[0].label), "%s", TR("All Songs"));
-        snprintf(out_rows[0].trailing_asset, sizeof(out_rows[0].trailing_asset), "%s", "playing_plane/ic_more.png");
+        snprintf(out_rows[0].trailing_asset, sizeof(out_rows[0].trailing_asset), "%s", "navigation/more.png");
         prefix = 1;
         count--;
     } else {
@@ -10035,7 +10035,7 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
                 out_rows[prefix + i].artwork_key = song_album_thumbnail_key(&representative);
         }
         snprintf(out_rows[prefix + i].trailing_asset, sizeof(out_rows[prefix + i].trailing_asset),
-                 "%s", "playing_plane/ic_more.png");
+                 "%s", "navigation/more.png");
     }
     free(rows);
     return n + prefix;
@@ -10219,7 +10219,7 @@ static int artists_fetch_page(void * ctx, int offset, int count, compact_list_pa
         out_rows[i].artwork_key = albumart_artist_thumbnail_key(rows[i].name);
         snprintf(out_rows[i].artwork_name, sizeof(out_rows[i].artwork_name), "%s", rows[i].name);
         snprintf(out_rows[i].trailing_asset, sizeof(out_rows[i].trailing_asset),
-                 "%s", "playing_plane/ic_more.png");
+                 "%s", "navigation/more.png");
     }
     free(rows);
     return n;
@@ -10235,7 +10235,7 @@ static int album_artists_fetch_page(void * ctx, int offset, int count, compact_l
         out_rows[i].artwork_key = albumart_artist_thumbnail_key(rows[i].name);
         snprintf(out_rows[i].artwork_name, sizeof(out_rows[i].artwork_name), "%s", rows[i].name);
         snprintf(out_rows[i].trailing_asset, sizeof(out_rows[i].trailing_asset),
-                 "%s", "playing_plane/ic_more.png");
+                 "%s", "navigation/more.png");
     }
     free(rows);
     return n;

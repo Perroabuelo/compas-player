@@ -431,7 +431,7 @@ static void build_screen(void) {
     screen = lv_obj_create(NULL);
     lv_obj_add_style(screen, &style_theme_screen_bg, 0);
     lv_obj_add_event_cb(screen, screen_delete_cb, LV_EVENT_DELETE, NULL);
-    title_label = build_screen_header(screen, TR("File Manager"), back_cb, asset_path("playing_plane/ic_more.png"),
+    title_label = build_screen_header(screen, TR("File Manager"), back_cb, asset_path("navigation/more.png"),
                                       menu_button_cb);
     const file_browser_options_t options = {
         .on_select = on_file_browser_selected,

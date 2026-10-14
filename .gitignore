@@ -116,6 +116,10 @@
 # backgrounds.
 !/assets/theme2/submenu/
 
+# Navigation icons are project artwork in a separate namespace, with pinned
+# Phosphor source attribution in navigation/SOURCES.txt.
+!/assets/theme2/navigation/
+
 # Home launcher tiles. Mixed directory: the six tile glyphs and their _s
 # duplicates are Phosphor/Material redraws swapped in place (SOURCES.txt),
 # each byte-different from the stock file of the same name. The rest of the
@@ -247,6 +251,7 @@
 !/scripts/install_startup_trace.py
 !/scripts/generate_car_mode_toggle.py
 !/scripts/generate_stream_media_icons.py
+!/scripts/generate_navigation_icons.py
 !/scripts/kernel/*.py
 
 # Standalone development self-tests are local-only and are not shipped in

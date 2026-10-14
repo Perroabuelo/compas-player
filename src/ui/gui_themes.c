@@ -130,6 +130,7 @@ static const char * const s_legacy_asset_inventory[] = {
     "pull_down/dlna.png", "pull_down/dlna_s.png",
     "pull_down/gapless_play.png", "pull_down/gapless_play_s.png",
     "pull_down/hibylink.png", "pull_down/hibylink_s.png",
+    "navigation/search.png", "navigation/more.png",
     "sub_back/bg_search.png", "sub_back/btn_back.png", "sub_back/btn_search.png", "sub_back/close.png",
     "sub_back/btn_playlist.png", "sub_back/set.png",
     "topbar/lucide_audio_lines.png", "topbar/lucide_headphones.png",
