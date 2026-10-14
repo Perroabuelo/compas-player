@@ -179,7 +179,7 @@ plugin.define({
   | Area | Tokens |
   | --- | --- |
   | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker` |
-  | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.hw_volume_curve` |
+  | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.crossfeed.angle`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
   | Network | `network.http.sync`, `network.http.async`, `network.http.download`, `network.http.download_progress` |
@@ -210,7 +210,7 @@ plugin.define({
 
 All of these are additions; older plugins keep working.
 
-Headphone crossfeed is the capability `audio.crossfeed` (`plugin.eq_get_crossfeed` / `plugin.eq_set_crossfeed`). It does not raise `PLUGIN_API_VERSION`. Check the capability; do not require a newer `api_min`.
+Headphone crossfeed is the capability `audio.crossfeed` (`plugin.eq_get_crossfeed` / `plugin.eq_set_crossfeed`). It does not raise `PLUGIN_API_VERSION`. Check the capability; do not require a newer `api_min`. The additive capability `audio.crossfeed.angle` indicates the optional angle field in `get_eq_state()` / `eq_apply_state()`; it does not raise the API version.
 
 ## Screens
 
@@ -856,8 +856,8 @@ These additions keep API version **16**. Check each capability with
 | `get_playback_format()` | `playback.format`: `nil` while idle, otherwise a snapshot with `path`, `codec`, source `sample_rate`/`bit_depth`, `output_sample_rate`/`output_bit_depth`, `channels`, `bitrate_kbps`, `duration_seconds`, `is_stream`, `seekable`, `is_dsd`, `dop`, `replaygain_applied`/`replaygain_applied_db`, `generation`, and live `software_volume_gain`, `playback_speed`, `crossfade_enabled`. Unknown source depth/bitrate is 0; MP3 has no encoded PCM bit depth. Software gain is a linear PCM multiplier, distinct from hardware/UI volume. Crossfade reports the setting, not whether two tracks are currently mixing. |
 | `get_output_info()` | `playback.output_info`: `route` (`wired`, `bluetooth`, or `usb_dac`), `active`, PCM `sample_rate`/`bit_depth`, `hardware_sample_rate`/`hardware_bit_depth` when known, cached `bluetooth_codec` when available, `resampling`, `resampling_known`, and `dop`. Bluetooth and USB conversion/final hardware formats are unknown; matching PCM fields alone cannot prove bit-perfect output. |
 | `eq_apply_profile(path, { persist = false })` | `audio.peq.transient`: applies an SD profile to runtime EQ without saving it. Default persistence remains enabled. Later explicit EQ save/edit operations may save the active profile. |
-| `get_eq_state()` | `audio.peq.state`: detached runtime snapshot with `bypass`, `preamp_db`, `stereo_width`, `crossfeed`, and ten ordered `bands` (`index`, `freq_hz`, `gain_db`, `q`, `type`, `enabled`). This observes active settings, including transient profiles, rather than reading a possibly stale saved profile. |
-| `eq_apply_state(state, { persist = false })` | `audio.peq.state`: validates the complete snapshot before applying it. Persistence defaults to true. Plugins can restore a saved runtime snapshot without writing flash; compare the current state with the last state they applied before restoring, to preserve subsequent user changes. Numerical limits: preamp/gain −300 to 300 dB, frequency 1–24000 Hz, Q 0.01–100, width 0–2, crossfeed 0–1; all must be finite. `crossfeed` may be omitted; a missing field applies as off so older snapshots still load. |
+| `get_eq_state()` | `audio.peq.state`: detached runtime snapshot with `bypass`, `preamp_db`, `stereo_width`, `crossfeed`, `crossfeed_angle`, and ten ordered `bands` (`index`, `freq_hz`, `gain_db`, `q`, `type`, `enabled`). This observes active settings, including transient profiles, rather than reading a possibly stale saved profile. |
+| `eq_apply_state(state, { persist = false })` | `audio.peq.state`: validates the complete snapshot before applying it. Persistence defaults to true. Plugins can restore a saved runtime snapshot without writing flash; compare the current state with the last state they applied before restoring, to preserve subsequent user changes. Numerical limits: preamp/gain −300 to 300 dB, frequency 1–24000 Hz, Q 0.01–100, width 0–2, crossfeed 0–1; all must be finite. `crossfeed` may be omitted; a missing field applies as off so older snapshots still load. Optional `crossfeed_angle` is 0 (no delay), 30, 45, 60, or 90 degrees; omission applies no delay. Check `audio.crossfeed.angle` before relying on that field. |
 | `get_track_metadata(path)` | `library.track_metadata`: exact local SD-path lookup in the scanned database, returning `id`, `path`, `title`, `artist`, `album`, `album_artist`, and `genre`. Returns `nil` for unindexed/remote/invalid paths; absent tags are empty strings. Does not parse files or iterate the library on each track. |
 | `get_crossfade()`, `set_crossfade(enabled)` | `playback.settings`: boolean; retains native coupling with gapless. |
 | `get_gapless()`, `set_gapless(enabled)` | `playback.settings`: boolean; disabling gapless also disables crossfade. |
@@ -1061,17 +1061,27 @@ Crossfeed is saved as `crossfeed` in the same `.peq` current file and named
 profiles, so `eq_save_profile` / `eq_load_profile` and `get_eq_state` /
 `eq_apply_state` round-trip it. Profiles and snapshots that omit the field load
 as off. `eq_reset()` and the EQ screen's Flat / Reset actions turn it off.
-New installs start off. The native control is one strength slider on the EQ
-band-options screen (0 is off). There is no separate enable switch.
+New installs start off. The EQ band-options screen has a strength slider (0 is off) and a global
+Crossfeed angle selector. There is no separate enable switch. Crossfeed runs
+only when EQ is On; bypass skips the entire stage.
 
 Crossfeed is a filtered-difference headphone blend. It is not a stereo-width
-matrix, a room model, or a head-related transfer function, and it has no
-interaural delay. A one-pole low-pass at 700 Hz tracks
+matrix, a room model, or a head-related transfer function. In No delay mode
+it retains the original response: a one-pole low-pass at 700 Hz tracks
 each channel. At strength `s` the cross coefficient is `k = 0.30 * s`:
 `yL = xL + k * (lpR - lpL)` and the mirror for the right channel. Once the
 low-pass has settled, that is direct `1 - k` and cross `k`. A centered steady
 signal stays at unity gain. A steady full-scale hard-panned tone stays inside
 full scale. High frequencies are left almost untouched.
+
+The optional `crossfeed_angle` is persisted with the profile. Values 30, 45,
+60, and 90 degrees select approximately 261, 381, 488, and 655 microseconds,
+rounded to the nearest sample at the PCM stage's rate. Only the opposite-channel
+low-pass contribution is delayed; the direct output is not buffered. No delay
+(0) is the default for new installs, resets, older profiles, and snapshots
+without this field. A fixed 512-frame stereo ring caps the tap at 511 frames.
+Unlike No delay mode, delayed identical-channel stereo can change phase and
+frequency response; steady DC remains at unity. Single-channel PCM is unchanged.
 
 A polarity reversal can still overshoot while the low-pass holds the previous
 sample, by about `1 + 2k` (1.6 at full strength). The PCM stage's 1 ms limiter
@@ -1083,7 +1093,9 @@ gain is not a constant attenuation: in-range audio, including steady mono and
 a steady hard-pan, is unchanged. Strength 0 does not apply it. Preamp boosts
 that already exceed the ceiling still go to the existing limiter.
 
-Strength changes ramp over 20 ms. The audio thread restarts the low-pass from
+Strength and delay-tap changes blend over 20 ms. Rapid angle changes coalesce
+to the latest selection after the current blend finishes. The audio thread
+restarts the low-pass and delay history from
 the next sample after a stop/restart, seek, A-B loop jump, A-B source switch,
 or a DoP stretch followed by PCM, including when the rate and PCM format are
 unchanged. Continuous gapless PCM and ordinary block boundaries keep the

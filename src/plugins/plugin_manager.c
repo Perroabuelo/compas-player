@@ -2912,11 +2912,12 @@ static bool plugin_song_path_valid(const char * path);
 /* Return an explicit, detached snapshot so plugins can keep or serialize it
  * without observing subsequent changes to peq.c's live band structs. */
 static int l_plugin_get_eq_state(lua_State * L) {
-    lua_createtable(L, 0, 5);
+    lua_createtable(L, 0, 6);
     lua_pushboolean(L, peq_get_bypass()); lua_setfield(L, -2, "bypass");
     lua_pushnumber(L, peq_get_preamp_db()); lua_setfield(L, -2, "preamp_db");
     lua_pushnumber(L, peq_get_stereo_width()); lua_setfield(L, -2, "stereo_width");
     lua_pushnumber(L, peq_get_crossfeed()); lua_setfield(L, -2, "crossfeed");
+    lua_pushinteger(L, peq_get_crossfeed_angle()); lua_setfield(L, -2, "crossfeed_angle");
     lua_createtable(L, PEQ_NUM_BANDS, 0);
     for (int i = 0; i < PEQ_NUM_BANDS; i++) {
         const peq_band_t * b = peq_get_band(i);
@@ -2940,10 +2941,12 @@ static int l_plugin_get_eq_state(lua_State * L) {
  * gain/Q, and the stereo-width clamp implemented by peq.c. `crossfeed` is
  * optional so a snapshot captured before that field existed still applies:
  * a missing or nil field means off, and does not leave the previous strength
- * in place. A present field must be a finite number from 0 to 1. */
+ * in place. A present field must be a finite number from 0 to 1. The
+ * optional crossfeed_angle selects the delay; missing means legacy/no delay. */
 static int l_plugin_eq_apply_state(lua_State * L) {
     luaL_checktype(L, 1, LUA_TTABLE);
     bool bypass, enabled[PEQ_NUM_BANDS];
+    int crossfeed_angle = 0;
     double preamp, width, crossfeed, freq[PEQ_NUM_BANDS], gain[PEQ_NUM_BANDS], q[PEQ_NUM_BANDS];
     peq_band_type_t types[PEQ_NUM_BANDS];
     lua_getfield(L, 1, "bypass");
@@ -2959,6 +2962,15 @@ static int l_plugin_eq_apply_state(lua_State * L) {
         luaL_argcheck(L, lua_type(L, -1) == LUA_TNUMBER, 1, "crossfeed must be a number when present");
         crossfeed = lua_tonumber(L, -1);
         luaL_argcheck(L, isfinite(crossfeed) && crossfeed >= 0.0 && crossfeed <= 1.0, 1, "crossfeed must be finite and between 0 and 1");
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "crossfeed_angle");
+    if (!lua_isnil(L, -1)) {
+        luaL_argcheck(L, lua_type(L, -1) == LUA_TNUMBER, 1, "crossfeed_angle must be a number when present");
+        double angle = lua_tonumber(L, -1);
+        luaL_argcheck(L, angle == 0.0 || angle == 30.0 || angle == 45.0 || angle == 60.0 || angle == 90.0,
+                      1, "crossfeed_angle must be 0, 30, 45, 60, or 90");
+        crossfeed_angle = (int) angle;
     }
     lua_pop(L, 1);
     lua_getfield(L, 1, "bands");
@@ -2996,7 +3008,7 @@ static int l_plugin_eq_apply_state(lua_State * L) {
         if (!lua_isnil(L, -1)) { luaL_argcheck(L, lua_type(L, -1) == LUA_TBOOLEAN, 2, "persist must be boolean"); persist = lua_toboolean(L, -1); }
         lua_pop(L, 1);
     }
-    peq_set_bypass(bypass); peq_set_preamp_db(preamp); peq_set_stereo_width(width); peq_set_crossfeed(crossfeed);
+    peq_set_bypass(bypass); peq_set_preamp_db(preamp); peq_set_stereo_width(width); peq_set_crossfeed(crossfeed); peq_set_crossfeed_angle(crossfeed_angle);
     for (int i = 0; i < PEQ_NUM_BANDS; i++) {
         peq_set_band(i, freq[i], gain[i], q[i]); peq_set_band_type(i, types[i]); peq_set_band_enabled(i, enabled[i]);
     }
@@ -4867,7 +4879,7 @@ static const char * const plugin_capabilities[] = {
     "network.http.download", "filesystem.mkdir", "crypto.md5", "audio.peq", "data.json",
     "storage.namespaced", "storage.secrets", "playback.remote", "filesystem.playlists", "library.refresh",
     "ui.home_layout", "ui.theme_refresh", "ui.reload", "ui.home_tiles", "ui.launcher_layout",
-    "audio.stereo_width", "audio.crossfeed", "playback.speed", "ui.home_background", "audio.hw_volume_curve", "ui.lock_screen", "ui.quick_toggle",
+    "audio.stereo_width", "audio.crossfeed", "audio.crossfeed.angle", "playback.speed", "ui.home_background", "audio.hw_volume_curve", "ui.lock_screen", "ui.quick_toggle",
     "data.zip", "data.html", "ui.text_view", "data.zip_image", "data.image_thumbnail", "ui.list_grid", "ui.list_showing",
     "ui.list_update", "ui.text_view_images", "ui.list_wrap", "ui.settings_list_wrap", "playback.transport_skip",
     "ui.player_layout_xml", "storage.secrets_get", "playback.progress",

@@ -260,6 +260,7 @@ static lv_obj_t * eq_preamp_slider;
 static lv_obj_t * eq_preamp_value_label;
 static lv_obj_t * eq_crossfeed_slider;
 static lv_obj_t * eq_crossfeed_value_label;
+static lv_obj_t * eq_crossfeed_angle_dropdown;
 static lv_obj_t * eq_freq_slider;
 static lv_obj_t * eq_gain_slider;
 static lv_obj_t * eq_q_slider;
@@ -4476,6 +4477,15 @@ static void refresh_all_eq_widgets(void) {
         eq_format_crossfeed(formatted, sizeof(formatted), peq_get_crossfeed());
         lv_label_set_text(eq_crossfeed_value_label, formatted);
     }
+    if (eq_crossfeed_angle_dropdown) {
+        int angle = peq_get_crossfeed_angle();
+        uint32_t selected = 0;
+        if (angle == 30) selected = 1;
+        else if (angle == 45) selected = 2;
+        else if (angle == 60) selected = 3;
+        else if (angle == 90) selected = 4;
+        lv_dropdown_set_selected(eq_crossfeed_angle_dropdown, selected);
+    }
     refresh_eq_band_widgets();
     if (eq_profile_button_label) {
         char name[256];
@@ -5153,6 +5163,15 @@ static void eq_flat_btn_cb(lv_event_t * e) {
     peq_save();
 }
 
+static void eq_crossfeed_angle_dropdown_event_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_VALUE_CHANGED) return;
+    static const int angles[] = { 0, 30, 45, 60, 90 };
+    uint32_t selected = lv_dropdown_get_selected(lv_event_get_target(e));
+    if (selected >= sizeof(angles) / sizeof(angles[0])) selected = 0;
+    peq_set_crossfeed_angle(angles[selected]);
+    peq_save();
+}
+
 static lv_obj_t * build_eq_band_options_screen(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_theme_screen_bg, 0);
@@ -5167,8 +5186,24 @@ static lv_obj_t * build_eq_band_options_screen(void) {
     lv_obj_set_style_pad_all(content, BOARD_SCALE_PX(12), 0);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_gap(content, 16, 0);
+    lv_obj_set_scroll_dir(content, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_OFF);
     lv_obj_t * preamp = create_eq_slider_card(content, EQ_FIELD_PREAMP, &eq_preamp_value_label, &eq_preamp_slider, -120, 120);
     lv_obj_t * crossfeed = create_eq_slider_card(content, EQ_FIELD_CROSSFEED, &eq_crossfeed_value_label, &eq_crossfeed_slider, 0, 100);
+    lv_obj_t * angle_title = lv_label_create(content);
+    lv_label_set_text(angle_title, TR("Crossfeed angle"));
+    lv_obj_add_style(angle_title, &style_theme_text_primary, 0);
+    lv_obj_set_style_text_font(angle_title, gui_theme_font(GUI_FONT_ROLE_BODY), 0);
+    eq_crossfeed_angle_dropdown = lv_dropdown_create(content);
+    lv_dropdown_set_options(eq_crossfeed_angle_dropdown, TR("No delay\n30°\n45°\n60°\n90°"));
+    lv_obj_set_width(eq_crossfeed_angle_dropdown, lv_pct(95));
+    style_settings_dropdown(eq_crossfeed_angle_dropdown);
+    lv_obj_t * angle_help = lv_label_create(content);
+    lv_label_set_text(angle_help, TR("Crossfeed reduces stereo separation with a filtered copy from the opposite channel. This global setting requires EQ On. With No delay, identical left and right signals such as pink noise are affected very little."));
+    lv_obj_set_width(angle_help, lv_pct(95));
+    lv_label_set_long_mode(angle_help, LV_LABEL_LONG_WRAP);
+    lv_obj_add_style(angle_help, &style_theme_text_muted, 0);
+    lv_obj_set_style_text_font(angle_help, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
     lv_obj_t * title = lv_label_create(content);
     lv_label_set_text(title, TR("Filter type"));
     lv_obj_add_style(title, &style_theme_text_primary, 0);
@@ -5199,6 +5234,7 @@ static lv_obj_t * build_eq_band_options_screen(void) {
     refresh_all_eq_widgets();
     lv_obj_add_event_cb(eq_preamp_slider, eq_preamp_slider_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(eq_crossfeed_slider, eq_crossfeed_slider_event_cb, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(eq_crossfeed_angle_dropdown, eq_crossfeed_angle_dropdown_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(eq_band_enabled_switch, eq_band_enabled_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(eq_type_dropdown, eq_type_dropdown_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     finalize_screen_navigation(scr);
@@ -5601,6 +5637,7 @@ void gui_settings_teardown(void) {
     eq_bypass_switch = eq_band_enabled_switch = NULL;
     eq_preamp_slider = eq_preamp_value_label = NULL;
     eq_crossfeed_slider = eq_crossfeed_value_label = NULL;
+    eq_crossfeed_angle_dropdown = NULL;
     eq_freq_slider = eq_gain_slider = eq_q_slider = NULL;
     eq_type_dropdown = eq_freq_value_label = eq_gain_value_label = eq_q_value_label = NULL;
     eq_band_number_label = eq_profile_button_label = eq_main_content = eq_footer = eq_bypass_state_label = NULL;
