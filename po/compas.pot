@@ -2568,6 +2568,9 @@ msgstr ""
 msgid "Artist Images"
 msgstr ""
 
+msgid "Themes"
+msgstr ""
+
 msgid "Appearance"
 msgstr ""
 
@@ -2664,9 +2667,6 @@ msgid ""
 msgstr ""
 
 msgid "Plugins"
-msgstr ""
-
-msgid "Themes"
 msgstr ""
 
 msgid "Now Playing layouts"

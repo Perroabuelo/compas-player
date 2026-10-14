@@ -3321,7 +3321,12 @@ typedef struct {
 } keyboard_layout_option_t;
 
 static const keyboard_layout_option_t keyboard_layout_options[] = {
-    { KEYBOARD_LAYOUT_T9, N_("T9") }, { KEYBOARD_LAYOUT_QWERTY, N_("QWERTY") },
+    { KEYBOARD_LAYOUT_T9, N_("T9") },
+    { KEYBOARD_LAYOUT_QWERTY, N_("QWERTY") },
+    { KEYBOARD_LAYOUT_AZERTY, "AZERTY (Français)" },
+    { KEYBOARD_LAYOUT_QWERTZ, "QWERTZ (Deutsch)" },
+    { KEYBOARD_LAYOUT_RUSSIAN, "Русский (ЙЦУКЕН)" },
+    { KEYBOARD_LAYOUT_UKRAINIAN, "Українська (ЙЦУКЕН)" },
 };
 #define KEYBOARD_LAYOUT_OPTION_COUNT (sizeof(keyboard_layout_options) / sizeof(keyboard_layout_options[0]))
 
@@ -3391,8 +3396,13 @@ void gui_display_apply_rotation(bool upside_down) {
     if (act) lv_obj_invalidate(act);
 }
 
+static void themes_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_themes_open_picker();
+}
+
 static lv_obj_t * build_settings_appearance_screen(void) {
-    static pill_list_item_t items[7 + PLUGIN_MAX_DISPLAY_LIST_ITEMS];
+    static pill_list_item_t items[8 + PLUGIN_MAX_DISPLAY_LIST_ITEMS];
     items[0] = (pill_list_item_t){ TR("Accent Color"), PILL_ACCESSORY_CHEVRON, false, accent_color_row_cb, NULL, NULL };
     items[1] = (pill_list_item_t){ TR("Font"), PILL_ACCESSORY_CHEVRON, false, custom_font_row_cb, NULL, NULL };
     items[2] = (pill_list_item_t){ TR("Font Size"), PILL_ACCESSORY_CHEVRON, false, font_size_settings_row_cb, NULL, NULL };
@@ -3406,7 +3416,8 @@ static lv_obj_t * build_settings_appearance_screen(void) {
     items[6] = (pill_list_item_t){ TR("Artist Images"), PILL_ACCESSORY_TOGGLE,
                                     current_settings.show_artist_images, NULL,
                                     artist_images_switch_event_cb, NULL };
-    int count = append_grouped_plugin_rows(items, 7, PLUGIN_MAX_DISPLAY_LIST_ITEMS,
+    items[7] = (pill_list_item_t){ TR("Themes"), PILL_ACCESSORY_CHEVRON, false, themes_row_cb, NULL, NULL };
+    int count = append_grouped_plugin_rows(items, 8, PLUGIN_MAX_DISPLAY_LIST_ITEMS,
         "display", "appearance", plugin_manager_get_display_list_item_count,
         plugin_manager_get_display_list_item_label, plugin_manager_get_display_list_item_options,
         plugin_display_list_item_click_cb);
@@ -4050,16 +4061,11 @@ static void dac_home_usb_row_cb(lv_event_t * e) {
     start_usb_mode_switch(USB_MODE_DAC);
 }
 
-static void more_themes_row_cb(lv_event_t * e) {
-    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
-    gui_themes_open_picker();
-}
-
 lv_obj_t * build_dac_home_screen(void) {
     const icon_grid_item_t items[] = {
         { "submenu/plugins.png", NULL, TR("Plugins"), gui_plugin_manage_row_cb, NULL },
         { "submenu/files.png", NULL, TR("File Manager"), gui_file_manager_tile_cb, NULL },
-        { "submenu/themes.png", NULL, TR("Themes"), more_themes_row_cb, NULL },
+        { "submenu/themes.png", NULL, TR("Themes"), themes_row_cb, NULL },
         { "submenu/layouts.png", NULL, TR("Now Playing layouts"), player_layout_choice_settings_row_cb, NULL },
         { "submenu/usb.png", NULL, TR("USB DAC"), dac_home_usb_row_cb, NULL },
         { "submenu/bluetooth.png", NULL, TR("Bluetooth DAC"), bt_dac_settings_row_cb, NULL },

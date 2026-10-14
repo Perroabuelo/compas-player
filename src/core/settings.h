@@ -39,6 +39,13 @@ extern const int SLEEP_TIMER_STEPS[];
 
 #define KEYBOARD_LAYOUT_T9 0
 #define KEYBOARD_LAYOUT_QWERTY 1
+#define KEYBOARD_LAYOUT_AZERTY 2
+#define KEYBOARD_LAYOUT_QWERTZ 3
+#define KEYBOARD_LAYOUT_LEGACY_4 4
+#define KEYBOARD_LAYOUT_LEGACY_5 5
+#define KEYBOARD_LAYOUT_LEGACY_6 6
+#define KEYBOARD_LAYOUT_RUSSIAN 7
+#define KEYBOARD_LAYOUT_UKRAINIAN 8
 
 typedef struct {
     float volume;              /* 0.0 - 1.0 */
@@ -386,9 +393,9 @@ typedef struct {
      * via fallback_font_apply_size_tier(). Defaults to 1 (Medium). */
     int font_size_tier;
 
-    /* Settings -> Display -> Appearance -> Keyboard. Layout used by every text
-     * field and inline search: 0 = T9 keypad, 1 = QWERTY (default). Numeric
-     * fields always use the T9 numeric keypad. */
+    /* Settings -> Display -> Appearance -> Keyboard. Persistent layout enum;
+     * 0 = T9 and 1 = Latin QWERTY retain their original on-disk values.
+     * Numeric fields always use the T9 numeric keypad. */
     int keyboard_layout;
 
     /* Settings -> Lyrics Text Size: independent text size control for the

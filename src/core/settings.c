@@ -9,6 +9,7 @@ player_settings_t current_settings;
 #include "utf8_util.h"
 
 #include <dirent.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -30,6 +31,15 @@ player_settings_t current_settings;
 #endif
 
 #define SETTINGS_TMP_FILE_PATH SETTINGS_FILE_PATH ".tmp"
+
+static int normalize_keyboard_layout(int layout) {
+    if (layout == KEYBOARD_LAYOUT_LEGACY_4 ||
+        layout == KEYBOARD_LAYOUT_LEGACY_5 ||
+        layout == KEYBOARD_LAYOUT_LEGACY_6) return KEYBOARD_LAYOUT_QWERTY;
+    if (layout < KEYBOARD_LAYOUT_T9 || layout > KEYBOARD_LAYOUT_UKRAINIAN)
+        return KEYBOARD_LAYOUT_QWERTY;
+    return layout;
+}
 
 /* These names are part of the on-disk settings format. Keep them stable if
  * enum ordering or display labels change. */
@@ -631,7 +641,14 @@ bool settings_load(player_settings_t * out) {
         } else if (strcmp(key, "font_size_tier") == 0) {
             out->font_size_tier = atoi(value);
         } else if (strcmp(key, "keyboard_layout") == 0) {
-            out->keyboard_layout = atoi(value);
+            char * end;
+            errno = 0;
+            long layout = strtol(value, &end, 10);
+            bool parsed = end != value && errno == 0;
+            while (isspace((unsigned char) *end)) end++;
+            out->keyboard_layout = parsed && *end == '\0' &&
+                layout >= KEYBOARD_LAYOUT_T9 && layout <= KEYBOARD_LAYOUT_UKRAINIAN
+                ? (int) layout : KEYBOARD_LAYOUT_QWERTY;
         } else if (strcmp(key, "lyrics_font_size_tier") == 0) {
             out->lyrics_font_size_tier = atoi(value);
         } else if (strcmp(key, "brightness_percent") == 0) {
@@ -672,7 +689,7 @@ bool settings_load(player_settings_t * out) {
     if (out->usb_mode < 0 || out->usb_mode > 2) out->usb_mode = 0; /* defensive re-clamp, same reasoning as screen_timeout_seconds -- the settings file is plaintext and could be hand-edited out of range */
     if (out->play_mode < 0 || out->play_mode > 3) out->play_mode = 0;
     if (out->font_size_tier < 0 || out->font_size_tier > 2) out->font_size_tier = 1;
-    if (out->keyboard_layout != KEYBOARD_LAYOUT_T9 && out->keyboard_layout != KEYBOARD_LAYOUT_QWERTY) out->keyboard_layout = KEYBOARD_LAYOUT_QWERTY;
+    out->keyboard_layout = normalize_keyboard_layout(out->keyboard_layout);
     if (out->lyrics_font_size_tier != 1 && out->lyrics_font_size_tier != 2) out->lyrics_font_size_tier = 1; /* Medium/Large only, see settings.h */
     if (out->replaygain_mode < 0 || out->replaygain_mode > 2) out->replaygain_mode = 1; /* Off/Per Track/Per Album only, see settings.h */
     if (out->animation_scale != 0 && out->animation_scale != 25 && out->animation_scale != 50 &&
@@ -831,7 +848,8 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "timezone=%s\n", settings->timezone);
     fprintf(f, "hostname=%s\n", settings->hostname);
     fprintf(f, "font_size_tier=%d\n", settings->font_size_tier);
-    fprintf(f, "keyboard_layout=%d\n", settings->keyboard_layout == KEYBOARD_LAYOUT_QWERTY ? KEYBOARD_LAYOUT_QWERTY : KEYBOARD_LAYOUT_T9);
+    int keyboard_layout = normalize_keyboard_layout(settings->keyboard_layout);
+    fprintf(f, "keyboard_layout=%d\n", keyboard_layout);
     fprintf(f, "lyrics_font_size_tier=%d\n", settings->lyrics_font_size_tier);
     fprintf(f, "brightness_percent=%d\n", settings->brightness_percent);
     fprintf(f, "clock_24h=%d\n", settings->clock_24h ? 1 : 0);
