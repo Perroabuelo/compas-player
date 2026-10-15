@@ -53,8 +53,7 @@ void start_library_metadata_refresh_paths(const char * const * paths, int count)
 void start_library_metadata_refresh_album(const char * album, const char * album_artist);
 void start_library_metadata_refresh_artist(metadata_db_group_kind_t kind, const char * name);
 void show_library_refresh_all_metadata_prompt(void);
-/* Controls boot migration and background import/storage follow-up behavior.
- * Explicit Settings and plugin refresh requests remain available. */
+/* Controls automatic library rescanning on boot / SD mount. */
 bool gui_library_auto_rescan_enabled(void);
 void poll_library_rescan(void);
 void poll_sd_format(void);

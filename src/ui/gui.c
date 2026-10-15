@@ -1734,19 +1734,6 @@ void gui_stream_media_refresh(void) {
     if (old) lv_obj_delete(old);
 }
 
-/* Keep migration's first scan deferred until screen setup has completed.
- * This uses the same one-shot timer shape as fallback_font.c's deferred
- * load because it cannot start synchronously during the cache load. */
-static void migration_rescan_timer_cb(lv_timer_t * timer) {
-    lv_timer_delete(timer);
-    start_library_auto_rescan();
-}
-
-#define MIGRATION_RESCAN_DELAY_MS 500
-static void migration_schedule_deferred_rescan(void) {
-    lv_timer_create(migration_rescan_timer_cb, MIGRATION_RESCAN_DELAY_MS, NULL);
-}
-
 void gui_init(uint32_t screen_width, uint32_t screen_height) {
     lv_display_add_event_cb(lv_display_get_default(), screen_wake_frame_ready_cb,
                             LV_EVENT_ALL, NULL);
@@ -1934,15 +1921,6 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
     boot_checkpoint("build_player_screen done");
 #endif
     gui_lyrics_init();
-    /* Converts any pre-existing absolute-path playlist entries (everything
-     * written before playlist_files_append()/_create() started writing
-     * relative ones) to relative -- see playlist_files_migrate_to_relative()'s
-     * own comment. Runs before the first read of any playlist below. Host-only
-     * exclusion matches migrate_old_db_if_needed()'s own -- ./music/Playlists
-     * locally is dev test fixtures, not real user data. */
-#ifndef HOST_BUILD
-    playlist_files_migrate_to_relative(PLAYLISTS_DIR);
-#endif
 #ifndef HOST_BUILD
     boot_checkpoint("library_load_from_cache_only begin");
 #endif
@@ -1950,11 +1928,6 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
 #ifndef HOST_BUILD
     boot_checkpoint("library_load_from_cache_only done");
 #endif
-    /* Migration keeps its automatic first scan, even if the destination
-     * cache reports FRESH. A non-migration FRESH result is handled by the
-     * library's settled build prompt. */
-    if (metadata_db_migration_needed() && gui_library_auto_rescan_enabled())
-        migration_schedule_deferred_rescan();
     /* No whole-library load anywhere in this boot path, on purpose --
      * remote_control.c queries metadata_db.c directly (its own METADATA_DB_
      * GUARD) rather than needing a synced copy of the library, and each of
@@ -2001,20 +1974,62 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
      * Subsonic artist/album row has no local playlist_index to highlight
      * against. */
 
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_library_init begin");
+#endif
     gui_library_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_library_init done");
+#endif
     /* Warms the first ALBUM_THUMBNAIL_CACHE_SIZE album thumbnails into RAM
      * (and the rest onto disk) before the user ever opens Albums. */
     gui_library_start_boot_thumbnail_warmup();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_network_init begin");
+#endif
     gui_network_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_network_init done");
+#endif
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_settings_init begin");
+#endif
     gui_settings_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_settings_init done");
+#endif
     gui_plugin_manage_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_plugin_store_init begin");
+#endif
     gui_plugin_store_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_plugin_store_init done");
+#endif
     gui_books_init();
     build_power_off_countdown_popup();
     gui_queue_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_plugins_init begin");
+#endif
     gui_plugins_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_plugins_init done");
+#endif
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_shell_init begin");
+#endif
     gui_shell_init(screen_width, screen_height);
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_shell_init done");
+#endif
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_navigation_init begin");
+#endif
     gui_navigation_init();
+#ifndef HOST_BUILD
+    boot_checkpoint("gui_navigation_init done");
+#endif
 #ifndef HOST_BUILD
     boot_checkpoint("all screens built");
 #endif
@@ -2094,13 +2109,6 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
     boot_checkpoint("gui_init returning");
 #endif
 
-    /* Deliberately the very last thing gui_init() does -- see
-     * fallback_font_schedule_deferred_load()'s own doc comment for why this
-     * can't just load the font directly here or anywhere earlier in this
-     * function (the auto-resume path just above is exactly the kind of
-     * pre-first-frame call site that hung boot on the previous attempt at
-     * this). */
-    fallback_font_schedule_deferred_load();
 #ifdef TEST_BOOT_RC
     /* The production startup path above deliberately resets session-only
      * modes and persists them as disabled. Re-enable only in memory for this

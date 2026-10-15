@@ -6393,45 +6393,57 @@ static char (*scan_plugin_dir_sorted_names(char dir_path_out[600], int * out_cou
     DIR * d = opendir(dir_path_out);
     if (!d) return NULL; /* no .plugins folder -- nothing to do, not an error */
 
-    int total = 0;
+    char (*names)[256] = NULL;
+    size_t name_count = 0;
+    size_t capacity = 0;
     struct dirent * ent;
-    while ((ent = readdir(d)) != NULL) {
+    for (;;) {
+        errno = 0;
+        ent = readdir(d);
+        if (!ent) {
+            if (errno != 0) goto fail;
+            break;
+        }
         size_t len = strlen(ent->d_name);
         if (len < 5 || strcasecmp(ent->d_name + len - 4, ".lua") != 0) continue;
         if (gui_themes_is_legacy_theme_loader(NULL, ent->d_name)) continue;
-        total++;
-    }
-    if (total == 0) {
-        closedir(d);
-        return NULL;
-    }
-
-    char (*names)[256] = malloc((size_t) total * sizeof(*names));
-    if (!names) {
-        closedir(d);
-        return NULL;
-    }
-
-    /* rewinddir(), not a second opendir() -- same DIR* handle, standard
-     * POSIX way to restart a directory stream already open. name_count is
-     * bounded by `total` from the pass above regardless of whether the
-     * directory's real contents shift between the two passes (a file
-     * added/removed concurrently) -- defensive, not expected in practice at
-     * this point in boot. */
-    rewinddir(d);
-    int name_count = 0;
-    while (name_count < total && (ent = readdir(d)) != NULL) {
-        size_t len = strlen(ent->d_name);
-        if (len < 5 || strcasecmp(ent->d_name + len - 4, ".lua") != 0) continue;
-        if (gui_themes_is_legacy_theme_loader(NULL, ent->d_name)) continue;
+        if (name_count >= (size_t) INT_MAX) {
+            errno = EOVERFLOW;
+            goto fail;
+        }
+        if (name_count == capacity) {
+            size_t next_capacity = capacity ? capacity * 2 : 16;
+            if (next_capacity < capacity || next_capacity > (size_t) INT_MAX)
+                next_capacity = (size_t) INT_MAX;
+            if (next_capacity <= capacity || next_capacity > SIZE_MAX / sizeof(*names)) {
+                errno = EOVERFLOW;
+                goto fail;
+            }
+            void * grown = realloc(names, next_capacity * sizeof(*names));
+            if (!grown) goto fail;
+            names = grown;
+            capacity = next_capacity;
+        }
         snprintf(names[name_count], sizeof(names[0]), "%s", ent->d_name);
         name_count++;
     }
-    closedir(d);
+    if (closedir(d) != 0) {
+        free(names);
+        return NULL;
+    }
 
-    qsort(names, (size_t) name_count, sizeof(names[0]), plugin_filename_cmp);
-    *out_count = name_count;
+    if (name_count == 0) {
+        free(names);
+        return NULL;
+    }
+    qsort(names, name_count, sizeof(names[0]), plugin_filename_cmp);
+    *out_count = (int) name_count;
     return names;
+
+fail:
+    closedir(d);
+    free(names);
+    return NULL;
 }
 
 void plugin_manager_init(void) {

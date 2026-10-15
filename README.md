@@ -127,10 +127,6 @@ Keep the existing `.compas` directory and place the binary inside it. Open **Set
 
 SD updates require a matching device-model marker in the binary and cannot be older than the player packaged in the firmware. Rejected startup updates are preserved with a `.rejected` suffix so they are not retried on every boot.
 
-Older bootloaders look for `SD/.open_hiby_player/open_hiby_player`. Flash a current full `.upt` once to switch to the `.compas` path. Older installations may also have `/usr/bin/open_hiby_bootloader`; the current full image installs `/usr/bin/compas_loader` and updates the wrapper that starts it.
-
-During the compatibility window, each mount migrates up to 256 top-level entries from `SD/.open_hiby_player` to `SD/.compas`, excluding database and bootloader entries. Remaining entries are retried on a later boot or card reinsertion. Existing destinations are preserved so retries are safe; large cache directories are renamed in constant time when the destination is absent. Archived database files and stock/update bootloader artifacts remain in the old directory. This migration is planned for removal after the compatibility window.
-
 ## Build from source
 
 The host simulator is the quickest way to explore the interface. On Arch Linux, install `sdl2`, `make`, `gcc`/`g++` and `git`; `make` fetches LVGL when needed:

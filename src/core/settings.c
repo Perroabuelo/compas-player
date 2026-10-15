@@ -314,46 +314,7 @@ void settings_subsonic_server_upsert(player_settings_t * settings, const char * 
     settings->subsonic_saved[found].verify_tls = verify_tls;
 }
 
-static void import_legacy_subsonic_list_file(player_settings_t * out, const char * path) {
-    FILE * f = fopen(path, "r");
-    if (!f) return;
-    char line[1024];
-    while (fgets(line, sizeof(line), f)) {
-        size_t n = strlen(line);
-        while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = '\0';
-        char * url = line;
-        char * user = strchr(url, '\t');
-        if (!user) continue;
-        *user++ = '\0';
-        char * pass = strchr(user, '\t');
-        if (!pass) continue;
-        *pass++ = '\0';
-        char * tls = strchr(pass, '\t');
-        if (!tls) continue;
-        *tls++ = '\0';
-        settings_subsonic_server_upsert(out, url, user, pass, tls[0] != '0');
-    }
-    fclose(f);
-}
-
-static void import_legacy_subsonic_servers(player_settings_t * out) {
-    if (out->subsonic_saved_count == 0) {
-        import_legacy_subsonic_list_file(out,
-#ifdef HOST_BUILD
-            "./open_hiby_player_subsonic.txt"
-#else
-            "/usr/data/open_hiby_player_subsonic.txt"
-#endif
-        );
-#ifndef HOST_BUILD
-        import_legacy_subsonic_list_file(out, "/data/mnt/sd_0/.compas/subsonic.list");
-        import_legacy_subsonic_list_file(out, "/data/mnt/sd_0/.open_hiby_player/subsonic.list");
-#endif
-#ifdef HOST_BUILD
-        import_legacy_subsonic_list_file(out, "./.compas/subsonic.list");
-        import_legacy_subsonic_list_file(out, "./.open_hiby_player/subsonic.list");
-#endif
-    }
+static void upsert_current_subsonic_url(player_settings_t * out) {
     if (out->subsonic_saved_count == 0 && out->subsonic_url[0]) {
         settings_subsonic_server_upsert(out, out->subsonic_url, out->subsonic_username, out->subsonic_password,
                                         out->subsonic_verify_tls);
@@ -361,9 +322,8 @@ static void import_legacy_subsonic_servers(player_settings_t * out) {
 }
 
 /* Sidecar is what gui.c reads (via metadata_db_load_subsonic_servers()).
- * Union settings.subsonic_saved into it (so a settings-only list from this
- * tree isn't dropped by an SD TSV left by the other copy), then mirror up
- * to SETTINGS_SUBSONIC_SAVED_MAX sidecar rows back into settings so
+ * Union settings.subsonic_saved into it, then mirror up to
+ * SETTINGS_SUBSONIC_SAVED_MAX sidecar rows back into settings so
  * settings_save() still keeps a copy on /usr/data. Identical rows are not
  * rewritten -- upsert itself skips a no-op save. */
 static void sync_subsonic_saved_sidecar(player_settings_t * out) {
@@ -421,9 +381,8 @@ bool settings_load(player_settings_t * out) {
     bool legacy_car_mode_volume_percent_seen = false;
 
     FILE * f = fopen(SETTINGS_FILE_PATH, "r");
-    if (!f) f = fopen(SETTINGS_LEGACY_FILE_PATH, "r");
     if (!f) {
-        import_legacy_subsonic_servers(out);
+        upsert_current_subsonic_url(out);
         sync_subsonic_saved_sidecar(out);
         return false;
     }
@@ -750,7 +709,7 @@ bool settings_load(player_settings_t * out) {
     out->idle_shutdown_minutes = nearest_step(out->idle_shutdown_minutes, IDLE_SHUTDOWN_STEPS, IDLE_SHUTDOWN_STEP_COUNT);
     out->sleep_timer_minutes = nearest_step(out->sleep_timer_minutes, SLEEP_TIMER_STEPS, SLEEP_TIMER_STEP_COUNT);
 
-    import_legacy_subsonic_servers(out);
+    upsert_current_subsonic_url(out);
     sync_subsonic_saved_sidecar(out);
 
     fclose(f);

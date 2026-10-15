@@ -38,7 +38,6 @@ void refresh_artist_albums_now_playing_indicator(void);
 #include "metadata.h"
 #include "metadata_db.h"
 #include "metadata_refresh_targets.h"
-#include "storage_migration.h"
 #include "sd_fsck_run.h"
 #include "tagcache.h"
 #include "ui_wake.h"
@@ -7217,14 +7216,11 @@ static bool library_rescan_incomplete;
 static bool library_rescan_allow_rebuild;
 static bool library_rescan_load_blocked;
 static bool library_rescan_saved;
-static bool library_rescan_migrating;
-static bool library_rescan_migration_cleanup;
 static const char library_recovered_message[] = N_("Library recovered. Use Settings > Update Music Database to save");
 
 static void library_scan_once_with_options(bool force_all_metadata);
 static void library_scan_targeted_once(void);
-static bool library_scan_open_database(bool allow_rebuild, bool allow_pending_migration,
-                                       metadata_db_load_outcome_t * out_open_outcome,
+static bool library_scan_open_database(bool allow_rebuild, metadata_db_load_outcome_t * out_open_outcome,
                                        bool * out_preserve_rebuild);
 static int compare_scan_target_paths(const void * a, const void * b);
 static void reset_library_scan_progress(void);
@@ -7578,12 +7574,6 @@ static metadata_db_load_outcome_t reload_library_cache(void);
 static void report_library_cache_load(void) {
     if (!library_cache_load_pending) return;
     library_cache_load_pending = false;
-    if (metadata_db_migration_needed() &&
-        library_cache_load_outcome != METADATA_DB_LOAD_FAILED &&
-        library_cache_load_outcome != METADATA_DB_LOAD_UNMOUNTED) {
-        show_info_toast(TR("Library migration pending. Favourites and play history will be kept"));
-        return;
-    }
     switch (library_cache_load_outcome) {
         case METADATA_DB_LOAD_FAILED:
             library_prompt_enqueue(LIBRARY_PROMPT_LOAD_FAILED, library_cache_load_card_generation);
@@ -7624,7 +7614,6 @@ static void * library_rescan_thread_func(void * arg) {
         library_scan_targeted_once();
     else
         library_scan_once();
-    metadata_db_migration_cancel();
     DB_LOG("DB", "rescan_thread_end songs=%lld elapsed_ms=%llu rss_kb=%ld",
            (long long) metadata_db_get_song_count(), (unsigned long long) (db_log_now_ms() - started_ms),
            db_log_rss_kb());
@@ -7689,13 +7678,10 @@ static bool start_library_rescan_job(bool allow_rebuild, library_rescan_mode_t m
                                                                            : METADATA_DB_LOAD_SUCCESS_NORMAL;
     atomic_store_explicit(&library_rescan_done_flag, false, memory_order_relaxed);
     library_rescan_active = true;
-    bool migrating_database = metadata_db_migration_needed();
-    const char * busy_title = migrating_database ? TR("Migrating\nmusic database...")
-        : mode == LIBRARY_RESCAN_FORCE_METADATA ? TR("Refreshing\nall metadata...")
+    const char * busy_title = mode == LIBRARY_RESCAN_FORCE_METADATA ? TR("Refreshing\nall metadata...")
         : mode == LIBRARY_RESCAN_TARGETED ? TR("Refreshing\nmetadata...")
         : TR("Updating\nmusic database...");
-    const char * busy_detail = migrating_database ? TR("Preparing database migration...")
-        : mode == LIBRARY_RESCAN_TARGETED || mode == LIBRARY_RESCAN_FORCE_METADATA
+    const char * busy_detail = mode == LIBRARY_RESCAN_TARGETED || mode == LIBRARY_RESCAN_FORCE_METADATA
             ? TR("Preparing metadata refresh...") : TR("Preparing music library...");
     library_rescan_token = gui_busy_show(busy_title, busy_detail);
     gui_busy_set_progress(library_rescan_token, 0);
@@ -8279,9 +8265,7 @@ void poll_library_rescan(void) {
     if (!overall_success) {
         gui_busy_hide(library_rescan_token);
         if (!library_setup_scan_complete) nav_reset_to_home();
-        if (library_rescan_migrating && !library_rescan_migration_cleanup) {
-            show_error_toast(TR("Library migration failed. Old library intact. Use Settings > Update Music Database to retry"));
-        } else if (library_operation_outcome == METADATA_DB_LOAD_UNMOUNTED) {
+        if (library_operation_outcome == METADATA_DB_LOAD_UNMOUNTED) {
             show_error_toast(TR("No SD card"));
         } else if (library_rescan_load_blocked) {
             if (library_operation_outcome == METADATA_DB_LOAD_SUCCESS_RECOVERED)
@@ -8306,10 +8290,6 @@ void poll_library_rescan(void) {
         if (library_rescan_failed_count > 0 || library_rescan_incomplete)
             show_error_toast(TR("Some songs could not be read"));
         else show_info_toast(TR("Metadata refreshed"));
-    } else if (library_rescan_migrating) {
-        show_info_toast(metadata_db_migration_cleanup_pending()
-                            ? TR("Library migrated. Old database cleanup will retry")
-                            : TR("Library migrated. Favourites and play history kept"));
     } else if (library_operation_outcome == METADATA_DB_LOAD_SUCCESS_RECOVERED) {
         show_info_toast(library_rescan_saved
                             ? (library_rescan_incomplete ? TR("Library recovered and saved, some folders could not be read")
@@ -8692,7 +8672,6 @@ void poll_sd_card_hotplug(void) {
          * poll and leave the previous card's library and queue in memory. */
         mount_sd_card_if_needed();
         if (sd_card_root_is_mounted()) {
-            storage_migrate_legacy_data();
             mount_fail_streak = 0;
             sd_mount_fail_notified = false;
             return;
@@ -8880,7 +8859,6 @@ static bool sd_format_card_worker(void) {
     if (!subprocess_run_timeout(mkdosfs_argv, NULL, 0, 120000)) return false;
 
     mount_sd_card_if_needed();
-    if (sd_card_root_is_mounted()) storage_migrate_legacy_data();
     return sd_card_root_is_mounted();
 }
 #else
@@ -11014,8 +10992,6 @@ static void library_scan_targeted_once(void) {
     library_rescan_load_blocked = false;
     library_rescan_saved = false;
     library_rescan_published = false;
-    library_rescan_migrating = metadata_db_migration_needed();
-    library_rescan_migration_cleanup = metadata_db_migration_cleanup_pending();
     library_scan_progress_done = 0;
     library_scan_progress_total = library_rescan_scope == LIBRARY_REFRESH_SCOPE_PATHS
                                       ? library_rescan_target_count : 0;
@@ -11030,7 +11006,7 @@ static void library_scan_targeted_once(void) {
     DB_LOG("DB", "targeted_refresh_begin targets=%d rss_kb=%ld",
            library_rescan_target_count, db_log_rss_kb());
     bool preserve_rebuild = false;
-    if (!library_scan_open_database(library_rescan_allow_rebuild, false, NULL,
+    if (!library_scan_open_database(library_rescan_allow_rebuild, NULL,
                                     &preserve_rebuild)) return;
     if (preserve_rebuild) {
         /* A preserved rebuild is a provisional empty cache. A partial update
@@ -11138,8 +11114,7 @@ static void library_scan_targeted_once(void) {
         return;
     }
 
-    if (!library_rescan_migrating &&
-        metadata_refresh_should_skip_commit(library_rescan_changed_count, target_deleted, row_inserted)) {
+    if (metadata_refresh_should_skip_commit(library_rescan_changed_count, target_deleted, row_inserted)) {
         int32_t generation_before = tagcache_generation();
         metadata_db_abort_update();
         library_rescan_published = tagcache_generation() != generation_before;
@@ -11158,11 +11133,7 @@ static void library_scan_targeted_once(void) {
     library_scan_phase = LIBRARY_SCAN_PHASE_SAVE;
     int32_t generation_before = tagcache_generation();
     bool committed = metadata_db_end_update();
-    if (committed && library_rescan_migrating && metadata_db_storage_current() &&
-        !atomic_load_explicit(&library_scan_cancel_requested, memory_order_acquire))
-        committed = metadata_db_migration_finish();
     library_rescan_published = tagcache_generation() != generation_before;
-    if (committed && library_rescan_migrating) library_rescan_migration_cleanup = true;
     library_rescan_saved = committed && !preserve_rebuild;
     library_operation_outcome = combine_load_outcomes(library_operation_outcome, metadata_db_get_load_outcome());
     if (!committed)
@@ -11254,8 +11225,7 @@ static void rescan_playlists(void) {
     playlist_files_reconcile(PLAYLISTS_DIR, mounted);
 }
 
-static bool library_scan_open_database(bool allow_rebuild, bool allow_pending_migration,
-                                       metadata_db_load_outcome_t * out_open_outcome,
+static bool library_scan_open_database(bool allow_rebuild, metadata_db_load_outcome_t * out_open_outcome,
                                        bool * out_preserve_rebuild) {
     metadata_db_load_outcome_t open_outcome = metadata_db_open();
     bool preserve_rebuild = false;
@@ -11278,17 +11248,6 @@ static bool library_scan_open_database(bool allow_rebuild, bool allow_pending_mi
         library_rescan_load_blocked = true;
         return false;
     }
-    library_rescan_migrating = metadata_db_migration_needed();
-    library_rescan_migration_cleanup = metadata_db_migration_cleanup_pending();
-    if (!allow_pending_migration && library_rescan_migrating && !library_rescan_migration_cleanup) {
-        /* Legacy rating replay needs every song marked seen by a full scan. */
-        library_operation_outcome = combine_load_outcomes(library_operation_outcome, METADATA_DB_LOAD_FAILED);
-        return false;
-    }
-    if (!metadata_db_migration_prepare()) {
-        library_operation_outcome = combine_load_outcomes(library_operation_outcome, METADATA_DB_LOAD_FAILED);
-        return false;
-    }
     return true;
 }
 
@@ -11303,8 +11262,6 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     library_rescan_incomplete = false;
     library_rescan_load_blocked = false;
     library_rescan_saved = false;
-    library_rescan_migrating = metadata_db_migration_needed();
-    library_rescan_migration_cleanup = metadata_db_migration_cleanup_pending();
     bool db_logging = db_log_enabled();
     uint64_t scan_started_ms = db_logging ? db_log_now_ms() : 0;
     uint64_t phase_started_ms = scan_started_ms;
@@ -11318,7 +11275,7 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     DB_LOG("DB", "scan_begin root=%s rss_kb=%ld", MUSIC_ROOT_DIR, db_log_rss_kb());
     metadata_db_load_outcome_t open_outcome;
     bool preserve_rebuild = false;
-    if (!library_scan_open_database(library_rescan_allow_rebuild, true,
+    if (!library_scan_open_database(library_rescan_allow_rebuild,
                                     &open_outcome, &preserve_rebuild)) return;
     int64_t song_count_before_scan = metadata_db_get_song_count();
     DB_LOG("DB", "db_open elapsed_ms=%llu songs=%lld rss_kb=%ld",
@@ -11376,7 +11333,7 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     library_scan_phase = LIBRARY_SCAN_PHASE_TAGS;
     bool force_metadata_anywhere = force_all_metadata;
     if (open_outcome == METADATA_DB_LOAD_SUCCESS_NORMAL && !preserve_rebuild &&
-        !library_rescan_migrating && skipped_count == 0 && discovered_count >= 0 &&
+        skipped_count == 0 && discovered_count >= 0 &&
         metadata_db_get_song_count() == (int64_t) discovered_count &&
         library_scan_unchanged_fast_path(spool_fd, spool_owner->root_fd, discovered_count,
                                          force_metadata_anywhere)) {
@@ -11493,7 +11450,7 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     if (!metadata_db_storage_current() || atomic_load_explicit(&library_scan_cancel_requested, memory_order_acquire))
         complete = false;
 
-    if (!complete || (library_rescan_migrating && !library_rescan_migration_cleanup && skipped_count > 0)) {
+    if (!complete) {
         DB_LOG("DB", "spool_read_incomplete done=%d total=%d rss_kb=%ld", done, discovered_count, db_log_rss_kb());
         metadata_db_abort_update();
         library_operation_outcome = combine_load_outcomes(library_operation_outcome, metadata_db_get_load_outcome());
@@ -11515,7 +11472,7 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     bool missing_paths = force_all_metadata &&
                          (int64_t) library_rescan_matched_existing != metadata_db_get_song_count();
     if (missing_paths) library_rescan_identity_changed = true;
-    if (force_all_metadata && !library_rescan_migrating && !preserve_rebuild && skipped_count == 0 &&
+    if (force_all_metadata && !preserve_rebuild && skipped_count == 0 &&
         metadata_refresh_should_skip_commit(library_rescan_changed_count, false, row_inserted)) {
         if (atomic_load_explicit(&library_scan_cancel_requested, memory_order_acquire) ||
             !sd_card_root_is_mounted() || !metadata_db_storage_current()) {
@@ -11545,11 +11502,7 @@ static void library_scan_once_with_options(bool force_all_metadata) {
     library_scan_phase = LIBRARY_SCAN_PHASE_SAVE;
     int32_t generation_before = tagcache_generation();
     bool committed = metadata_db_end_update();
-    if (committed && library_rescan_migrating && metadata_db_storage_current() &&
-        !atomic_load_explicit(&library_scan_cancel_requested, memory_order_acquire))
-        committed = metadata_db_migration_finish();
     library_rescan_published = tagcache_generation() != generation_before;
-    if (committed && library_rescan_migrating) library_rescan_migration_cleanup = true;
     metadata_db_load_outcome_t commit_outcome = metadata_db_get_load_outcome();
     library_rescan_saved = committed && !preserve_rebuild;
     library_operation_outcome = combine_load_outcomes(library_operation_outcome, commit_outcome);

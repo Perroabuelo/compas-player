@@ -939,7 +939,7 @@ bool peq_save_to_path(const char * path) {
 }
 
 void peq_load(void) {
-    if (!peq_load_from_path(PEQ_FILE_PATH)) peq_load_from_path(PEQ_LEGACY_FILE_PATH);
+    peq_load_from_path(PEQ_FILE_PATH);
 }
 
 void peq_save(void) {
