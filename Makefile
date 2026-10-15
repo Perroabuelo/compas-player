@@ -47,6 +47,8 @@ CROSS_STRIP = mipsel-linux-musl-strip
 # X1600 targets advertise MIPS32r2. Keep the existing o32/FP32 register
 # contract explicit and disable FP contraction while GCC uses the target ISA.
 # Pass TARGET_CPU_FLAGS=-march=mips1 to rebuild against the old baseline for A/B.
+# R1/R3 Pro II combined loaders use the pinned CPU flags in their build script;
+# that script derives strip from CROSS_CC rather than using CROSS_STRIP.
 TARGET_CPU_FLAGS ?= -march=mips32r2 -mabi=32 -mfp32 -mno-odd-spreg -ffp-contract=off
 
 # Dependency directory names
@@ -1059,8 +1061,9 @@ $(TARGET_BIN): $(TARGET_OBJS) $(TARGET_CPU_FLAGS_STAMP) $(TARGET_AUDIO_LIBS) Mak
 	$(CROSS_STRIP) -s -o $@ $(BUILD_TARGET_DIR)/$(TARGET_BIN)_unstripped
 	@echo "Target build complete: File ready at '$(TARGET_BIN)'"
 
-# Standalone bootloader -- see src/bootloader/main.c's own top comment.
-# Deliberately its own tiny static binary, not linked against LVGL/the main
+# Board bootloader output. R1 and R3 Pro II use the combined Compás/Rockbox
+# selector by default; R3II 2025 keeps the standalone Compás loader.
+# The standalone loader is its own tiny static binary, not linked against LVGL/the main
 # TARGET_OBJS: subprocess.c and tjpgd.c (for the boot splash -- see fb_draw.c's
 # own doc comment) are pulled in directly (both already dependency-free) rather
 # than reusing TARGET_OBJS's build rule, so this never accidentally drags in
@@ -1092,13 +1095,21 @@ BOOTLOADER_SRCS = src/bootloader/selector_controller.c src/bootloader/selector_i
 # the statically linked mount helpers and JPEG decoder small.
 BOOTLOADER_CFLAGS = -O2 -Wall -I. -Isrc/bootloader -Isrc/core -I$(MBEDTLS_DIR)/include -DCOMPAS_LOADER_BUILD $(BOARD_DEFINE) -ffunction-sections -fdata-sections
 
+ifeq ($(filter $(BOARD),r1 r3proii),$(BOARD))
+bootloader:
+	CROSS_CC="$(CROSS_CC)" bash scripts/build_rockbox_bootloader.sh "$(BOARD)"
+	@test -s "build/rockbox-bootloader/$(BOARD)/compas_rockbox_bootloader"
+	@set -e; tmp="$(BOOTLOADER_BIN).tmp"; trap 'rm -f "$$tmp"' EXIT; cp "build/rockbox-bootloader/$(BOARD)/compas_rockbox_bootloader" "$$tmp"; chmod 0755 "$$tmp"; mv -f "$$tmp" "$(BOOTLOADER_BIN)"
+	@echo "Combined Compás/Rockbox bootloader ready: $(BOOTLOADER_BIN)"
+else
 bootloader: $(TARGET_CPU_FLAGS_STAMP)
 	@mkdir -p $(BUILD_TARGET_DIR)
 	$(CROSS_CC) $(TARGET_CPU_FLAGS) $(BOOTLOADER_CFLAGS) -static -no-pie $(BOOTLOADER_SRCS) -o $(BUILD_TARGET_DIR)/$(BOOTLOADER_BIN)_unstripped -Wl,--gc-sections -lpthread -lm
 	$(CROSS_STRIP) -s -o $(BOOTLOADER_BIN) $(BUILD_TARGET_DIR)/$(BOOTLOADER_BIN)_unstripped
-	@echo "Bootloader build complete: File ready at '$(BOOTLOADER_BIN)'"
+	@echo "Standalone Compás bootloader ready: $(BOOTLOADER_BIN)"
+endif
 
-# Explicit opt-in prototype; normal firmware/release targets remain unchanged.
+# Explicit alias for rebuilding the combined R1/R3 Pro II selector.
 .PHONY: rockbox-bootloader
 rockbox-bootloader:
 	CROSS_CC="$(CROSS_CC)" bash scripts/build_rockbox_bootloader.sh "$(BOARD)"

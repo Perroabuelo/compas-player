@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the optional Rockbox-derived selector without changing release images.
+# Build the combined Compás/Rockbox bootloader for R1 or R3 Pro II.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -169,4 +169,4 @@ if grep -q INTERP "$work/elf-info.txt"; then
     exit 1
 fi
 mv -f "$temporary_output" "$output"
-echo "Built experimental selector: $output"
+echo "Built combined Compás/Rockbox bootloader: $output"

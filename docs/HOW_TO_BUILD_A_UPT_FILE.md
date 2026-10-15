@@ -67,8 +67,10 @@ checksum secret.
 
 ## 2. Build matching player and bootloader binaries
 
-Build both outputs for the same board. The Makefile writes board-specific
-outputs so builds do not overwrite each other:
+Build both outputs for the same board. R1 and R3 Pro II use the combined
+Compás/Rockbox bootloader by default; R3II 2025 uses the standalone Compás
+loader because no verified Rockbox target exists for that board. The Makefile
+writes board-specific outputs so builds do not overwrite each other:
 
 | Board | Build commands | Player output | Bootloader output |
 | --- | --- | --- | --- |

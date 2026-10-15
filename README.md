@@ -168,6 +168,11 @@ make target BOARD=r3ii_2025
 make bootloader BOARD=r3ii_2025
 ```
 
+R1 and R3 Pro II use the combined Compás/Rockbox bootloader as their default
+`make bootloader` output. R3II 2025 keeps the standalone Compás loader because
+there is no verified Rockbox target for that board. The full-image guide
+documents these board-specific outputs.
+
 The packer requires an approved base `.upt` for the same board. Proprietary
 base images remain external and are not committed to this repository. The
 packer verifies the board identity, required runtime and font files,

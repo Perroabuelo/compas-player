@@ -1,17 +1,20 @@
-# Experimental Compás / Rockbox selector
+# Compás bootloaders
 
-This is a Linux-hosted selector derived from Rockbox's `hibyos_linux.c`, not
-a replacement for the device's pre-kernel U-Boot. The patch is pinned to
-Rockbox commit `2b12d568ff32089a9efcbc2db95e9a18c7d9c68f` and retains its
-GPL-2.0-or-later source notice. The build downloads the corresponding source
-and keeps it with the generated files under `build/rockbox-bootloader/`.
+`make bootloader BOARD=r1` and `make bootloader BOARD=r3proii` build the full
+combined Compás/Rockbox Linux-hosted bootloader and place it at the existing
+firmware packaging path: `compas_loader` or `compas_loader_r3proii`. The
+selector is derived from Rockbox’s `hibyos_linux.c` and retains its
+GPL-2.0-or-later notice. The build is pinned to Rockbox commit
+`2b12d568ff32089a9efcbc2db95e9a18c7d9c68f`; its source and intermediate files
+are kept under `build/rockbox-bootloader/`. `make rockbox-bootloader` remains
+available as an alias that builds the same combined image in that build
+directory. `ROCKBOX_SOURCE` may point to a Git checkout containing the pinned
+commit; the script clones it into the build directory and does not modify the
+provided checkout.
 
-Build explicitly with `make rockbox-bootloader BOARD=r1` or
-`make rockbox-bootloader BOARD=r3proii`. `ROCKBOX_SOURCE` can name an existing
-Rockbox Git checkout containing the pinned commit; it is cloned into the
-build directory and is never modified. The ordinary `bootloader` target,
-release workflows and firmware repacker continue to use the existing loader.
-There is no verified upstream R3II 2025 target.
+R3II 2025 has no verified Rockbox target, so `make bootloader
+BOARD=r3ii_2025` continues to build the standalone Compás loader directly to
+`compas_loader_r3ii_2025`.
 
 The combined selector draws the Compás splash and prepares the SD card before
 checking for Rockbox. If a valid matching installation is missing and no
@@ -29,20 +32,22 @@ installed or packaged player, and supervises it with the normal crash, reboot,
 shutdown and logging behavior. It does not invoke a separate
 `compas_loader` executable. The player also retains its Settings > Updates >
 Player Update action.
+
 Rockbox payloads use the standard SD `/.rockbox/rockbox.r1` or
 `/.rockbox/rockbox.r3proii` location and matching `rockbox-info.txt`. Dynamic
 R1 payloads also require their companion `libasound.so.2`. Executables are
-validated and staged atomically under persistent `/usr/data/.compas/rockbox/`, rather than
-RAM-backed storage. A missing, invalid or unstaged payload falls back to
-Compás. The source on the SD card is retained. A successful exec replaces
-the selector; it does not remain as a supervisor.
+validated and staged atomically under persistent `/usr/data/.compas/rockbox/`,
+rather than RAM-backed storage. A missing, invalid or unstaged payload falls
+back to Compás. The source on the SD card is retained. A successful exec
+replaces the selector; it does not remain as a supervisor.
 
 Compás reboot requests ask BusyBox init to run its shutdown hooks, with a
 bounded kernel reboot fallback. The shared supervisor remains active for both
-the standalone loader and this optional selector.
+the standalone loader and the combined selector.
 
-This target is a prototype and is not enabled in firmware images. The built
-`compas_rockbox_bootloader` must be installed as the device's Linux-hosted
-bootloader by a separate, board-specific deployment step. U-Boot and release
-packaging are unchanged. Test both menu choices, updates, crash recovery,
-shutdown and card removal on each supported device before deployment.
+Builds require the MIPS musl cross toolchain, a host C compiler, Perl, Git,
+Python 3, GNU make and `flock`. CI installs the toolchain and provides the
+host dependencies in its Ubuntu runner image.
+
+Before deploying on a board, verify both boot choices, SD player updates,
+crash recovery, restart, shutdown and card-removal handling on that board.
