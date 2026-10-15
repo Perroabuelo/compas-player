@@ -42,8 +42,14 @@ void gui_library_suspend_boot_prompt(void);
 void gui_library_teardown(void);
 void gui_library_refresh_music_screen(void);
 void gui_library_set_artist_images_enabled(bool enabled);
-/* Apply persisted Files/Albums display ordering without replacing playback queues. */
-void gui_library_apply_sorting(void);
+typedef enum {
+    GUI_LIBRARY_SORT_FILES,
+    GUI_LIBRARY_SORT_ALBUMS,
+    GUI_LIBRARY_SORT_ARTIST_ALBUMS,
+    GUI_LIBRARY_SORT_ALBUM_ARTIST_ALBUMS
+} gui_library_sort_scope_t;
+/* Apply one persisted ordering without disturbing unrelated library views. */
+void gui_library_apply_sorting(gui_library_sort_scope_t scope);
 
 void start_library_rescan(void);
 void start_library_auto_rescan(void);

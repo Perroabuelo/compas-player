@@ -305,6 +305,8 @@ typedef struct {
     bool show_artist_images;
     int file_sort_mode; /* 0 Name, 1 Newest Modified; directories stay first. */
     int album_sort_mode; /* 0 Name, 1 Recently Added, 2 Release Year (oldest first). */
+    int artist_albums_sort_mode; /* Ordering within an Artist's Albums view. */
+    int album_artist_albums_sort_mode; /* Ordering within an Album Artist's Albums view. */
 
     /* Idle action after a long stretch idle (screen off, not playing, not
      * charging) -- either power_suspend_now() (suspend-to-RAM, see

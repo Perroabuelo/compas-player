@@ -183,6 +183,7 @@ static bool resolve_album_display_row(int index, group_row_t * out);
 static void populate_artist_albums_view(const char * name, metadata_db_group_kind_t kind);
 static pthread_mutex_t artist_albums_state_mutex;
 static metadata_db_group_kind_t artist_albums_current_kind;
+static metadata_db_album_sort_t artist_albums_current_sort;
 static char artist_albums_current_name[128];
 static int artist_albums_group_count;
 
@@ -199,6 +200,24 @@ static metadata_db_album_sort_t requested_album_sort(void) {
         ? sort : METADATA_DB_ALBUM_SORT_NAME;
 }
 
+static int configured_group_album_sort(metadata_db_group_kind_t kind) {
+    if (kind == METADATA_DB_GROUP_ARTIST) return current_settings.artist_albums_sort_mode;
+    if (kind == METADATA_DB_GROUP_ALBUM_ARTIST) return current_settings.album_artist_albums_sort_mode;
+    return current_settings.album_sort_mode;
+}
+
+static metadata_db_album_sort_t effective_group_album_sort(metadata_db_group_kind_t kind) {
+    int value = configured_group_album_sort(kind);
+    metadata_db_album_sort_t sort = (metadata_db_album_sort_t) value;
+    return metadata_db_album_sort_available(sort) ? sort : METADATA_DB_ALBUM_SORT_NAME;
+}
+
+static metadata_db_album_sort_t requested_group_album_sort(metadata_db_group_kind_t kind) {
+    int value = configured_group_album_sort(kind);
+    return value >= METADATA_DB_ALBUM_SORT_NAME && value <= METADATA_DB_ALBUM_SORT_YEAR
+        ? (metadata_db_album_sort_t) value : METADATA_DB_ALBUM_SORT_NAME;
+}
+
 /* Playback can change while the library database is busy. Resolve the
  * database-only part on one coalescing worker and leave all list/search/LVGL
  * mapping on the UI thread. The request and result contain copied scalars;
@@ -208,6 +227,7 @@ typedef struct {
     uint64_t lifetime;
     char path[sizeof(now_playing_path)];
     metadata_db_album_sort_t album_sort;
+    metadata_db_album_sort_t artist_albums_sort;
     int32_t library_revision;
     metadata_db_group_kind_t artist_albums_kind;
     char artist_albums_name[128];
@@ -286,7 +306,7 @@ static void * now_playing_lookup_worker(void * unused) {
             if (request.artist_albums_name[0]) {
                 value = metadata_db_get_album_for_group_sorted_offset(request.artist_albums_kind,
                                                                        request.artist_albums_name,
-                                                                       request.album_sort,
+                                                                       request.artist_albums_sort,
                                                                        song.tags.album,
                                                                        song.tags.album_artist);
                 if (value >= 0 && value < INT_MAX) result.artist_albums_row = (int) value + 1;
@@ -329,6 +349,7 @@ static void request_now_playing_indicator_lookup(void) {
     now_playing_lookup_request.library_revision = revision;
     pthread_mutex_lock(&artist_albums_state_mutex);
     now_playing_lookup_request.artist_albums_kind = artist_albums_current_kind;
+    now_playing_lookup_request.artist_albums_sort = requested_group_album_sort(artist_albums_current_kind);
     snprintf(now_playing_lookup_request.artist_albums_name,
              sizeof(now_playing_lookup_request.artist_albums_name), "%s", artist_albums_current_name);
     pthread_mutex_unlock(&artist_albums_state_mutex);
@@ -6265,30 +6286,33 @@ static void search_close(search_binding_t * b) {
     search_close_internal(b, true);
 }
 
-void gui_library_apply_sorting(void) {
-    search_binding_t * album_search = &search_bindings[SEARCH_BINDING_ALBUMS];
-    search_binding_t * file_search = &search_bindings[SEARCH_BINDING_FILES];
-    if (album_search->active) search_close(album_search);
-    if (file_search->active) search_close(file_search);
-    file_browser_set_sort_mode((file_browser_sort_mode_t) current_settings.file_sort_mode);
-    if (albums_list) {
+void gui_library_apply_sorting(gui_library_sort_scope_t scope) {
+    if (scope == GUI_LIBRARY_SORT_FILES) {
+        search_binding_t * file_search = &search_bindings[SEARCH_BINDING_FILES];
+        if (file_search->active) search_close(file_search);
+        file_browser_set_sort_mode((file_browser_sort_mode_t) current_settings.file_sort_mode);
+    } else if (scope == GUI_LIBRARY_SORT_ALBUMS && albums_list) {
+        search_binding_t * album_search = &search_bindings[SEARCH_BINDING_ALBUMS];
+        if (album_search->active) search_close(album_search);
         int artists = 0, album_artists = 0, albums = 0;
         metadata_db_get_group_counts(&artists, &album_artists, &albums);
         compact_list_set_paged_provider(albums_list, albums_fetch_page, NULL, albums);
         compact_list_scroll_to_index(albums_list, 0);
         az_index_binding_t * az = find_az_binding_for_screen(albums_screen);
         if (az) lv_obj_add_flag(az->strip, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (artist_albums_list) {
+    } else if ((scope == GUI_LIBRARY_SORT_ARTIST_ALBUMS ||
+                scope == GUI_LIBRARY_SORT_ALBUM_ARTIST_ALBUMS) && artist_albums_list) {
         char name[sizeof(artist_albums_current_name)];
         metadata_db_group_kind_t kind;
         pthread_mutex_lock(&artist_albums_state_mutex);
         snprintf(name, sizeof(name), "%s", artist_albums_current_name);
         kind = artist_albums_current_kind;
         pthread_mutex_unlock(&artist_albums_state_mutex);
-        if (name[0]) populate_artist_albums_view(name, kind);
+        metadata_db_group_kind_t affected_kind = scope == GUI_LIBRARY_SORT_ARTIST_ALBUMS
+            ? METADATA_DB_GROUP_ARTIST : METADATA_DB_GROUP_ALBUM_ARTIST;
+        if (name[0] && kind == affected_kind) populate_artist_albums_view(name, kind);
     }
-    refresh_now_playing_indicators();
+    if (scope != GUI_LIBRARY_SORT_FILES) refresh_now_playing_indicators();
     gui_navigation_invalidate_theme_snapshots();
 }
 
@@ -6715,6 +6739,11 @@ void gui_library_poll_now_playing_indicators(void) {
         return;
     }
     if (ready && result.request.album_sort != requested_album_sort()) {
+        request_now_playing_indicator_lookup();
+        return;
+    }
+    if (ready && result.request.artist_albums_sort !=
+                 requested_group_album_sort(result.request.artist_albums_kind)) {
         request_now_playing_indicator_lookup();
         return;
     }
@@ -9697,7 +9726,7 @@ static void artist_album_row_click_cb(int index) {
     if (group_index < 0 || group_index >= artist_albums_group_count) return;
     group_row_t group;
     if (metadata_db_get_albums_for_group_sorted(artist_albums_current_kind, artist_albums_current_name,
-                                                effective_album_sort(), group_index, 1, &group) != 1) return;
+                                                effective_group_album_sort(artist_albums_current_kind), group_index, 1, &group) != 1) return;
     (void) show_album_group_filtered(&group, artist_albums_song_filter());
 }
 
@@ -9919,7 +9948,7 @@ static void artist_album_more_click_cb(int index) {
         group_row_t group;
         if (group_index >= 0 && group_index < artist_albums_group_count &&
             metadata_db_get_albums_for_group_sorted(artist_albums_current_kind, artist_albums_current_name,
-                                                     effective_album_sort(), group_index, 1, &group) == 1)
+                                                     effective_group_album_sort(artist_albums_current_kind), group_index, 1, &group) == 1)
             open_album_collection_menu(&group, artist_albums_song_filter());
         return;
     }
@@ -9989,6 +10018,7 @@ void refresh_artist_albums_now_playing_indicator(void) {
         strcmp(result->request.path, now_playing_path) == 0 &&
         (!have_revision || result->library_revision == current_revision) &&
         result->request.artist_albums_kind == artist_albums_current_kind &&
+        result->request.artist_albums_sort == requested_group_album_sort(artist_albums_current_kind) &&
         strcmp(result->request.artist_albums_name, artist_albums_current_name) == 0 &&
         result->artist_albums_row > 0 &&
         result->artist_albums_row <= artist_albums_group_count)
@@ -10007,6 +10037,7 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
     pthread_mutex_lock(&artist_albums_state_mutex);
     snprintf(current_name, sizeof(current_name), "%s", artist_albums_current_name);
     current_kind = artist_albums_current_kind;
+    metadata_db_album_sort_t current_sort = artist_albums_current_sort;
     pthread_mutex_unlock(&artist_albums_state_mutex);
 
     int prefix = 0;
@@ -10022,7 +10053,7 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
     if (count <= 0) return prefix;
     group_row_t * rows = malloc(sizeof(*rows) * (size_t) count);
     int n = rows ? metadata_db_get_albums_for_group_sorted(current_kind, current_name,
-                                                            effective_album_sort(), offset,
+                                                            current_sort, offset,
                                                             count, rows) : 0;
     for (int i = 0; i < n; i++) {
         snprintf(out_rows[prefix + i].label, sizeof(out_rows[prefix + i].label), "%s", rows[i].name);
@@ -10045,9 +10076,11 @@ static int artist_albums_fetch_page(void * ctx, int offset, int count, compact_l
 }
 
 static void populate_artist_albums_view(const char * name, metadata_db_group_kind_t kind) {
+    metadata_db_album_sort_t sort = effective_group_album_sort(kind);
     pthread_mutex_lock(&artist_albums_state_mutex);
     snprintf(artist_albums_current_name, sizeof(artist_albums_current_name), "%s", name);
     artist_albums_current_kind = kind;
+    artist_albums_current_sort = sort;
     pthread_mutex_unlock(&artist_albums_state_mutex);
 
     int64_t count64 = metadata_db_count_albums_for_group(kind, name);

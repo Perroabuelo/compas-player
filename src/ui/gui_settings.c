@@ -69,7 +69,11 @@ static lv_obj_t * settings_gapless_toggle_img = NULL;
 static lv_obj_t * settings_screen;
 static lv_obj_t * settings_library_screen;
 static lv_obj_t * settings_sorting_screen;
-static lv_obj_t * settings_sorting_options[5];
+enum { SORTING_FILE_OPTION_COUNT = 2, SORTING_ALBUM_CONTEXT_COUNT = 3,
+       SORTING_ALBUM_MODE_COUNT = 3,
+       SORTING_OPTION_COUNT = SORTING_FILE_OPTION_COUNT +
+           SORTING_ALBUM_CONTEXT_COUNT * SORTING_ALBUM_MODE_COUNT };
+static lv_obj_t * settings_sorting_options[SORTING_OPTION_COUNT];
 static lv_obj_t * settings_sound_effects_screen;
 static lv_obj_t * settings_eq_profiles_menu_screen;
 static lv_obj_t * settings_appearance_screen;
@@ -3381,8 +3385,19 @@ static void refresh_all_covers_row_cb(lv_event_t * e) {
 static void refresh_sorting_options(void) {
     int album_sort = current_settings.album_sort_mode;
     if (!metadata_db_album_sort_available((metadata_db_album_sort_t) album_sort)) album_sort = 0;
-    for (int i = 0; i < 5; i++) {
-        bool selected = i < 2 ? current_settings.file_sort_mode == i : album_sort == i - 2;
+    int selected_sorts[] = { album_sort, current_settings.artist_albums_sort_mode,
+                             current_settings.album_artist_albums_sort_mode };
+    for (int i = 0; i < SORTING_OPTION_COUNT; i++) {
+        int selected_sort;
+        bool selected;
+        if (i < SORTING_FILE_OPTION_COUNT) selected = current_settings.file_sort_mode == i;
+        else {
+            int context = (i - SORTING_FILE_OPTION_COUNT) / SORTING_ALBUM_MODE_COUNT;
+            int sort = (i - SORTING_FILE_OPTION_COUNT) % SORTING_ALBUM_MODE_COUNT;
+            selected_sort = selected_sorts[context];
+            if (!metadata_db_album_sort_available((metadata_db_album_sort_t) selected_sort)) selected_sort = 0;
+            selected = selected_sort == sort;
+        }
         if (settings_sorting_options[i])
             lv_obj_set_style_border_width(settings_sorting_options[i], selected ? BOARD_SCALE_PX(3) : 0, 0);
     }
@@ -3391,18 +3406,36 @@ static void refresh_sorting_options(void) {
 static void sorting_option_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     int option = (int) (intptr_t) lv_event_get_user_data(e);
-    if (option < 0 || option >= 5) return;
-    if (option < 2) current_settings.file_sort_mode = option;
-    else {
-        metadata_db_album_sort_t sort = (metadata_db_album_sort_t) (option - 2);
+    if (option < 0 || option >= SORTING_OPTION_COUNT) return;
+    gui_library_sort_scope_t scope;
+    if (option < SORTING_FILE_OPTION_COUNT) {
+        if (current_settings.file_sort_mode == option) return;
+        current_settings.file_sort_mode = option;
+        scope = GUI_LIBRARY_SORT_FILES;
+    } else {
+        int context = (option - SORTING_FILE_OPTION_COUNT) / SORTING_ALBUM_MODE_COUNT;
+        int sort_value = (option - SORTING_FILE_OPTION_COUNT) % SORTING_ALBUM_MODE_COUNT;
+        metadata_db_album_sort_t sort = (metadata_db_album_sort_t) sort_value;
         if (sort != METADATA_DB_ALBUM_SORT_NAME && !metadata_db_album_sort_available(sort)) {
             show_error_toast(TR("Update Music Database to enable this album order"));
             return;
         }
-        current_settings.album_sort_mode = option - 2;
+        if (context == 0) {
+            if (current_settings.album_sort_mode == sort_value) return;
+            current_settings.album_sort_mode = sort_value;
+            scope = GUI_LIBRARY_SORT_ALBUMS;
+        } else if (context == 1) {
+            if (current_settings.artist_albums_sort_mode == sort_value) return;
+            current_settings.artist_albums_sort_mode = sort_value;
+            scope = GUI_LIBRARY_SORT_ARTIST_ALBUMS;
+        } else {
+            if (current_settings.album_artist_albums_sort_mode == sort_value) return;
+            current_settings.album_artist_albums_sort_mode = sort_value;
+            scope = GUI_LIBRARY_SORT_ALBUM_ARTIST_ALBUMS;
+        }
     }
     settings_save_async(&current_settings);
-    gui_library_apply_sorting();
+    gui_library_apply_sorting(scope);
     refresh_sorting_options();
 }
 
@@ -3411,13 +3444,22 @@ static lv_obj_t * build_sorting_screen(void) {
     lv_obj_t * screen = build_subsonic_list_screen(TR("Sorting"), &title, &list);
     (void) title;
     add_section_header(list, TR("Files (folders stay first)"));
-    static const char * labels[] = { N_("Name (A–Z)"), N_("Newest Modified"), N_("Name (A–Z)"),
-                                     N_("Recently Added"), N_("Release Year (oldest first)") };
-    for (int i = 0; i < 5; i++) {
-        if (i == 2) add_section_header(list, TR("Albums"));
+    static const char * labels[] = { N_("Name (A–Z)"), N_("Newest Modified") };
+    static const char * group_titles[] = { N_("Albums"), N_("Artists"), N_("Album Artist") };
+    static const char * album_labels[] = { N_("Name (A–Z)"), N_("Recently Added"), N_("Release Year (oldest first)") };
+    for (int i = 0; i < SORTING_FILE_OPTION_COUNT; i++) {
         settings_sorting_options[i] = add_pill_option_row(list, TR(labels[i]), false,
                                             sorting_option_cb, (void *) (intptr_t) i);
         lv_obj_add_style(settings_sorting_options[i], gui_theme_accent_outline_style(), 0);
+    }
+    for (int context = 0; context < SORTING_ALBUM_CONTEXT_COUNT; context++) {
+        add_section_header(list, TR(group_titles[context]));
+        for (int sort = 0; sort < SORTING_ALBUM_MODE_COUNT; sort++) {
+            int option = SORTING_FILE_OPTION_COUNT + context * SORTING_ALBUM_MODE_COUNT + sort;
+            settings_sorting_options[option] = add_pill_option_row(list, TR(album_labels[sort]), false,
+                                                sorting_option_cb, (void *) (intptr_t) option);
+            lv_obj_add_style(settings_sorting_options[option], gui_theme_accent_outline_style(), 0);
+        }
     }
     lv_obj_t * help = add_section_header(list,
         TR("Files use modification dates. Albums use the newest track added; missing release years sort last. Update Music Database once to read years from existing files."));

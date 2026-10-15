@@ -258,6 +258,8 @@ static void set_defaults(player_settings_t * out) {
     out->show_artist_images = true;
     out->file_sort_mode = 0;
     out->album_sort_mode = 0;
+    out->artist_albums_sort_mode = 0;
+    out->album_artist_albums_sort_mode = 0;
     /* Defaults on: a device left screen-off with idle_shutdown_enabled=false
      * sits at full power indefinitely. Suspend-to-RAM (not a full poweroff)
      * avoids resetting the music queue. 10 minutes (IDLE_SHUTDOWN_STEPS min)
@@ -376,6 +378,8 @@ bool settings_load(player_settings_t * out) {
     set_defaults(out);
 
     bool play_button_mapping_seen = false;
+    bool artist_albums_sort_seen = false;
+    bool album_artist_albums_sort_seen = false;
     bool car_mode_volume_percent_seen = false;
     int legacy_car_mode_volume_percent = 80;
     bool legacy_car_mode_volume_percent_seen = false;
@@ -584,6 +588,12 @@ bool settings_load(player_settings_t * out) {
             out->file_sort_mode = strcmp(value, "1") == 0 ? 1 : 0;
         } else if (strcmp(key, "album_sort_mode") == 0) {
             out->album_sort_mode = strcmp(value, "1") == 0 ? 1 : (strcmp(value, "2") == 0 ? 2 : 0);
+        } else if (strcmp(key, "artist_albums_sort_mode") == 0) {
+            out->artist_albums_sort_mode = strcmp(value, "1") == 0 ? 1 : (strcmp(value, "2") == 0 ? 2 : 0);
+            artist_albums_sort_seen = true;
+        } else if (strcmp(key, "album_artist_albums_sort_mode") == 0) {
+            out->album_artist_albums_sort_mode = strcmp(value, "1") == 0 ? 1 : (strcmp(value, "2") == 0 ? 2 : 0);
+            album_artist_albums_sort_seen = true;
         } else if (strcmp(key, "show_artist_images") == 0) {
             out->show_artist_images = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "idle_shutdown_enabled") == 0) {
@@ -713,6 +723,11 @@ bool settings_load(player_settings_t * out) {
     sync_subsonic_saved_sidecar(out);
 
     fclose(f);
+
+    /* Existing installs inherit their previous global album order in each
+     * nested collection until the user chooses a context-specific order. */
+    if (!artist_albums_sort_seen) out->artist_albums_sort_mode = out->album_sort_mode;
+    if (!album_artist_albums_sort_seen) out->album_artist_albums_sort_mode = out->album_sort_mode;
     return true;
 }
 
@@ -820,6 +835,8 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "show_artist_images=%d\n", settings->show_artist_images ? 1 : 0);
     fprintf(f, "file_sort_mode=%d\n", settings->file_sort_mode == 1 ? 1 : 0);
     fprintf(f, "album_sort_mode=%d\n", settings->album_sort_mode >= 0 && settings->album_sort_mode <= 2 ? settings->album_sort_mode : 0);
+    fprintf(f, "artist_albums_sort_mode=%d\n", settings->artist_albums_sort_mode >= 0 && settings->artist_albums_sort_mode <= 2 ? settings->artist_albums_sort_mode : 0);
+    fprintf(f, "album_artist_albums_sort_mode=%d\n", settings->album_artist_albums_sort_mode >= 0 && settings->album_artist_albums_sort_mode <= 2 ? settings->album_artist_albums_sort_mode : 0);
     fprintf(f, "idle_shutdown_enabled=%d\n", settings->idle_shutdown_enabled ? 1 : 0);
     fprintf(f, "idle_shutdown_minutes=%d\n", settings->idle_shutdown_minutes);
     fprintf(f, "idle_suspend_enabled=%d\n", settings->idle_suspend_enabled ? 1 : 0);
