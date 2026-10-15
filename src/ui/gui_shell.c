@@ -847,9 +847,13 @@ void gui_shell_set_status_bar_screen_context(lv_obj_t * screen) {
 
     /* White status glyphs need a stable black surface on ordinary screens,
      * especially when a light theme is active. Player and Lyrics draw
-     * edge-to-edge artwork, so keep their backing translucent. Keeping this
+     * edge-to-edge artwork, as can Home with a background image, so keep
+     * their backing translucent. Keeping this
      * on the persistent band also lets transition snapshots composite it. */
-    bool over_artwork = screen == gui_player_get_screen() || screen == gui_lyrics_get_screen();
+    bool home_background = screen && screen == home_screen &&
+                           lv_obj_get_style_bg_image_src(screen, LV_PART_MAIN) != NULL;
+    bool over_artwork = screen == gui_player_get_screen() || screen == gui_lyrics_get_screen() ||
+                        home_background;
     lv_obj_set_style_bg_color(status_bar_band, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(status_bar_band, over_artwork ? LV_OPA_50 : LV_OPA_COVER,
                             LV_PART_MAIN);
@@ -5445,6 +5449,7 @@ void gui_shell_refresh_home(void) {
     if (!fresh) return;
     home_screen = fresh;
     gui_navigation_replace_home(old, fresh);
+    if (lv_screen_active() == fresh) gui_shell_set_status_bar_screen_context(fresh);
     if (old) lv_obj_delete(old);
 }
 
