@@ -9018,6 +9018,7 @@ static lv_obj_t * power_action_status;
 /* Destructive actions require a second, explicit tap. A dismissed/reopened
  * menu never retains an armed action. */
 static int power_action_pending = -1;
+static bool power_restart_selector_long_press_fired;
 
 #define POWER_OVERLAY_BLUR_WORK_WIDTH 60
 #define POWER_OVERLAY_BLUR_WORK_HEIGHT 100
@@ -9213,9 +9214,29 @@ static void power_action_backdrop_cb(lv_event_t * e) {
     power_action_hide();
 }
 
+static void power_restart_selector_press_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_PRESSED)
+        power_restart_selector_long_press_fired = false;
+}
+
+static void power_restart_selector_long_press_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
+    power_restart_selector_long_press_fired = true;
+    power_action_pending = -1;
+    char error[128] = {0};
+    if (!idle_shutdown_reboot_to_bootloader(error, sizeof(error)))
+        show_error_toast(error[0] ? error : TR("Could not restart into the boot selector"));
+}
+
 static void power_action_clicked_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     int action = (int) (intptr_t) lv_event_get_user_data(e);
+    if (action == 1 && power_restart_selector_long_press_fired) {
+        /* LVGL sends CLICKED after a long press is released. Consume that
+         * release so it cannot start the ordinary two-tap restart flow. */
+        power_restart_selector_long_press_fired = false;
+        return;
+    }
     if (action == 0 || action == 1) {
         if (firmware_update_busy()) {
             lv_label_set_text(power_action_status, TR("An update is in progress. Please wait."));
@@ -9333,8 +9354,13 @@ void build_power_off_countdown_popup(void) {
 
     /* Keep the sheet inside the sys-layer backdrop so both are hidden as
      * one modal and neither can fall behind the persistent status bar. */
+    lv_obj_t * actions[4] = {0};
     power_action_overlay.popup = build_power_hub_panel(power_action_overlay.backdrop,
-        power_action_clicked_cb, &power_action_status, NULL);
+        power_action_clicked_cb, &power_action_status, actions);
+    if (actions[1]) {
+        lv_obj_add_event_cb(actions[1], power_restart_selector_press_cb, LV_EVENT_PRESSED, NULL);
+        lv_obj_add_event_cb(actions[1], power_restart_selector_long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
+    }
 }
 
 void update_music_database_row_cb(lv_event_t * e) {

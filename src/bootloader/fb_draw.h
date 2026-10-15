@@ -2,6 +2,7 @@
 #define BOOTLOADER_FB_DRAW_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "board_config.h"
@@ -11,6 +12,8 @@
  * fb_open() verifies the runtime framebuffer geometry against these dimensions. */
 #define FB_WIDTH BOARD_SCREEN_WIDTH
 #define FB_HEIGHT BOARD_SCREEN_HEIGHT
+
+#define BOOTLOADER_BG_PATH "/usr/resource/litegui/theme2/boot_animation/en/0.jpg"
 
 typedef uint16_t fb_color_t;
 
@@ -31,6 +34,12 @@ fb_color_t fb_rgb(uint8_t r, uint8_t g, uint8_t b);
 
 void fb_fill(fb_color_t color);
 void fb_fill_rect(int x, int y, int w, int h, fb_color_t color);
+
+/* Copy a complete RGB565 frame into the off-screen buffer. Dimensions must
+ * exactly match this board; stride is measured in uint16_t pixels. This does
+ * not flush to the panel -- callers still assemble their frame before calling
+ * fb_flush(). */
+bool fb_draw_blit_rgb565(const uint16_t * pixels, int width, int height, size_t stride_pixels);
 
 /* Uppercase letters, digits, space, ':', '-', and '_' only -- see fb_draw.c's own
  * font table doc comment for exactly why the character set is this

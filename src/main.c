@@ -1,3 +1,4 @@
+#include "app_version.h"
 #include "lvgl/lvgl.h"
 #include "audio.h"
 #include "waveform.h"
@@ -519,6 +520,7 @@ int main(int argc, char ** argv) {
      * just returning EPIPE (which audio_output_write() already handles
      * correctly). Must run before anything else opens a subprocess pipe. */
     signal(SIGPIPE, SIG_IGN);
+    fprintf(stdout, "Player model: %s\n", app_board_marker());
 #ifdef HOST_BUILD
     signal(SIGSEGV, crash_handler);
     signal(SIGABRT, crash_handler);

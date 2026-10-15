@@ -1423,22 +1423,21 @@ static void update_timer_cb(lv_timer_t * timer) {
  * style would still be all-zero memory at that point. */
 #define SCREEN_BG_COLOR lv_color_make(0, 0, 0)
 
+/* The loader owns the boot artwork. Zero disables both the player splash
+ * render and its minimum display wait. */
+#define BOOT_SPLASH_MIN_DISPLAY_MS 0
+
+#if BOOT_SPLASH_MIN_DISPLAY_MS > 0
 /* Real device uptime (lv_tick_get() is CLOCK_MONOTONIC-backed, see main.c's
  * custom_tick_get()) at which gui_show_boot_splash() below was called --
  * read back by gui_init() near the end of its own setup to decide how much
  * longer, if any, the splash needs to stay up. 0 is never a real tick value
  * this far into boot, so it doubles as "splash was never shown". */
 static uint32_t boot_splash_start_tick = 0;
+#endif
 
-/* The bootloader now owns the longer (up to 5s) SD-discovery window before
- * launching this process. Keep a short player-owned splash so framebuffer
- * takeover remains visually clean, without stacking the former additional
- * three-second minimum onto every bootloader-managed startup. Standalone
- * test launches still retain a visible one-second splash. Bluetooth does
- * not extend this global wait; gui_shell.c tracks its readiness separately. */
-#define BOOT_SPLASH_MIN_DISPLAY_MS 1000
-
-/* Displays the boot splash image immediately after framebuffer initialization.
+/* With a nonzero duration, displays the boot splash image immediately after
+ * framebuffer initialization. At zero this function does not touch LVGL.
  *
  * Uses asset_path("boot_animation/en/0.jpg"), matching the JPEG drawn by the
  * bootloader to provide a seamless visual handoff without decode discrepancies.
@@ -1450,6 +1449,7 @@ static uint32_t boot_splash_start_tick = 0;
  * lv_layer_top() is hidden while the splash is displayed so status bar icons
  * and overlays built during gui_init() do not appear until the splash finishes. */
 void gui_show_boot_splash(void) {
+#if BOOT_SPLASH_MIN_DISPLAY_MS > 0
     boot_splash_start_tick = lv_tick_get();
 
     lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_HIDDEN);
@@ -1469,6 +1469,7 @@ void gui_show_boot_splash(void) {
 
     lv_screen_load(scr);
     lv_timer_handler(); /* force an immediate render -- nothing else pumps the loop until main.c's own main loop starts */
+#endif
 }
 
 
@@ -2021,28 +2022,19 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
 
 
 #ifndef HOST_BUILD
-    /* Holds the boot splash (gui_show_boot_splash(), called from main.c
-     * before any of this function's own work) on screen for at least
-     * BOOT_SPLASH_MIN_DISPLAY_MS of real boot time, piggybacking on
-     * whatever this function's own setup (library load, screen building)
-     * already consumed -- only adds *additional* wait if that finished
-     * faster, so this isn't always a flat tax on boot time. This also
-     * delays start_refresh_bt_icon() (called above) by the same margin.
-     *
-     * Bluetooth readiness is handled asynchronously by gui_shell.c and does
-     * not extend this splash minimum. */
+#if BOOT_SPLASH_MIN_DISPLAY_MS > 0
+    /* Only a nonzero player splash configuration can delay startup. */
     while (boot_splash_start_tick != 0 &&
            lv_tick_get() - boot_splash_start_tick < BOOT_SPLASH_MIN_DISPLAY_MS) {
         uint32_t wait_ms = lv_timer_handler();
         if (wait_ms > 50) wait_ms = 50;
         usleep(wait_ms * 1000);
     }
+#endif
     boot_checkpoint("boot splash settle wait done");
 
-    /* Reveals the status bar/popups/quick drawer -- see gui_show_boot_
-     * splash()'s own comment for why these were hidden in the first place
-     * (they all live on lv_layer_top(), which paints above any screen
-     * unconditionally, splash included). */
+    /* Ensure the status bar/popups/quick drawer are visible, including when
+     * the optional splash did not hide them. */
     lv_obj_remove_flag(lv_layer_top(), LV_OBJ_FLAG_HIDDEN);
 #endif
     gui_library_boot_ready(lv_tick_get());

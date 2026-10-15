@@ -31,6 +31,7 @@
 #include "timezone_data.h"
 #include "firmware_update.h"
 #include "firmware_ota.h"
+#include "player_update.h"
 #include "plugin_manager.h"
 #include "gui_plugin_manage.h"
 #include "gui_plugin_store.h"
@@ -673,6 +674,193 @@ static lv_obj_t * ota_install_title;
 static gui_busy_handle_t ota_busy;
 static bool ota_ui_active;
 
+/* Player-only update shares the settings screen's main-loop polling and busy
+ * overlay. The worker's state survives an in-process UI rebuild; teardown
+ * drops only the LVGL handle, and polling recreates the overlay if needed. */
+static lv_obj_t * player_update_menu;
+static lv_obj_t * player_update_backdrop;
+static gui_popup_t player_update_offer_popup;
+static lv_obj_t * player_update_offer_title;
+static gui_popup_t player_update_confirm_popup;
+static lv_obj_t * player_update_confirm_title;
+static gui_busy_handle_t player_update_busy;
+static bool player_update_ui_active;
+static player_update_state_t player_update_ui_last_state = PLAYER_UPDATE_IDLE;
+
+static bool player_update_worker_active(void) {
+    player_update_status_t status;
+    player_update_get_status(&status);
+    return status.state == PLAYER_UPDATE_CHECKING || status.state == PLAYER_UPDATE_DOWNLOADING ||
+           status.state == PLAYER_UPDATE_INSTALLING;
+}
+
+static bool player_update_can_start(void) {
+    if (!firmware_usb_ready()) return false;
+    if (firmware_ota_busy() || firmware_update_busy() || player_update_worker_active()) {
+        show_error_toast(TR("An update is already in progress"));
+        return false;
+    }
+    return true;
+}
+
+static void hide_player_update_menu(void) {
+    if (player_update_menu) lv_obj_add_flag(player_update_menu, LV_OBJ_FLAG_HIDDEN);
+    if (player_update_backdrop) lv_obj_add_flag(player_update_backdrop, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void player_update_backdrop_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_player_update_menu();
+}
+
+static void player_update_cancel_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_popup_hide(&player_update_offer_popup);
+    gui_popup_hide(&player_update_confirm_popup);
+    player_update_reset();
+}
+
+static void player_update_show_sd_confirm(void) {
+    lv_label_set_text(player_update_confirm_title,
+                      TR("Install the player update from the SD card?\n\nUpdates the player and restarts the device. Firmware, fonts, and artwork are unchanged."));
+    gui_popup_show(&player_update_confirm_popup);
+}
+
+static void player_update_install_confirm_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_popup_hide(&player_update_confirm_popup);
+    if (!player_update_can_start()) return;
+    char error[160] = {0};
+    bool started = player_update_start_sd_install(error, sizeof(error));
+    if (!started) {
+        show_error_toast(error[0] ? error : TR("Could not start the player update"));
+        return;
+    }
+    player_update_ui_active = true;
+    player_update_ui_last_state = PLAYER_UPDATE_IDLE;
+    player_update_busy = gui_busy_show(TR("Updating player"), TR("Starting update"));
+    gui_busy_set_progress(player_update_busy, 0);
+}
+
+static void player_update_online_offer_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_popup_hide(&player_update_offer_popup);
+    if (!player_update_can_start()) return;
+    if (!gui_shell_wifi_effective_enabled()) {
+        show_error_toast(TR("Connect to Wi-Fi before downloading the player update"));
+        return;
+    }
+    char error[160] = {0};
+    if (!player_update_start_online_install(error, sizeof(error))) {
+        show_error_toast(error[0] ? error : TR("Could not start the player update"));
+        return;
+    }
+    player_update_ui_active = true;
+    player_update_ui_last_state = PLAYER_UPDATE_IDLE;
+    player_update_busy = gui_busy_show(TR("Updating player"), TR("Starting download"));
+    gui_busy_set_progress(player_update_busy, 0);
+}
+
+static void player_update_online_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_player_update_menu();
+    if (!player_update_can_start()) return;
+    if (!gui_shell_wifi_effective_enabled()) {
+        show_error_toast(TR("Turn on Wi-Fi and connect first"));
+        return;
+    }
+    if (!player_update_start_check()) {
+        show_error_toast(TR("Could not start the player update check"));
+        return;
+    }
+    player_update_ui_active = true;
+    player_update_ui_last_state = PLAYER_UPDATE_IDLE;
+    player_update_busy = gui_busy_show(TR("Checking for player updates"), "");
+}
+
+static void player_update_sd_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_player_update_menu();
+    if (!player_update_can_start()) return;
+    player_update_show_sd_confirm();
+}
+
+static void build_player_update_popups(void) {
+    const menu_popup_row_t rows[] = {
+        { TR("Check for online update"), player_update_online_cb, false },
+        { TR("Install from SD card"), player_update_sd_cb, false },
+        { TR("Cancel"), player_update_backdrop_cb, false, true },
+    };
+    player_update_menu = build_menu_popup(rows, (int)(sizeof(rows) / sizeof(rows[0])),
+                                          player_update_backdrop_cb, &player_update_backdrop);
+    player_update_offer_popup.popup = build_confirm_popup(
+        "", LV_LABEL_LONG_WRAP, &player_update_offer_title, NULL, TR("Download & Install"), accent_lv_color(),
+        player_update_online_offer_cb, NULL, TR("Cancel"), accent_lv_color(), player_update_cancel_cb, NULL,
+        player_update_cancel_cb, &player_update_offer_popup.backdrop);
+    player_update_confirm_popup.popup = build_confirm_popup(
+        "", LV_LABEL_LONG_WRAP, &player_update_confirm_title, NULL, TR("Install & Restart"),
+        lv_color_make(255, 120, 120), player_update_install_confirm_cb, NULL,
+        TR("Cancel"), accent_lv_color(), player_update_cancel_cb, NULL,
+        player_update_cancel_cb, &player_update_confirm_popup.backdrop);
+}
+
+static void player_update_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (player_update_menu) lv_obj_remove_flag(player_update_menu, LV_OBJ_FLAG_HIDDEN);
+    if (player_update_backdrop) lv_obj_remove_flag(player_update_backdrop, LV_OBJ_FLAG_HIDDEN);
+    if (player_update_backdrop) lv_obj_move_foreground(player_update_backdrop);
+    if (player_update_menu) lv_obj_move_foreground(player_update_menu);
+}
+
+static void poll_player_update(void) {
+    if (!player_update_ui_active) return;
+    player_update_status_t status;
+    player_update_get_status(&status);
+    if (status.state == PLAYER_UPDATE_CHECKING || status.state == PLAYER_UPDATE_DOWNLOADING ||
+        status.state == PLAYER_UPDATE_INSTALLING) {
+        bool recreated = !player_update_busy;
+        if (recreated)
+            player_update_busy = gui_busy_show(status.state == PLAYER_UPDATE_CHECKING ? TR("Checking for player updates") :
+                status.state == PLAYER_UPDATE_DOWNLOADING ? TR("Downloading player update") : TR("Installing player update"), "");
+        if (recreated || player_update_ui_last_state != status.state) {
+            const char * detail = status.state == PLAYER_UPDATE_CHECKING ? TR("Checking the latest release") :
+                status.state == PLAYER_UPDATE_DOWNLOADING ? TR("Downloading player update") :
+                TR("Replacing the player and preparing to restart");
+            gui_busy_set_detail(player_update_busy, detail);
+            player_update_ui_last_state = status.state;
+        }
+        if (status.state == PLAYER_UPDATE_DOWNLOADING)
+            gui_busy_set_progress(player_update_busy, status.percent);
+        return;
+    }
+
+    if (player_update_busy) {
+        gui_busy_hide(player_update_busy);
+        player_update_busy = 0;
+    }
+    player_update_ui_active = false;
+    if (status.state == PLAYER_UPDATE_CHECKED) {
+        lv_label_set_text_fmt(player_update_offer_title,
+                              TR("Available player release: %s.\nInstalled: %s\n\nDownload and install? This updates the player and restarts the device. Firmware, fonts, and artwork are unchanged."),
+                              status.release.label, app_version_label());
+        gui_popup_show(&player_update_offer_popup);
+        return;
+    }
+    if (status.state == PLAYER_UPDATE_DONE) {
+        player_update_reset();
+#ifdef HOST_BUILD
+        show_info_toast(TR("Player updated successfully"));
+#else
+        idle_shutdown_reboot_now();
+#endif
+        return;
+    }
+    if (status.state == PLAYER_UPDATE_FAILED) {
+        show_error_toast(status.error[0] ? status.error : TR("Player update failed"));
+        player_update_reset();
+    }
+}
+
 static void hide_firmware_source_menu(void) {
     if (firmware_source_menu) lv_obj_add_flag(firmware_source_menu, LV_OBJ_FLAG_HIDDEN);
     if (firmware_source_backdrop) lv_obj_add_flag(firmware_source_backdrop, LV_OBJ_FLAG_HIDDEN);
@@ -799,6 +987,9 @@ void firmware_update_row_cb(lv_event_t * e) {
 }
 
 void poll_firmware_ota(void) {
+    /* Keep player update progress advancing even when firmware OTA owns its
+     * worker, or when the existing firmware poll is otherwise idle. */
+    poll_player_update();
     if (manual_update_ui_active || ota_ui_active) {
         firmware_update_status_t recovery;
         firmware_update_get_status(&recovery);
@@ -1054,13 +1245,20 @@ static void screenshot_combo_switch_event_cb(lv_event_t * e) {
     hw_buttons_set_screenshot_combo_enabled(current_settings.screenshot_combo_enabled);
 }
 
+static void reboot_to_boot_selector_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    char error[128] = {0};
+    if (!idle_shutdown_reboot_to_bootloader(error, sizeof(error)))
+        show_error_toast(error[0] ? error : TR("Could not restart into the boot selector"));
+}
+
 #if defined(BOARD_R3II_2025)
   #define SCREENSHOT_ROW_LABEL TR("Screenshots (Power + Previous)")
 #else
   #define SCREENSHOT_ROW_LABEL TR("Screenshots (Power + Vol Down)")
 #endif
 static lv_obj_t * build_dev_options_screen(void) {
-    static pill_list_item_t items[3];
+    static pill_list_item_t items[4];
     /* ADB lives here rather than on the USB Mode screen: it overrides
      * Storage/DAC while on and persists across a reboot, so it sits behind
      * Developer Options as the explicit opt-in that makes re-applying it on
@@ -1073,7 +1271,9 @@ static lv_obj_t * build_dev_options_screen(void) {
     items[2] = (pill_list_item_t){ SCREENSHOT_ROW_LABEL, PILL_ACCESSORY_TOGGLE,
                                     current_settings.screenshot_combo_enabled, NULL,
                                     screenshot_combo_switch_event_cb, NULL };
-    lv_obj_t * scr = build_pill_list_screen(TR("Developer Options"), generic_back_cb, items, 3, gui_theme_accent_style(), GUI_ROW_GAP, 100);
+    items[3] = (pill_list_item_t){ TR("Reboot to bootloader"), PILL_ACCESSORY_NONE, false,
+                                    reboot_to_boot_selector_row_cb, NULL, NULL };
+    lv_obj_t * scr = build_pill_list_screen(TR("Developer Options"), generic_back_cb, items, 4, gui_theme_accent_style(), GUI_ROW_GAP, 100);
     finalize_screen_navigation(scr);
     return scr;
 }
@@ -4029,6 +4229,7 @@ static void settings_plugins_layouts_updates_row_cb(lv_event_t * e) {
 static lv_obj_t * build_settings_updates_screen(void) {
     pill_list_item_t items[] = {
         { TR("Firmware Update"), PILL_ACCESSORY_CHEVRON, false, firmware_update_row_cb, NULL, NULL },
+        { TR("Player Update"), PILL_ACCESSORY_CHEVRON, false, player_update_row_cb, NULL, NULL },
         { TR("Plugins & Layouts"), PILL_ACCESSORY_CHEVRON, false, settings_plugins_layouts_updates_row_cb, NULL, NULL },
     };
     lv_obj_t * scr = build_pill_list_screen(TR("Updates"), generic_back_cb, items,
@@ -5664,6 +5865,7 @@ void gui_settings_init(void) {
     eq_profiles_screen = build_eq_profiles_screen();
     build_firmware_update_popup();
     build_firmware_ota_popups();
+    build_player_update_popups();
     build_eq_reset_popup();
     build_button_mapping_reset_popup();
     build_eq_profile_delete_popup();
@@ -5681,6 +5883,17 @@ void gui_settings_init(void) {
  * build_confirm_popup()'s own comment), not as children of any of these
  * screens, so each needs its own explicit deletion. */
 void gui_settings_teardown(void) {
+    if (player_update_busy) {
+        gui_busy_hide(player_update_busy);
+        player_update_busy = 0;
+    }
+    if (!player_update_ui_active)
+        player_update_reset(); /* discard any result whose popup is being torn down */
+    gui_popup_teardown(&player_update_offer_popup);
+    gui_popup_teardown(&player_update_confirm_popup);
+    player_update_offer_title = player_update_confirm_title = NULL;
+    if (player_update_menu) { lv_obj_delete(player_update_menu); player_update_menu = NULL; }
+    if (player_update_backdrop) { lv_obj_delete(player_update_backdrop); player_update_backdrop = NULL; }
     gui_popup_teardown(&firmware_update_popup);
     gui_popup_teardown(&ota_offer_popup);
     gui_popup_teardown(&ota_install_popup);

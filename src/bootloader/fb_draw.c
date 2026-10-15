@@ -79,6 +79,8 @@ static const uint8_t * glyph_rows(char c) {
         case 'D': { static const uint8_t g[7] = { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E }; return g; }
         /* #####   #....   #....   ####.   #....   #....   ##### */
         case 'E': { static const uint8_t g[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F }; return g; }
+        /* #####   #....   #....   ####.   #....   #....   #.... */
+        case 'F': { static const uint8_t g[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10 }; return g; }
         /* .####   #....   #....   #.###   #...#   #...#   .###. */
         case 'G': { static const uint8_t g[7] = { 0x0F, 0x10, 0x10, 0x17, 0x11, 0x11, 0x0E }; return g; }
         /* .###.   ..#..   ..#..   ..#..   ..#..   ..#..   .###. */
@@ -105,6 +107,8 @@ static const uint8_t * glyph_rows(char c) {
         case 'U': { static const uint8_t g[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E }; return g; }
         /* #...#   #...#   #...#   #...#   #...#   .#.#.   ..#.. */
         case 'V': { static const uint8_t g[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 }; return g; }
+        /* #...#   #...#   #...#   #.#.#   #.#.#   ##.##   #...# */
+        case 'W': { static const uint8_t g[7] = { 0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11 }; return g; }
         /* #...#   #...#   .#.#.   ..#..   ..#..   ..#..   ..#.. */
         case 'Y': { static const uint8_t g[7] = { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 }; return g; }
 
@@ -304,6 +308,21 @@ void fb_fill(fb_color_t color) {
     fb_fill_rect(0, 0, FB_WIDTH, FB_HEIGHT, color);
 }
 
+bool fb_draw_blit_rgb565(const uint16_t * pixels, int width, int height, size_t stride_pixels) {
+    if (!back_buffer || !pixels || width != FB_WIDTH || height != FB_HEIGHT ||
+        stride_pixels < (size_t) FB_WIDTH ||
+        stride_pixels > SIZE_MAX / sizeof(uint16_t) ||
+        (size_t) FB_HEIGHT > SIZE_MAX / (stride_pixels * sizeof(uint16_t))) {
+        return false;
+    }
+    for (int y = 0; y < FB_HEIGHT; y++) {
+        memcpy(back_buffer + (size_t) y * FB_WIDTH,
+               pixels + (size_t) y * stride_pixels,
+               (size_t) FB_WIDTH * sizeof(uint16_t));
+    }
+    return true;
+}
+
 void fb_fill_rect(int x, int y, int w, int h, fb_color_t color) {
     if (w <= 0 || h <= 0) return;
     int x0 = x < 0 ? 0 : x;
@@ -409,6 +428,7 @@ static int jpeg_file_output_to_fb(JDEC * jd, void * bitmap, JRECT * rect) {
 }
 
 bool fb_draw_background_jpeg(const char * path) {
+    if (!back_buffer) return false;
     FILE * f = fopen(path, "rb");
     if (!f) {
         perror("fb_draw: fopen background jpeg");
