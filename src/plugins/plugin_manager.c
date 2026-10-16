@@ -2151,8 +2151,9 @@ static void set_home_background_image(lua_State * L, const char * source_path, h
     if (dot && strcasecmp(dot, ".png") == 0) ext = ".png";
     else if (dot && strcasecmp(dot, ".jpg") == 0) ext = ".jpg";
     else if (dot && strcasecmp(dot, ".jpeg") == 0) ext = ".jpeg";
+    else if (dot && strcasecmp(dot, ".bin") == 0) ext = ".bin";
     if (!ext) {
-        luaL_error(L, "plugin.set_home_layout: options.background_image '%s' must be a .png, .jpg, or .jpeg file",
+        luaL_error(L, "plugin.set_home_layout: options.background_image '%s' must be a .png, .jpg, .jpeg, or valid RGB565 .bin file",
                    source_path);
         return; /* unreachable -- luaL_error() longjmps */
     }
@@ -2161,6 +2162,41 @@ static void set_home_background_image(lua_State * L, const char * source_path, h
     snprintf(relative_path, sizeof(relative_path), "home/background%s", ext);
     char dst_path[600];
     snprintf(dst_path, sizeof(dst_path), "%s%s", PLUGIN_THEME_OVERRIDE_ROOT, relative_path);
+
+    if (strcmp(ext, ".bin") == 0) {
+        int fd = open(source_path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+        lv_image_header_t header;
+        memset(&header, 0, sizeof(header));
+        struct stat st;
+        memset(&st, 0, sizeof(st));
+        lv_display_t * display = lv_display_get_default();
+        int max_w = display ? lv_display_get_horizontal_resolution(display) : BOARD_SCREEN_WIDTH;
+        int max_h = display ? lv_display_get_vertical_resolution(display) : BOARD_SCREEN_HEIGHT;
+        bool valid = fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode);
+        if (valid) {
+            size_t got = 0;
+            while (got < sizeof(header)) {
+                ssize_t n = read(fd, (uint8_t *) &header + got, sizeof(header) - got);
+                if (n < 0 && errno == EINTR) continue;
+                if (n <= 0) break;
+                got += (size_t) n;
+            }
+            valid = got == sizeof(header);
+        }
+        if (fd >= 0) close(fd);
+        uint64_t expected = (uint64_t) sizeof(header) + (uint64_t) header.stride * header.h;
+        valid = valid && header.magic == LV_IMAGE_HEADER_MAGIC && header.cf == LV_COLOR_FORMAT_RGB565 &&
+                header.flags == 0 && header.reserved_2 == 0 &&
+                header.w == (uint32_t) max_w && header.h == (uint32_t) max_h &&
+                header.stride == header.w * 2u &&
+                expected <= sizeof(header) + (uint64_t) max_w * (uint64_t) max_h * 2u &&
+                st.st_size >= 0 && (uint64_t) st.st_size == expected;
+        if (!valid) {
+            luaL_error(L, "plugin.set_home_layout: options.background_image '%s' is not a valid RGB565 LVGL image for this display",
+                       source_path);
+            return;
+        }
+    }
 
     /* Same best-effort two-level mkdir as l_plugin_set_icon() below. */
     mkdir(PLUGIN_THEME_OVERRIDE_ROOT, 0755);

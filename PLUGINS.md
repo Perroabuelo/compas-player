@@ -1430,6 +1430,9 @@ background and call `callback(dest)` or `callback(nil, reason)`.
   It center-crops and resizes to the active display's exact pixel dimensions,
   then writes an LVGL RGB565 `.bin` image. It uses the same background worker,
   callback, cancellation, and failure behavior as `image_thumbnail_async`.
+  Pass that `.bin` to `plugin.set_home_layout({}, {background_image = dest})`;
+  this accepts only a valid RGB565 LVGL image whose dimensions and byte layout
+  fit the current display.
 
 ### Startup splash image
 
