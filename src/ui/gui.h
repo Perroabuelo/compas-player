@@ -273,6 +273,8 @@ int gui_plugin_library_search(const char * query, int limit, song_row_t * out_ro
 
 bool gui_plugin_library_get_song(int64_t id, song_row_t * out_row);
 
+bool gui_plugin_library_album_cover(int64_t song_id, int size_px, char * out, size_t out_size);
+
 /* offset/limit here are a plain slice over metadata_db_get_groups_page()'s
  * own keyset-paginated result (fetched internally up to offset+limit,
  * capped at a much higher ceiling than the per-call page size -- see

@@ -2765,6 +2765,23 @@ static bool album_player_cache_hit(const albumart_info_t * info, char * found, s
                                           found, found_size);
 }
 
+bool gui_library_album_cover_cached(int64_t song_id, int size_px, char * out, size_t out_size) {
+    if (!out || out_size == 0) return false;
+    song_row_t row;
+    if (!metadata_db_get_song_by_id(song_id, &row)) {
+        return false;
+    }
+    albumart_info_t info;
+    albumart_info_from_song_row(&row, &info);
+    bool hit = false;
+    if (size_px == ALBUM_THUMBNAIL_PX) hit = album_thumbnail_sized_cache_hit(&info, out, out_size);
+    else if (size_px == ALBUM_PLAYER_CACHE_PX) hit = album_player_cache_hit(&info, out, out_size);
+    char absolute[PATH_MAX];
+    if (hit) hit = realpath(out, absolute) != NULL && strlen(absolute) < out_size;
+    if (hit) memcpy(out, absolute, strlen(absolute) + 1);
+    return hit;
+}
+
 #define THUMBNAIL_SIDECAR_MAX_BYTES (2U * 1024U * 1024U)
 #define ALBUM_ART_METADATA_TIMEOUT_MS 5000
 /* Small startup allowance; the helper has a bounded address-space budget
@@ -9362,7 +9379,7 @@ void build_power_off_countdown_popup(void) {
 
     /* Keep the sheet inside the sys-layer backdrop so both are hidden as
      * one modal and neither can fall behind the persistent status bar. */
-    lv_obj_t * actions[4] = {0};
+    lv_obj_t * actions[5] = {0};
     power_action_overlay.popup = build_power_hub_panel(power_action_overlay.backdrop,
         power_action_clicked_cb, &power_action_status, actions);
     if (actions[1]) {

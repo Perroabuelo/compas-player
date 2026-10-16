@@ -2955,17 +2955,19 @@ lv_obj_t * add_cover_card(lv_obj_t * list, const char * label,
     lv_obj_set_style_border_color(cover, lv_color_white(), 0);
     lv_obj_remove_flag(cover, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     if (resolved_image_src && resolved_image_src[0]) {
+        lv_obj_t * image = lv_image_create(cover);
         lv_image_header_t header;
-        if (lv_image_decoder_get_info(resolved_image_src, &header) == LV_RESULT_OK &&
-            header.w > 0 && header.h > 0) {
-            lv_obj_t * image = lv_image_create(cover);
-            if (!cover_card_preview_set(image, resolved_image_src, card_w, cover_h)) {
-                lv_image_set_src(image, resolved_image_src);
-                int64_t scale_w = (int64_t) card_w * 256 / header.w;
-                int64_t scale_h = (int64_t) cover_h * 256 / header.h;
-                lv_image_set_scale(image, (uint32_t) (scale_w < scale_h ? scale_w : scale_h));
-            }
+        if (cover_card_preview_set(image, resolved_image_src, card_w, cover_h)) {
             lv_obj_center(image);
+        } else if (lv_image_decoder_get_info(resolved_image_src, &header) == LV_RESULT_OK &&
+                   header.w > 0 && header.h > 0) {
+            lv_image_set_src(image, resolved_image_src);
+            int64_t scale_w = (int64_t) card_w * 256 / header.w;
+            int64_t scale_h = (int64_t) cover_h * 256 / header.h;
+            lv_image_set_scale(image, (uint32_t) (scale_w < scale_h ? scale_w : scale_h));
+            lv_obj_center(image);
+        } else {
+            lv_obj_delete(image);
         }
     }
     if (lv_obj_get_child_count(cover) == 0) {
