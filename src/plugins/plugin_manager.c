@@ -6782,6 +6782,7 @@ static void fill_available_entry(plugin_available_entry_t * e, const char * file
     e->loaded = false;
     e->over_limit = false;
     e->player_layout = false;
+    e->theme_package = false;
     uint64_t h = plugin_filename_hash(filename);
     for (int j = 0; j < plugin_over_limit_count; j++) {
         if (plugin_over_limit[j] == h) {
@@ -6882,16 +6883,19 @@ int plugin_manager_scan_available(plugin_available_entry_t * out, int max) {
     if (count > 0) {
         const char ** filenames = calloc((size_t) count, sizeof(*filenames));
         bool * layout_flags = calloc((size_t) count, sizeof(*layout_flags));
+        bool * theme_flags = calloc((size_t) count, sizeof(*theme_flags));
         if (filenames && layout_flags) {
             for (int i = 0; i < count; i++) {
                 filenames[i] = out[i].filename;
                 layout_flags[i] = out[i].player_layout;
             }
-            plugin_store_classify_layout_loaders(filenames, layout_flags, (size_t) count);
+            plugin_store_classify_loaders(filenames, layout_flags, theme_flags, (size_t) count);
             for (int i = 0; i < count; i++) out[i].player_layout = layout_flags[i];
         }
+        if (theme_flags) for (int i = 0; i < count; i++) out[i].theme_package = theme_flags[i];
         free(filenames);
         free(layout_flags);
+        free(theme_flags);
     }
     free(names);
     return count;
