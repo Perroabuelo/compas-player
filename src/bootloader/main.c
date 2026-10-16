@@ -414,7 +414,7 @@ bool compas_loader_prepare(void) {
     bootloader_checkpoint(fb_ready ? "framebuffer open done" : "framebuffer open failed");
     if (fb_ready) {
         bootloader_checkpoint("bootloader splash draw begin");
-        if (!fb_draw_background_jpeg(BOOTLOADER_BG_PATH)) fb_fill(COLOR_BG);
+        if (!fb_draw_startup_background()) fb_fill(COLOR_BG);
         bootloader_checkpoint("bootloader splash draw done; flush begin");
         fb_flush();
         bootloader_checkpoint("bootloader splash flush done");

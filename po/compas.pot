@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 00:10-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2347,6 +2347,12 @@ msgid "Match album art"
 msgstr ""
 
 msgid "Takes its color from the cover of the playing track"
+msgstr ""
+
+msgid "Tint startup image"
+msgstr ""
+
+msgid "Uses the accent color for the default splash."
 msgstr ""
 
 msgid "Presets"

@@ -178,12 +178,12 @@ plugin.define({
 
   | Area | Tokens |
   | --- | --- |
-  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker` |
+  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker`, `ui.startup_image` |
   | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.crossfeed.angle`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
   | Network | `network.http.sync`, `network.http.async`, `network.http.download`, `network.http.download_progress` |
-  | Data | `data.json`, `crypto.md5`, `data.zip`, `data.zip_image`, `data.image_thumbnail`, `data.html` |
+  | Data | `data.json`, `crypto.md5`, `data.zip`, `data.zip_image`, `data.image_thumbnail`, `data.wallpaper`, `data.html` |
   | Library | `library.artist_albums`, `library.paged`, `library.refresh`, `library.track_metadata` |
 
 - LEDs depend on the model: check `plugin.led_available()` instead.
@@ -1411,6 +1411,37 @@ background and call `callback(dest)` or `callback(nil, reason)`.
   don't treat the image as broken.
 - `dest` is replaced only on success. Jobs are cancelled, without callback,
   when the plugins reload.
+
+- `plugin.image_wallpaper_async(source, dest, callback)` (API 16,
+  `data.wallpaper`) prepares a JPEG, PNG or BMP file up to 3 MB as a wallpaper.
+  It center-crops and resizes to the active display's exact pixel dimensions,
+  then writes an LVGL RGB565 `.bin` image. It uses the same background worker,
+  callback, cancellation, and failure behavior as `image_thumbnail_async`.
+
+### Startup splash image
+
+`plugin.set_startup_image_async(prepared_bin_path_or_nil, callback)` selects
+the image shown while the player starts. Use `plugin.image_startup_async(source,
+dest, callback)` to prepare a JPEG, PNG or BMP (up to 3 MB) as a board-sized RGB565
+`.bin` first. It center-crops to the firmware's native screen width and height;
+the image is not tinted. The callback receives `dest` or `nil, reason`, with
+the same shared worker, busy result, cancellation and failure behavior as
+`image_wallpaper_async`. The destination must end in `.bin`.
+
+Check `plugin.has_capability("ui.startup_image")` before preparing, installing
+or restoring a splash. This additive capability does not change API version 16.
+Startup image selection requires firmware whose loader supports the override.
+
+`set_startup_image_async` returns `true` when the job starts, or `nil, "busy"`
+if another image job is running. Its callback receives `(true, nil)` after
+install or restore succeeds, or `(false, reason)` on failure. Passing `nil`
+removes the custom override and restores the built-in splash. Validation and
+preparation failures keep the previous selection intact. Changes are used on
+the next boot; they do not redraw the current screen or restart the player.
+
+`plugin.has_startup_image()` returns whether a valid custom image is installed
+for this board. The native Accent Color setting can tint the built-in splash;
+it does not recolor custom images.
 
 ### `plugin.html_to_blocks(bytes [, options])`
 

@@ -23,7 +23,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 00:10-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Spanish\n"
@@ -260,9 +260,8 @@ msgstr "Listas"
 msgid "Sound"
 msgstr "Sonido"
 
-#, fuzzy
 msgid "Playback"
-msgstr "Error de reproducción"
+msgstr "Reproducción"
 
 msgid "Library"
 msgstr "Biblioteca"
@@ -2442,6 +2441,12 @@ msgstr "Igualar la carátula"
 msgid "Takes its color from the cover of the playing track"
 msgstr "Toma su color de la carátula de la pista actual"
 
+msgid "Tint startup image"
+msgstr "Teñir imagen de inicio"
+
+msgid "Uses the accent color for the default splash."
+msgstr "Usa el color de acento para la imagen de inicio predeterminada."
+
 msgid "Presets"
 msgstr "Predefinidos"
 
@@ -2759,22 +2764,19 @@ msgid "Keyboard"
 msgstr "Teclado"
 
 msgid "Plugins can override these saved preferences."
-msgstr ""
+msgstr "Los plugins pueden sobrescribir estas preferencias guardadas."
 
-#, fuzzy
 msgid "Quick Drawer"
-msgstr "Configuración rápida"
+msgstr "Panel rápido"
 
-#, fuzzy
 msgid "Enabled"
-msgstr "Activar banda"
+msgstr "Activado"
 
-#, fuzzy
 msgid "Volume Slider"
-msgstr "Control de volumen del panel"
+msgstr "Control deslizante de volumen"
 
 msgid "Reorder Items"
-msgstr ""
+msgstr "Reordenar elementos"
 
 #, fuzzy
 msgid "Volume"
@@ -2796,7 +2798,7 @@ msgstr "Audio"
 
 #, fuzzy
 msgid "Playback Status"
-msgstr "Reproducción y controles"
+msgstr "Reproducción"
 
 #, fuzzy
 msgid "Bluetooth Codec"
@@ -3535,6 +3537,9 @@ msgstr "Controles de energía"
 msgid "Playback and device actions"
 msgstr "Reproducción y acciones del equipo"
 
+#~ msgid "Parametric EQ"
+#~ msgstr "EQ paramétrico"
+
 #~ msgid "Library migration pending. Favourites and play history will be kept"
 #~ msgstr "Migración de la biblioteca pendiente. Se conservarán favoritos e historial"
 
@@ -3563,8 +3568,14 @@ msgstr "Reproducción y acciones del equipo"
 #~ msgid "Albums (main list)"
 #~ msgstr "Álbumes (lista principal)"
 
-#~ msgid "Parametric EQ"
-#~ msgstr "EQ paramétrico"
+#~ msgid "Visible"
+#~ msgstr "Visible"
+
+#~ msgid "Move Up"
+#~ msgstr "Mover arriba"
+
+#~ msgid "Move Down"
+#~ msgstr "Mover abajo"
 
 #~ msgid "Back"
 #~ msgstr "Atrás"

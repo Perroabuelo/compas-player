@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 00:10-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Finnish\n"
@@ -235,9 +235,8 @@ msgstr "Soittolistat"
 msgid "Sound"
 msgstr "Ääni"
 
-#, fuzzy
 msgid "Playback"
-msgstr "Toistovirhe"
+msgstr "Toisto"
 
 msgid "Library"
 msgstr "Kirjasto"
@@ -2371,6 +2370,12 @@ msgstr "Mukaudu albumin kansikuvaan"
 msgid "Takes its color from the cover of the playing track"
 msgstr "Käyttää toistettavan kappaleen kansikuvan väriä"
 
+msgid "Tint startup image"
+msgstr "Sävytä käynnistyskuva"
+
+msgid "Uses the accent color for the default splash."
+msgstr "Käyttää korostusväriä oletuskäynnistyskuvassa."
+
 msgid "Presets"
 msgstr "Esiasetukset"
 
@@ -2686,22 +2691,19 @@ msgid "Keyboard"
 msgstr "Näppäimistö"
 
 msgid "Plugins can override these saved preferences."
-msgstr ""
+msgstr "Lisäosat voivat ohittaa nämä tallennetut asetukset."
 
-#, fuzzy
 msgid "Quick Drawer"
-msgstr "Pika-asennus"
+msgstr "Pikavalikko"
 
-#, fuzzy
 msgid "Enabled"
-msgstr "Ota kaista käyttöön"
+msgstr "Käytössä"
 
-#, fuzzy
 msgid "Volume Slider"
-msgstr "Laatikon äänenvoimakkuuden liukusäädin"
+msgstr "Äänenvoimakkuuden liukusäädin"
 
 msgid "Reorder Items"
-msgstr ""
+msgstr "Järjestä kohteet"
 
 #, fuzzy
 msgid "Volume"
@@ -2723,7 +2725,7 @@ msgstr "Ääni"
 
 #, fuzzy
 msgid "Playback Status"
-msgstr "Toisto ja ohjaimet"
+msgstr "Toisto"
 
 #, fuzzy
 msgid "Bluetooth Codec"
@@ -3461,6 +3463,9 @@ msgstr "Virtatoiminnot"
 msgid "Playback and device actions"
 msgstr "Toisto- ja laitetoiminnot"
 
+#~ msgid "Parametric EQ"
+#~ msgstr "Parametrinen taajuuskorjain"
+
 #~ msgid "Library migration pending. Favourites and play history will be kept"
 #~ msgstr "Kirjaston siirto odottaa. Suosikit ja toistohistoria säilyvät"
 
@@ -3489,8 +3494,14 @@ msgstr "Toisto- ja laitetoiminnot"
 #~ msgid "Albums (main list)"
 #~ msgstr "Albumit (pääluettelo)"
 
-#~ msgid "Parametric EQ"
-#~ msgstr "Parametrinen taajuuskorjain"
+#~ msgid "Visible"
+#~ msgstr "Näkyvissä"
+
+#~ msgid "Move Up"
+#~ msgstr "Siirrä ylös"
+
+#~ msgid "Move Down"
+#~ msgstr "Siirrä alas"
 
 #~ msgid "Back"
 #~ msgstr "Takaisin"

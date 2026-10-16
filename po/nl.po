@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 00:10-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -235,9 +235,8 @@ msgstr "Afspeellijsten"
 msgid "Sound"
 msgstr "Geluid"
 
-#, fuzzy
 msgid "Playback"
-msgstr "Afspeelfout"
+msgstr "Afspelen"
 
 msgid "Library"
 msgstr "Bibliotheek"
@@ -2369,6 +2368,12 @@ msgstr "Albumhoes volgen"
 msgid "Takes its color from the cover of the playing track"
 msgstr "Neemt de kleur over van de cover van het nummer dat wordt afgespeeld"
 
+msgid "Tint startup image"
+msgstr "Opstartafbeelding kleuren"
+
+msgid "Uses the accent color for the default splash."
+msgstr "Gebruikt de accentkleur voor de standaard opstartafbeelding."
+
 msgid "Presets"
 msgstr "Voorinstellingen"
 
@@ -2684,22 +2689,19 @@ msgid "Keyboard"
 msgstr "Toetsenbord"
 
 msgid "Plugins can override these saved preferences."
-msgstr ""
+msgstr "Plugins kunnen deze opgeslagen voorkeuren overschrijven."
 
-#, fuzzy
 msgid "Quick Drawer"
-msgstr "Snelle installatie"
+msgstr "Snelpaneel"
 
-#, fuzzy
 msgid "Enabled"
-msgstr "Band inschakelen"
+msgstr "Ingeschakeld"
 
-#, fuzzy
 msgid "Volume Slider"
-msgstr "Volumeschuifregelaar in lade"
+msgstr "Volumeschuifregelaar"
 
 msgid "Reorder Items"
-msgstr ""
+msgstr "Items herschikken"
 
 #, fuzzy
 msgid "Volume"
@@ -2721,7 +2723,7 @@ msgstr "Audio"
 
 #, fuzzy
 msgid "Playback Status"
-msgstr "Afspelen en bediening"
+msgstr "Afspelen"
 
 #, fuzzy
 msgid "Bluetooth Codec"
@@ -3459,6 +3461,9 @@ msgstr "Voedingsbediening"
 msgid "Playback and device actions"
 msgstr "Afspelen en apparaatacties"
 
+#~ msgid "Parametric EQ"
+#~ msgstr "Parametrische equalizer"
+
 #~ msgid "Library migration pending. Favourites and play history will be kept"
 #~ msgstr "Bibliotheekmigratie in afwachting. Favorieten en afspeelgeschiedenis blijven behouden"
 
@@ -3487,8 +3492,14 @@ msgstr "Afspelen en apparaatacties"
 #~ msgid "Albums (main list)"
 #~ msgstr "Albums (hoofdlijst)"
 
-#~ msgid "Parametric EQ"
-#~ msgstr "Parametrische equalizer"
+#~ msgid "Visible"
+#~ msgstr "Zichtbaar"
+
+#~ msgid "Move Up"
+#~ msgstr "Omhoog verplaatsen"
+
+#~ msgid "Move Down"
+#~ msgstr "Omlaag verplaatsen"
 
 #~ msgid "Back"
 #~ msgstr "Terug"

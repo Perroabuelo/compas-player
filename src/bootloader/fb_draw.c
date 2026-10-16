@@ -10,6 +10,7 @@
 #include <linux/fb.h>
 
 #include "lvgl/src/libs/tjpgd/tjpgd.h"
+#include "startup_splash.h"
 
 static int fb_fd = -1;
 static uint16_t * fb_mem = NULL;
@@ -336,7 +337,7 @@ void fb_fill_rect(int x, int y, int w, int h, fb_color_t color) {
 
 /* scale=3 keeps the status text readable on either supported panel without
  * needing anti-aliasing. */
-#define GLYPH_SCALE 3
+#define GLYPH_SCALE (FB_WIDTH < 400 ? 2 : 3)
 
 void fb_draw_text(int x, int y, const char * text, fb_color_t color) {
     int cursor_x = x;
@@ -460,6 +461,25 @@ bool fb_draw_background_jpeg(const char * path) {
     fclose(f);
 
     if (ok) {
+        bool tint = false;
+        uint32_t accent = 0xF4E58C;
+        startup_splash_get_tint(&tint, &accent);
+        if (tint) {
+            uint8_t accent_red = (uint8_t)(accent >> 16);
+            uint8_t accent_green = (uint8_t)(accent >> 8);
+            uint8_t accent_blue = (uint8_t)accent;
+            size_t count = (size_t)FB_WIDTH * FB_HEIGHT;
+            for (size_t i = 0; i < count; i++) {
+                uint16_t pixel = back_buffer[i];
+                unsigned red = ((pixel >> 11) & 31u) * 255u / 31u;
+                unsigned green = ((pixel >> 5) & 63u) * 255u / 63u;
+                unsigned blue = (pixel & 31u) * 255u / 31u;
+                unsigned luminance = (299u * red + 587u * green + 114u * blue + 500u) / 1000u;
+                back_buffer[i] = fb_rgb((uint8_t)(accent_red * luminance / 255u),
+                                        (uint8_t)(accent_green * luminance / 255u),
+                                        (uint8_t)(accent_blue * luminance / 255u));
+            }
+        }
         /* jpeg_file_output_to_fb() decoded into back_buffer (see put_pixel()'s
          * own doc comment) -- both it and bg_cache are the same compact,
          * no-stride layout now, so caching it is one plain memcpy, not a
@@ -476,6 +496,21 @@ bool fb_draw_background_jpeg(const char * path) {
     return ok;
 }
 
+bool fb_draw_startup_background(void) {
+    size_t count = (size_t)FB_WIDTH * FB_HEIGHT;
+    uint16_t *pixels = malloc(count * sizeof(*pixels));
+    if (pixels && startup_splash_read(STARTUP_SPLASH_PATH, FB_WIDTH, FB_HEIGHT, pixels)) {
+        bool ok = fb_draw_blit_rgb565(pixels, FB_WIDTH, FB_HEIGHT, FB_WIDTH);
+        if (ok) {
+            free(bg_cache);
+            bg_cache = pixels;
+            return true;
+        }
+    }
+    free(pixels);
+    return fb_draw_background_jpeg(BOOTLOADER_BG_PATH);
+}
+
 void fb_restore_background(fb_color_t fallback_color) {
     if (!bg_cache) {
         fb_fill(fallback_color);
@@ -484,4 +519,22 @@ void fb_restore_background(fb_color_t fallback_color) {
     /* Same compact layout as back_buffer -- one plain memcpy, no stride
      * math (that only applies at the actual fb_flush() blit to fb_mem). */
     memcpy(back_buffer, bg_cache, (size_t) FB_WIDTH * FB_HEIGHT * sizeof(uint16_t));
+}
+
+void fb_draw_installer_warning(void) {
+    fb_restore_background(fb_rgb(0x12, 0x12, 0x12));
+
+    fb_color_t white = fb_rgb(0xFF, 0xFF, 0xFF);
+    int text_height = fb_text_height();
+    int first_y = FB_HEIGHT / 2 - text_height;
+    int second_y = FB_HEIGHT / 2 + text_height / 2;
+    int box_y = first_y - 8;
+    int box_bottom = second_y + text_height + 8;
+    int box_width = fb_text_width("DO NOT REMOVE SD CARD") + 16;
+    if (box_width > FB_WIDTH) box_width = FB_WIDTH;
+    int box_x = (FB_WIDTH - box_width) / 2;
+
+    fb_fill_rect(box_x, box_y, box_width, box_bottom - box_y, fb_rgb(0x12, 0x12, 0x12));
+    fb_draw_text_centered(first_y, "UPDATING PLAYER", white);
+    fb_draw_text_centered(second_y, "DO NOT REMOVE SD CARD", white);
 }

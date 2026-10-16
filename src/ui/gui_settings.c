@@ -1502,6 +1502,12 @@ static void accent_dynamic_event_cb(lv_event_t * e) {
     gui_theme_set_accent_dynamic(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
 }
 
+static void accent_startup_tint_event_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_VALUE_CHANGED) return;
+    current_settings.startup_splash_tint = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+    settings_save_async(&current_settings);
+}
+
 static lv_obj_t * accent_card(lv_obj_t * parent, int32_t width) {
     lv_obj_t * card = lv_obj_create(parent);
     lv_obj_set_size(card, width, LV_SIZE_CONTENT);
@@ -1612,6 +1618,28 @@ static lv_obj_t * build_accent_color_screen(void) {
     accent_dynamic_switch = lv_switch_create(dyn);
     lv_obj_add_style(accent_dynamic_switch, gui_theme_accent_style(), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(accent_dynamic_switch, accent_dynamic_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* Built-in splash tint is an independent choice from album-art matching.
+     * Custom startup images keep their original colors. */
+    lv_obj_t * splash_tint = accent_card(body, card_w);
+    lv_obj_set_flex_flow(splash_tint, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(splash_tint, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(splash_tint, BOARD_SCALE_PX(12), 0);
+    lv_obj_t * splash_tint_text = accent_plain_obj(splash_tint);
+    lv_obj_set_flex_grow(splash_tint_text, 1);
+    lv_obj_set_height(splash_tint_text, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(splash_tint_text, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(splash_tint_text, BOARD_SCALE_PX(4), 0);
+    accent_text(splash_tint_text, TR("Tint startup image"), GUI_FONT_ROLE_ROW, false);
+    lv_obj_t * splash_tint_hint = accent_text(splash_tint_text,
+        TR("Uses the accent color for the default splash."), GUI_FONT_ROLE_SUBTEXT, true);
+    lv_obj_set_width(splash_tint_hint, lv_pct(100));
+    lv_label_set_long_mode(splash_tint_hint, LV_LABEL_LONG_WRAP);
+    lv_obj_t * startup_tint_switch = lv_switch_create(splash_tint);
+    lv_obj_add_style(startup_tint_switch, gui_theme_accent_style(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(startup_tint_switch, accent_startup_tint_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    if (current_settings.startup_splash_tint)
+        lv_obj_add_state(startup_tint_switch, LV_STATE_CHECKED);
 
     /* Custom color picker */
     accent_picker_card = accent_card(body, card_w);

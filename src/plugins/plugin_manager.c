@@ -36,6 +36,7 @@
 #include "image_thumb.h"
 #include "gui_text_view.h"
 #include "metadata_db.h"
+#include "../core/startup_splash.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -5071,13 +5072,14 @@ static const char * const plugin_capabilities[] = {
     "storage.namespaced", "storage.secrets", "playback.remote", "filesystem.playlists", "library.refresh",
     "ui.home_layout", "ui.theme_refresh", "ui.reload", "ui.home_tiles", "ui.launcher_layout",
     "audio.stereo_width", "audio.crossfeed", "audio.crossfeed.angle", "playback.speed", "ui.home_background", "audio.hw_volume_curve", "ui.lock_screen", "ui.quick_toggle",
-    "data.zip", "data.html", "ui.text_view", "data.zip_image", "data.image_thumbnail", "ui.list_grid", "ui.list_showing",
+    "data.zip", "data.html", "ui.text_view", "data.zip_image", "data.image_thumbnail", "data.wallpaper", "ui.list_grid", "ui.list_showing",
     "ui.list_update", "ui.text_view_images", "ui.list_wrap", "ui.settings_list_wrap", "playback.transport_skip",
     "ui.player_layout_xml", "storage.secrets_get", "playback.progress",
     "playback.format", "playback.output_info", "playback.silent_volume", "audio.peq.transient",
     "playback.output_events", "playback.settings", "playback.ab_loop", "playback.ab_switch", "playback.http_seek",
     "audio.peq.state", "library.track_metadata", "playback.transient_volume",
-    "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.file_picker"
+    "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.file_picker",
+    "ui.startup_image"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -5395,6 +5397,8 @@ typedef struct {
     int max_w;
     int max_h;
     bool source_is_file;
+    bool wallpaper;
+    bool startup_install;
     bool ok;
     const char * error; /* static string */
 } plugin_zip_image_t;
@@ -5415,6 +5419,12 @@ static void * plugin_zip_image_thread(void * arg) {
 #endif
     if (install_thread_crash_altstack) install_thread_crash_altstack(); /* see its own comment (main.c) */
     plugin_zip_image_t * job = arg;
+    if (job->startup_install) {
+        job->ok = startup_splash_install(job->zip_path[0] ? job->zip_path : NULL,
+                                         BOARD_SCREEN_WIDTH, BOARD_SCREEN_HEIGHT, &job->error);
+        atomic_store(&job->done, true);
+        return NULL;
+    }
     unsigned char * data = NULL;
     size_t len = 0;
     if (job->source_is_file) {
@@ -5453,8 +5463,14 @@ static void * plugin_zip_image_thread(void * arg) {
     if (!job->error && plugin_zip_image_cancelled(job)) {
         job->error = "cancelled";
     } else if (!job->error) {
-        job->ok = image_thumb_write_bin(data, len, job->max_w, job->max_h, job->dest_path, ARTWORK_PRIO_THUMBNAIL,
-                                        plugin_zip_image_cancelled, job, &job->error);
+        if (job->wallpaper)
+            job->ok = image_wallpaper_write_bin(data, len, job->max_w, job->max_h, job->dest_path,
+                                                ARTWORK_PRIO_THUMBNAIL, plugin_zip_image_cancelled, job,
+                                                &job->error);
+        else
+            job->ok = image_thumb_write_bin(data, len, job->max_w, job->max_h, job->dest_path,
+                                            ARTWORK_PRIO_THUMBNAIL, plugin_zip_image_cancelled, job,
+                                            &job->error);
     }
     free(data);
     atomic_store(&job->done, true);
@@ -5466,23 +5482,49 @@ static bool path_has_bin_extension(const char * path) {
     return n > 4 && strcmp(path + n - 4, ".bin") == 0;
 }
 
+/* Startup splash override. The loader consumes a board-native RGB565 frame,
+ * so its dimensions are the firmware constants even when LVGL is rotated. */
+static int plugin_image_thumbnail_start(lua_State * L, const char * source_path, const char * entry,
+                                       const char * dest_path, int max_w, int max_h,
+                                       int callback_index, bool source_is_file, bool wallpaper,
+                                       bool startup_install);
+
+static int l_plugin_set_startup_image_async(lua_State * L) {
+    const char * path = NULL;
+    if (!lua_isnoneornil(L, 1))
+        path = check_plugin_external_path(L, 1, "plugin.set_startup_image_async");
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (path && strlen(path) >= sizeof(plugin_zip_image.zip_path))
+        return luaL_error(L, "plugin.set_startup_image_async: path too long");
+    return plugin_image_thumbnail_start(L, path, NULL, "", BOARD_SCREEN_WIDTH,
+                                        BOARD_SCREEN_HEIGHT, 2, true, false, true);
+}
+
+static int l_plugin_has_startup_image(lua_State * L) {
+    lua_pushboolean(L, startup_splash_configured());
+    return 1;
+}
+
 /* Starts the shared ZIP/file thumbnail job after each Lua API has validated
  * its own argument layout and emitted any API-specific argument errors. */
 static int plugin_image_thumbnail_start(lua_State * L, const char * source_path, const char * entry,
                                        const char * dest_path, int max_w, int max_h,
-                                       int callback_index, bool source_is_file) {
+                                       int callback_index, bool source_is_file, bool wallpaper,
+                                       bool startup_install) {
     if (plugin_zip_image.active) return push_plugin_error(L, "busy");
 
     plugin_zip_image_t * job = &plugin_zip_image;
     memset(job, 0, sizeof(*job));
     atomic_init(&job->done, false);
     atomic_init(&job->cancel, false);
-    snprintf(job->zip_path, sizeof(job->zip_path), "%s", source_path);
+    if (source_path) snprintf(job->zip_path, sizeof(job->zip_path), "%s", source_path);
     if (entry) snprintf(job->entry, sizeof(job->entry), "%s", entry);
     snprintf(job->dest_path, sizeof(job->dest_path), "%s", dest_path);
     job->max_w = max_w;
     job->max_h = max_h;
     job->source_is_file = source_is_file;
+    job->wallpaper = wallpaper;
+    job->startup_install = startup_install;
     lua_pushvalue(L, callback_index);
     job->callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     job->L = plugin_main_state(L);
@@ -5517,7 +5559,7 @@ static int l_plugin_zip_image_async(lua_State * L) {
         return luaL_error(L, "plugin.zip_image_async: path too long");
     if (!path_has_bin_extension(dest_path))
         return luaL_error(L, "plugin.zip_image_async: dest_path must end in .bin");
-    return plugin_image_thumbnail_start(L, zip_path, entry, dest_path, (int) max_w, (int) max_h, 6, false);
+    return plugin_image_thumbnail_start(L, zip_path, entry, dest_path, (int) max_w, (int) max_h, 6, false, false, false);
 }
 
 static int l_plugin_image_thumbnail_async(lua_State * L) {
@@ -5531,7 +5573,40 @@ static int l_plugin_image_thumbnail_async(lua_State * L) {
     if (strlen(source_path) >= sizeof(plugin_zip_image.zip_path) || strlen(dest_path) >= sizeof(plugin_zip_image.dest_path) - 8)
         return luaL_error(L, "plugin.image_thumbnail_async: path too long");
     if (!path_has_bin_extension(dest_path)) return luaL_error(L, "plugin.image_thumbnail_async: dest_path must end in .bin");
-    return plugin_image_thumbnail_start(L, source_path, NULL, dest_path, (int) max_w, (int) max_h, 5, true);
+    return plugin_image_thumbnail_start(L, source_path, NULL, dest_path, (int) max_w, (int) max_h, 5, true, false, false);
+}
+
+static int l_plugin_image_wallpaper_async(lua_State * L) {
+    const char * source_path = check_plugin_external_path(L, 1, "plugin.image_wallpaper_async");
+    const char * dest_path = check_plugin_external_path(L, 2, "plugin.image_wallpaper_async");
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+    if (strlen(source_path) >= sizeof(plugin_zip_image.zip_path) ||
+        strlen(dest_path) >= sizeof(plugin_zip_image.dest_path) - 8)
+        return luaL_error(L, "plugin.image_wallpaper_async: path too long");
+    if (!path_has_bin_extension(dest_path))
+        return luaL_error(L, "plugin.image_wallpaper_async: dest_path must end in .bin");
+    lv_display_t * display = lv_display_get_default();
+    int width = display ? lv_display_get_horizontal_resolution(display) : BOARD_SCREEN_WIDTH;
+    int height = display ? lv_display_get_vertical_resolution(display) : BOARD_SCREEN_HEIGHT;
+    if (width <= 0 || height <= 0)
+        return luaL_error(L, "plugin.image_wallpaper_async: display dimensions unavailable");
+    return plugin_image_thumbnail_start(L, source_path, NULL, dest_path, width, height, 3, true, true, false);
+}
+
+/* Board-native counterpart to image_wallpaper_async, for startup splash
+ * images which are read before LVGL applies its display rotation. */
+static int l_plugin_image_startup_async(lua_State * L) {
+    const char * source_path = check_plugin_external_path(L, 1, "plugin.image_startup_async");
+    const char * dest_path = check_plugin_external_path(L, 2, "plugin.image_startup_async");
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+    if (strlen(source_path) >= sizeof(plugin_zip_image.zip_path) ||
+        strlen(dest_path) >= sizeof(plugin_zip_image.dest_path) - 8)
+        return luaL_error(L, "plugin.image_startup_async: path too long");
+    if (!path_has_bin_extension(dest_path))
+        return luaL_error(L, "plugin.image_startup_async: dest_path must end in .bin");
+    return plugin_image_thumbnail_start(L, source_path, NULL, dest_path,
+                                        BOARD_SCREEN_WIDTH, BOARD_SCREEN_HEIGHT,
+                                        3, true, true, false);
 }
 
 /* Delivers a finished job's callback (skipped when cancelled or the plugin
@@ -5549,7 +5624,11 @@ static void plugin_zip_image_poll(void) {
     if (inst && inst->aborted) return; /* frozen state: never touched again */
     if (!atomic_load(&job->cancel)) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-        if (job->ok) {
+        if (job->startup_install) {
+            lua_pushboolean(L, job->ok);
+            if (job->ok) lua_pushnil(L);
+            else lua_pushstring(L, job->error ? job->error : "could not set startup image");
+        } else if (job->ok) {
             lua_pushstring(L, job->dest_path);
             lua_pushnil(L);
         } else {
@@ -6014,10 +6093,14 @@ static const luaL_Reg plugin_funcs[] = {
     { "set_interval",              l_plugin_set_interval },
     { "clear_interval",            l_plugin_clear_interval },
     { "show_lock_screen",          l_plugin_show_lock_screen },
+    { "set_startup_image_async",   l_plugin_set_startup_image_async },
+    { "has_startup_image",         l_plugin_has_startup_image },
     { "zip_read",                  l_plugin_zip_read },
     { "zip_list",                  l_plugin_zip_list },
     { "zip_image_async",           l_plugin_zip_image_async },
     { "image_thumbnail_async",     l_plugin_image_thumbnail_async },
+    { "image_wallpaper_async",     l_plugin_image_wallpaper_async },
+    { "image_startup_async",       l_plugin_image_startup_async },
     { "html_to_blocks",            l_plugin_html_to_blocks },
     { "show_text_view",            l_plugin_show_text_view },
     { NULL, NULL }

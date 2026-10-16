@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 00:10-0600\n"
 "PO-Revision-Date: 2026-10-13 00:00+0000\n"
 "Last-Translator: Codex machine draft\n"
 "Language-Team: Ukrainian\n"
@@ -233,9 +233,8 @@ msgstr "Списки"
 msgid "Sound"
 msgstr "Звук"
 
-#, fuzzy
 msgid "Playback"
-msgstr "Помилка відтворення"
+msgstr "Відтворення"
 
 msgid "Library"
 msgstr "Бібліотека"
@@ -2378,6 +2377,12 @@ msgstr "Підібрати до обкладинки альбому"
 msgid "Takes its color from the cover of the playing track"
 msgstr "Колір береться з обкладинки композиції, що відтворюється"
 
+msgid "Tint startup image"
+msgstr "Забарвити заставку"
+
+msgid "Uses the accent color for the default splash."
+msgstr "Використовує колір акценту для стандартної заставки."
+
 msgid "Presets"
 msgstr "Попередні налаштування"
 
@@ -2693,22 +2698,19 @@ msgid "Keyboard"
 msgstr "Клавіатура"
 
 msgid "Plugins can override these saved preferences."
-msgstr ""
+msgstr "Плагіни можуть перевизначити ці збережені налаштування."
 
-#, fuzzy
 msgid "Quick Drawer"
-msgstr "Швидке налаштування"
+msgstr "Швидка панель"
 
-#, fuzzy
 msgid "Enabled"
-msgstr "Увімкнути смугу"
+msgstr "Увімкнено"
 
-#, fuzzy
 msgid "Volume Slider"
-msgstr "Повзунок гучності в панелі"
+msgstr "Повзунок гучності"
 
 msgid "Reorder Items"
-msgstr ""
+msgstr "Змінити порядок"
 
 #, fuzzy
 msgid "Volume"
@@ -2730,7 +2732,7 @@ msgstr "Аудіо"
 
 #, fuzzy
 msgid "Playback Status"
-msgstr "Відтворення та керування"
+msgstr "Відтворення"
 
 #, fuzzy
 msgid "Bluetooth Codec"
@@ -3468,6 +3470,9 @@ msgstr "Керування живленням"
 msgid "Playback and device actions"
 msgstr "Відтворення та дії пристрою"
 
+#~ msgid "Parametric EQ"
+#~ msgstr "Параметричний еквалайзер"
+
 #~ msgid "Library migration pending. Favourites and play history will be kept"
 #~ msgstr "Очікується перенесення бібліотеки. Обране та історію відтворення буде збережено"
 
@@ -3496,8 +3501,14 @@ msgstr "Відтворення та дії пристрою"
 #~ msgid "Albums (main list)"
 #~ msgstr "Альбоми (основний список)"
 
-#~ msgid "Parametric EQ"
-#~ msgstr "Параметричний еквалайзер"
+#~ msgid "Visible"
+#~ msgstr "Показувати"
+
+#~ msgid "Move Up"
+#~ msgstr "Перемістити вгору"
+
+#~ msgid "Move Down"
+#~ msgstr "Перемістити вниз"
 
 #~ msgid "Back"
 #~ msgstr "Назад"

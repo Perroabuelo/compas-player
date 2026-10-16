@@ -397,7 +397,7 @@ finished:
             selector_ui_draw_starting(true);
             present();
         } else {
-            if (!fb_draw_background_jpeg(BOOTLOADER_BG_PATH))
+            if (!fb_draw_startup_background())
                 fb_fill(fb_rgb(0x12, 0x12, 0x12));
             fb_flush();
         }
