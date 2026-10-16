@@ -568,12 +568,12 @@ static int plugin_settings_list_row_counts[PLUGIN_SETTINGS_LIST_SCREEN_POOL_SIZE
  *
  *   plugin.eq_reset()
  *     Restores every band, the preamp, bypass, stereo width, and crossfeed
- *     to peq.c's own built-in defaults (same as the native EQ screen's Reset
- *     button). Crossfeed is off.
+ *     to peq.c's own built-in defaults. Crossfeed is off; the native PEQ
+ *     screen's Reset button preserves Crossfeed instead.
  *
  *   plugin.eq_set_bypass(enabled)
  *   plugin.eq_set_preamp(db)
- *     Toggles/sets the whole-EQ bypass and pre-amp (dB).
+ *     Toggles/sets the PEQ bypass and pre-amp (dB). Crossfeed is independent.
  *
  *   plugin.eq_set_band(index, freq_hz, gain_db, q)
  *   plugin.eq_set_band_type(index, type)

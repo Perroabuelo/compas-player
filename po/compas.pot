@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-13 10:21-0600\n"
+"POT-Creation-Date: 2026-10-15 23:05-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -138,6 +138,57 @@ msgstr ""
 msgid "Could not start the update."
 msgstr ""
 
+msgid "Update failed."
+msgstr ""
+
+msgid "Could not prepare secure update storage."
+msgstr ""
+
+msgid "Could not download the release checksums."
+msgstr ""
+
+msgid "The release does not provide a valid player checksum."
+msgstr ""
+
+msgid "The release checksum does not match the published asset digest."
+msgstr ""
+
+msgid "The latest player release changed. Check again."
+msgstr ""
+
+msgid "The player image exceeds the safe size limit."
+msgstr ""
+
+msgid "Not enough internal storage for the player update."
+msgstr ""
+
+msgid "The player download did not complete."
+msgstr ""
+
+msgid "The downloaded player failed SHA-256 verification."
+msgstr ""
+
+msgid "Place a valid player executable at SD/.compas/compas_player."
+msgstr ""
+
+msgid "Could not start the player update check."
+msgstr ""
+
+msgid "Another update is already active."
+msgstr ""
+
+msgid "Check for a player update first."
+msgstr ""
+
+msgid "Not enough memory."
+msgstr ""
+
+msgid "Could not start the player download."
+msgstr ""
+
+msgid "Could not start the SD player update."
+msgstr ""
+
 msgid "Screenshots unavailable"
 msgstr ""
 
@@ -225,9 +276,6 @@ msgid ""
 msgstr ""
 
 msgid "Insert an SD card to download the update."
-msgstr ""
-
-msgid "Could not download the release checksums."
 msgstr ""
 
 msgid "The release has no checksum for this device's image."
@@ -877,18 +925,10 @@ msgstr ""
 msgid "Later"
 msgstr ""
 
-msgid "Library migration pending. Favourites and play history will be kept"
-msgstr ""
-
 msgid "No SD card"
 msgstr ""
 
 msgid "Library loaded"
-msgstr ""
-
-msgid ""
-"Migrating\n"
-"music database..."
 msgstr ""
 
 msgid ""
@@ -904,9 +944,6 @@ msgstr ""
 msgid ""
 "Updating\n"
 "music database..."
-msgstr ""
-
-msgid "Preparing database migration..."
 msgstr ""
 
 msgid "Preparing metadata refresh..."
@@ -1011,11 +1048,6 @@ msgid ""
 "This can take a while on large libraries"
 msgstr ""
 
-msgid ""
-"Library migration failed. Old library intact. Use Settings > Update Music "
-"Database to retry"
-msgstr ""
-
 msgid "Library unavailable. Use Settings > Update Music Database to rebuild"
 msgstr ""
 
@@ -1026,12 +1058,6 @@ msgid "Some songs could not be read"
 msgstr ""
 
 msgid "Metadata refreshed"
-msgstr ""
-
-msgid "Library migrated. Old database cleanup will retry"
-msgstr ""
-
-msgid "Library migrated. Favourites and play history kept"
 msgstr ""
 
 msgid "Library recovered and saved, some folders could not be read"
@@ -1099,6 +1125,9 @@ msgid "This permanently deletes everything on the card. This cannot be undone."
 msgstr ""
 
 msgid "Format"
+msgstr ""
+
+msgid "Could not restart into the boot selector"
 msgstr ""
 
 msgid "An update is in progress. Please wait."
@@ -1533,6 +1562,15 @@ msgid "Failed to switch to %s"
 msgstr ""
 
 msgid "USB Mode"
+msgstr ""
+
+msgid "Failed to update USB charging"
+msgstr ""
+
+msgid "USB charging setting is busy"
+msgstr ""
+
+msgid "Could not start USB charging update"
 msgstr ""
 
 msgid "Leave USB DAC mode?"
@@ -2022,7 +2060,7 @@ msgid "Crossfeed: %d%%"
 msgstr ""
 
 #, c-format
-msgid "Pre-Amp: %+.2f dB"
+msgid "%+.2f dB"
 msgstr ""
 
 #, c-format
@@ -2074,6 +2112,73 @@ msgid ""
 "Device will reboot into recovery mode."
 msgstr ""
 
+msgid ""
+"Install the player update from the SD card?\n"
+"\n"
+"Updates the player and restarts the device. Firmware, fonts, and artwork are "
+"unchanged."
+msgstr ""
+
+msgid "Could not start the player update"
+msgstr ""
+
+msgid "Updating player"
+msgstr ""
+
+msgid "Starting update"
+msgstr ""
+
+msgid "Connect to Wi-Fi before downloading the player update"
+msgstr ""
+
+msgid "Starting download"
+msgstr ""
+
+msgid "Could not start the player update check"
+msgstr ""
+
+msgid "Checking for player updates"
+msgstr ""
+
+msgid "Check for online update"
+msgstr ""
+
+msgid "Install from SD card"
+msgstr ""
+
+msgid "Download & Install"
+msgstr ""
+
+msgid "Install & Restart"
+msgstr ""
+
+msgid "Downloading player update"
+msgstr ""
+
+msgid "Installing player update"
+msgstr ""
+
+msgid "Checking the latest release"
+msgstr ""
+
+msgid "Replacing the player and preparing to restart"
+msgstr ""
+
+#, c-format
+msgid ""
+"Available player release: %s.\n"
+"Installed: %s\n"
+"\n"
+"Download and install? This updates the player and restarts the device. "
+"Firmware, fonts, and artwork are unchanged."
+msgstr ""
+
+msgid "Player updated successfully"
+msgstr ""
+
+msgid "Player update failed"
+msgstr ""
+
 #, c-format
 msgid ""
 "Firmware release %s is downloaded and verified.\n"
@@ -2101,12 +2206,6 @@ msgstr ""
 msgid ""
 "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install "
 "from SD card."
-msgstr ""
-
-msgid "Check for online update"
-msgstr ""
-
-msgid "Install from SD card"
 msgstr ""
 
 msgid "Download"
@@ -2205,7 +2304,7 @@ msgstr ""
 msgid "Enable debug logging"
 msgstr ""
 
-msgid "Load covers during playback (Experimental)"
+msgid "Reboot to bootloader"
 msgstr ""
 
 msgid "Custom color"
@@ -2415,6 +2514,9 @@ msgstr ""
 msgid "Equalizer"
 msgstr ""
 
+msgid "Crossfeed"
+msgstr ""
+
 msgid "Sound"
 msgstr ""
 
@@ -2526,9 +2628,6 @@ msgstr ""
 msgid "Release Year (oldest first)"
 msgstr ""
 
-msgid "Albums (main list)"
-msgstr ""
-
 msgid ""
 "Files use modification dates. Albums use the newest track added; missing "
 "release years sort last. Update Music Database once to read years from "
@@ -2559,10 +2658,49 @@ msgstr ""
 msgid "Keyboard"
 msgstr ""
 
-msgid "Drawer Volume Slider"
+msgid "Volume"
+msgstr ""
+
+msgid "Clock"
+msgstr ""
+
+msgid "Wired Headphones"
+msgstr ""
+
+msgid "Bluetooth Audio (A2DP)"
+msgstr ""
+
+msgid "USB Audio"
+msgstr ""
+
+msgid "Playback Status"
+msgstr ""
+
+msgid "Bluetooth Codec"
+msgstr ""
+
+msgid "Battery Icon"
+msgstr ""
+
+msgid "Left"
+msgstr ""
+
+msgid "Center"
+msgstr ""
+
+msgid "Right"
+msgstr ""
+
+msgid "Clock Position"
 msgstr ""
 
 msgid "Battery Percentage"
+msgstr ""
+
+msgid "Top Bar"
+msgstr ""
+
+msgid "Drawer Volume Slider"
 msgstr ""
 
 msgid "Artist Images"
@@ -2610,6 +2748,11 @@ msgstr ""
 msgid "LED charge indicator"
 msgstr ""
 
+msgid ""
+"Disable charging\n"
+"in USB DAC mode"
+msgstr ""
+
 msgid "Charging"
 msgstr ""
 
@@ -2628,9 +2771,6 @@ msgstr ""
 msgid "24-Hour Clock"
 msgstr ""
 
-msgid "Clock"
-msgstr ""
-
 msgid "Save"
 msgstr ""
 
@@ -2644,6 +2784,9 @@ msgid "Maintenance"
 msgstr ""
 
 msgid "Firmware Update"
+msgstr ""
+
+msgid "Player Update"
 msgstr ""
 
 msgid "Plugins & Layouts"
@@ -2673,6 +2816,9 @@ msgid "Now Playing layouts"
 msgstr ""
 
 msgid "More"
+msgstr ""
+
+msgid "0 dB"
 msgstr ""
 
 msgid "Combined response (dB) · EQ off"
@@ -2777,13 +2923,33 @@ msgstr ""
 msgid "Enable band"
 msgstr ""
 
-msgid "Reset to defaults"
+msgid "Crossfeed angle"
 msgstr ""
 
-msgid "Parametric EQ"
+msgid ""
+"No delay\n"
+"30°\n"
+"45°\n"
+"60°\n"
+"90°"
+msgstr ""
+
+msgid ""
+"Crossfeed blends a filtered signal from the opposite channel and works "
+"independently of PEQ. With No delay, identical left and right signals are "
+"affected very little."
+msgstr ""
+
+msgid "PEQ"
 msgstr ""
 
 msgid "Frequency"
+msgstr ""
+
+msgid "Pre-Amp"
+msgstr ""
+
+msgid "Reset to defaults"
 msgstr ""
 
 msgid "48 kHz reference"

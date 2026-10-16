@@ -1039,7 +1039,7 @@ saved immediately, and the EQ screen shows it.
 | `plugin.eq_load_profile(path)` | Loads a `.peq` profile. Returns `false` if it can't be read. |
 | `plugin.eq_save_profile(path)` | Saves the current EQ as a `.peq` profile, the same format as the EQ screen. Returns `false` if it can't be written. |
 | `plugin.eq_reset()` | Restores the defaults. |
-| `plugin.eq_set_bypass(on)` | `true` turns the whole EQ off, including stereo width and crossfeed. The PCM stage then leaves samples unchanged. DoP output never reaches it. |
+| `plugin.eq_set_bypass(on)` | `true` turns off the EQ bands, preamp and stereo width. Crossfeed remains independent; with Crossfeed also off and its ramp settled, the PCM stage leaves samples unchanged. DoP output never reaches it. |
 | `plugin.eq_set_preamp(db)` | Sets the preamp gain. |
 | `plugin.eq_get_stereo_width()` | Gets the configured width (API 16, capability `audio.stereo_width`). |
 | `plugin.eq_set_stereo_width(width)` | Sets width from 0 (mono fold) through 1 (neutral) to 2 (wider). Rejects nonfinite/out-of-range values. |
@@ -1060,10 +1060,10 @@ shows the band/preamp response and excludes this channel-dependent matrix.
 Crossfeed is saved as `crossfeed` in the same `.peq` current file and named
 profiles, so `eq_save_profile` / `eq_load_profile` and `get_eq_state` /
 `eq_apply_state` round-trip it. Profiles and snapshots that omit the field load
-as off. `eq_reset()` and the EQ screen's Flat / Reset actions turn it off.
-New installs start off. The EQ band-options screen has a strength slider (0 is off) and a global
-Crossfeed angle selector. There is no separate enable switch. Crossfeed runs
-only when EQ is On; bypass skips the entire stage.
+as off. `eq_reset()` turns it off; the PEQ screen's Flat / Reset actions preserve
+Crossfeed strength and angle. New installs start off. Settings → Sound → Crossfeed
+has a strength slider (0 is off) and an angle selector. There is no separate
+enable switch. Crossfeed runs independently of the PEQ On/Off switch.
 
 Crossfeed is a filtered-difference headphone blend. It is not a stereo-width
 matrix, a room model, or a head-related transfer function. In No delay mode
@@ -1103,9 +1103,10 @@ low-pass. A sample-rate or 16/24-bit format change does the same restart, so
 the previous stream is not replayed and a steady tone does not step. Mono
 input is unchanged. Any non-zero strength runs the PCM processor even when
 every EQ band is flat, preamp is 0 dB, and stereo width is 1, so the PCM
-stage rewrites samples. Strength 0, with the ramp already at 0, leaves this
-stage's samples unchanged and does no per-sample work. EQ bypass skips
-crossfeed along with the rest of that stage. Native DoP never enters it.
+stage rewrites samples. With the other processors inactive, strength 0 and a
+settled ramp leave samples unchanged and do no per-sample work. EQ bypass
+disables preamp, bands and stereo width while preserving Crossfeed. Native DoP
+never enters this stage.
 ReplayGain and volume stay outside this stage, in their existing order around
 it. Bluetooth and USB conversion can still change the signal after this
 stage; a matching PCM format alone does not prove bit-perfect output.
