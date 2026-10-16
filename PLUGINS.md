@@ -212,6 +212,19 @@ All of these are additions; older plugins keep working.
 
 Headphone crossfeed is the capability `audio.crossfeed` (`plugin.eq_get_crossfeed` / `plugin.eq_set_crossfeed`). It does not raise `PLUGIN_API_VERSION`. Check the capability; do not require a newer `api_min`. The additive capability `audio.crossfeed.angle` indicates the optional angle field in `get_eq_state()` / `eq_apply_state()`; it does not raise the API version.
 
+Stock MSEB is available through the additive API 16 capability
+`audio.mseb.stock`. `plugin.mseb_apply_state(state)` atomically applies a
+configuration with `enabled` (boolean), the integer controls `temperature`,
+`bass_ext`, `bass_texture`, `thickness`, `vocal_pos`, `female_vocal`,
+`sibilance_lf`, `sibilance_hf`, `impulse_tone`, and `air` (each -100..100),
+and `width` (finite number 0..2, with 1 neutral). Invalid state raises a Lua
+argument error before any field changes. `plugin.get_mseb_state()` returns the
+same fields. This native configuration is transient and is reset when the
+plugin manager deinitializes; plugins must retain their own saved settings.
+When enabled, stock MSEB overrides the manual PEQ bands, preamp and stereo
+width while retaining independent crossfeed. The manual EQ configuration is
+kept intact and becomes audible again when MSEB is disabled.
+
 ## Screens
 
 ### `plugin.register_list_item(list_id, label, on_open [, options])`

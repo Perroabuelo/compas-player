@@ -7,6 +7,7 @@
 #include "player_layouts.h"
 #include "gui_lock_screen.h"
 #include "peq.h"
+#include "mseb.h"
 #include "led_control.h"
 #include "battery.h"
 #include "charge_limiter.h"
@@ -154,6 +155,7 @@ typedef struct {
 } plugin_instance_t;
 
 static plugin_instance_t plugin_instances[PLUGIN_MAX_FILES];
+static lua_State * mseb_owner;
 static int plugin_instance_count = 0;
 /* Enabled files the last init left unloaded because PLUGIN_MAX_FILES was
  * reached, kept as filename hashes for plugin_manager_scan_available(). */
@@ -3208,6 +3210,49 @@ static int l_plugin_eq_apply_state(lua_State * L) {
     return 1;
 }
 
+/* Stock MSEB is a separate native DSP stage. Keep this bridge deliberately
+ * transactional: every field is validated before publishing a new config. */
+static const char * const mseb_value_fields[] = {
+    "temperature", "bass_ext", "bass_texture", "thickness", "vocal_pos",
+    "female_vocal", "sibilance_lf", "sibilance_hf", "impulse_tone", "air"
+};
+
+static int l_plugin_mseb_apply_state(lua_State * L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    mseb_config_t config = { 0 };
+    lua_getfield(L, 1, "enabled");
+    luaL_argcheck(L, lua_type(L, -1) == LUA_TBOOLEAN, 1, "enabled must be boolean");
+    config.enabled = lua_toboolean(L, -1); lua_pop(L, 1);
+    for (int i = 0; i < 10; i++) {
+        lua_getfield(L, 1, mseb_value_fields[i]);
+        luaL_argcheck(L, lua_isinteger(L, -1), 1, "all control values must be integers");
+        lua_Integer value = lua_tointeger(L, -1); lua_pop(L, 1);
+        luaL_argcheck(L, value >= -100 && value <= 100, 1, "all control values must be between -100 and 100");
+        config.values[i] = (int) value;
+    }
+    lua_getfield(L, 1, "width");
+    luaL_argcheck(L, lua_type(L, -1) == LUA_TNUMBER, 1, "width must be a number");
+    config.width = lua_tonumber(L, -1); lua_pop(L, 1);
+    luaL_argcheck(L, isfinite(config.width) && config.width >= 0.0 && config.width <= 2.0,
+                  1, "width must be finite and between 0 and 2");
+    if (!mseb_set_config(&config)) { lua_pushboolean(L, false); return 1; }
+    mseb_owner = config.enabled ? plugin_main_state(L) : NULL;
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+static int l_plugin_get_mseb_state(lua_State * L) {
+    mseb_config_t config;
+    mseb_get_config(&config);
+    lua_createtable(L, 0, 12);
+    lua_pushboolean(L, config.enabled); lua_setfield(L, -2, "enabled");
+    for (int i = 0; i < 10; i++) {
+        lua_pushinteger(L, config.values[i]); lua_setfield(L, -2, mseb_value_fields[i]);
+    }
+    lua_pushnumber(L, config.width); lua_setfield(L, -2, "width");
+    return 1;
+}
+
 /* Bounded cache lookup for one validated local SD path. This never scans tags
  * or walks the library; an unopened cache or absent row simply returns nil. */
 static int l_plugin_get_track_metadata(lua_State * L) {
@@ -5079,7 +5124,7 @@ static const char * const plugin_capabilities[] = {
     "playback.output_events", "playback.settings", "playback.ab_loop", "playback.ab_switch", "playback.http_seek",
     "audio.peq.state", "library.track_metadata", "playback.transient_volume",
     "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.file_picker",
-    "ui.startup_image"
+    "ui.startup_image", "audio.mseb.stock"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -6031,6 +6076,8 @@ static const luaL_Reg plugin_funcs[] = {
     { "eq_set_band_enabled",       l_plugin_eq_set_band_enabled },
     { "get_eq_state",              l_plugin_get_eq_state },
     { "eq_apply_state",             l_plugin_eq_apply_state },
+    { "mseb_apply_state",            l_plugin_mseb_apply_state },
+    { "get_mseb_state",              l_plugin_get_mseb_state },
     { "get_track_metadata",         l_plugin_get_track_metadata },
     { "set_hw_volume_curve",       l_plugin_set_hw_volume_curve },
     { "toggle_pause",              l_plugin_toggle_pause },
@@ -6438,6 +6485,10 @@ static void discard_failed_plugin_intervals(lua_State * L, bool aborted) {
 }
 
 static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
+    if (failed_load_owner_matches(mseb_owner, L, aborted)) {
+        mseb_reset();
+        mseb_owner = NULL;
+    }
     for (int i = 0; i < PLUGIN_MAX_FILES; ++i) {
         plugin_instance_t *inst = &plugin_instances[i];
         if (!failed_load_owner_matches(inst->L, L, aborted)) continue;
@@ -6986,6 +7037,8 @@ static void plugin_manager_mark_disposing(void) {
 void plugin_manager_deinit(void) {
     advance_list_registry_generation();
     plugin_manager_mark_disposing();
+    mseb_reset();
+    mseb_owner = NULL;
     ui_customization_set_override(NULL);
     ui_layout_sequence = 0;
     plugin_progress_reset();
