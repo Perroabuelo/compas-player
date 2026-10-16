@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: 2026-10-13 00:00+0000\n"
 "Last-Translator: Codex machine draft\n"
 "Language-Team: German\n"
@@ -208,6 +208,67 @@ msgstr "Screenshot fehlgeschlagen (Framebuffer)"
 
 msgid "Screenshot failed (worker)"
 msgstr "Screenshot fehlgeschlagen (Worker)"
+
+msgid "Files"
+msgstr "Dateien"
+
+msgid "Artists"
+msgstr "Interpreten"
+
+msgid "Albums"
+msgstr "Alben"
+
+msgid "Album Artist"
+msgstr "Albuminterpret"
+
+msgid "Genres"
+msgstr "Genres"
+
+msgid "All Songs"
+msgstr "Alle Titel"
+
+msgid "Playlists"
+msgstr "Playlists"
+
+msgid "Sound"
+msgstr "Klang"
+
+#, fuzzy
+msgid "Playback"
+msgstr "Wiedergabefehler"
+
+msgid "Library"
+msgstr "Bibliothek"
+
+msgid "Wi-Fi"
+msgstr "WLAN"
+
+msgid "Bluetooth"
+msgstr "Bluetooth"
+
+msgid "Sleep Timer"
+msgstr "Einschlaftimer"
+
+msgid "Crossfade"
+msgstr "Überblenden"
+
+msgid "AirPlay"
+msgstr "AirPlay"
+
+msgid "DLNA"
+msgstr "DLNA"
+
+msgid "Gapless"
+msgstr "Gapless-Wiedergabe"
+
+msgid "Remote Control"
+msgstr "Fernbedienung"
+
+msgid "Car Mode"
+msgstr "Auto-Modus"
+
+msgid "Plugins"
+msgstr "Plugins"
 
 #, c-format
 msgid "Page %d of %d"
@@ -709,9 +770,6 @@ msgstr "Zur Playlist hinzufügen"
 msgid "+ New Playlist"
 msgstr "+ Neue Playlist"
 
-msgid "Files"
-msgstr "Dateien"
-
 msgid "Audio"
 msgstr "Audio"
 
@@ -729,9 +787,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] "%lld Titel"
 msgstr[1] "%lld Titel"
-
-msgid "All Songs"
-msgstr "Alle Titel"
 
 msgid "Recently Added"
 msgstr "Zuletzt hinzugefügt"
@@ -790,23 +845,11 @@ msgstr "Bibliothek geändert. Öffne das Album erneut."
 msgid "Cannot load album tracks"
 msgstr "Albumtitel können nicht geladen werden"
 
-msgid "Artists"
-msgstr "Interpreten"
-
-msgid "Albums"
-msgstr "Alben"
-
-msgid "Album Artist"
-msgstr "Albuminterpret"
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] "%d Song"
 msgstr[1] "%d Songs"
-
-msgid "Genres"
-msgstr "Genres"
 
 msgid "Recently Played"
 msgstr "Zuletzt gespielt"
@@ -870,9 +913,6 @@ msgstr "Erstelle oben eine Playlist oder kopiere sie in den Ordner „Playlists�
 
 msgid "SD card not available"
 msgstr "SD-Karte nicht verfügbar"
-
-msgid "Playlists"
-msgstr "Playlists"
 
 msgid "Not enough memory to load CUE tracks"
 msgstr "Nicht genug Speicher, um CUE-Titel zu laden"
@@ -1384,9 +1424,6 @@ msgstr "Nicht festgelegt"
 msgid "DNS Settings"
 msgstr "DNS-Einstellungen"
 
-msgid "Wi-Fi"
-msgstr "WLAN"
-
 msgid "Manual SSID Entry"
 msgstr "SSID manuell eingeben"
 
@@ -1608,9 +1645,6 @@ msgstr "USB-Eingang: %s · %u Bit"
 msgid "DAC path: %s · %u-bit"
 msgstr "DAC-Ausgang: %s · %u Bit"
 
-msgid "Bluetooth"
-msgstr "Bluetooth"
-
 msgid "Bluetooth is off"
 msgstr "Bluetooth ist ausgeschaltet"
 
@@ -1657,9 +1691,6 @@ msgstr "Schalte WLAN ein, um darauf zuzugreifen"
 msgid "Web Server is busy"
 msgstr "Webserver ist beschäftigt"
 
-msgid "AirPlay"
-msgstr "AirPlay"
-
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Wenn diese Option aktiviert ist, ist das Gerät für AirPlay-Sender in deinem WLAN sichtbar. Übertrage Audio von einem iPhone, iPad oder Mac und gib es über den Ausgang dieses Geräts wieder."
 
@@ -1677,9 +1708,6 @@ msgstr "Wenn diese Option aktiviert ist, ist das Gerät für DLNA/UPnP-Steuerung
 
 msgid "Service is busy"
 msgstr "Dienst ist beschäftigt"
-
-msgid "DLNA"
-msgstr "DLNA"
 
 msgid "Unavailable"
 msgstr "Nicht verfügbar"
@@ -1722,9 +1750,6 @@ msgstr "Apps und Browser, die die aktuelle PIN verwenden, benötigen für eine e
 
 msgid "Generate"
 msgstr "Erstellen"
-
-msgid "Remote Control"
-msgstr "Fernbedienung"
 
 msgid "Connection PIN"
 msgstr "Verbindungs-PIN"
@@ -2386,9 +2411,6 @@ msgstr "Maximale Lautstärke"
 msgid "Limits the player volume, including buttons, remote controls and plugins."
 msgstr "Begrenzt die Player-Lautstärke, einschließlich Tasten, Fernbedienungen und Plugins."
 
-msgid "Car Mode"
-msgstr "Auto-Modus"
-
 msgid "Car Mode is disabled."
 msgstr "Auto-Modus ist deaktiviert."
 
@@ -2430,9 +2452,6 @@ msgstr "Verbleibende Zeit: %d:%02d:%02d"
 #, c-format
 msgid "Time remaining: %d:%02d"
 msgstr "Verbleibende Zeit: %d:%02d"
-
-msgid "Sleep Timer"
-msgstr "Einschlaftimer"
 
 msgid "Enable Sleep Timer"
 msgstr "Einschlaftimer aktivieren"
@@ -2507,12 +2526,6 @@ msgstr "Soundeffekte"
 msgid "Download Profiles"
 msgstr "Profile herunterladen"
 
-msgid "Crossfade"
-msgstr "Überblenden"
-
-msgid "Gapless"
-msgstr "Gapless-Wiedergabe"
-
 msgid "Buttons & Remote"
 msgstr "Tasten und Fernbedienung"
 
@@ -2525,9 +2538,6 @@ msgstr "Equalizer"
 #, fuzzy
 msgid "Crossfeed"
 msgstr "Crossfeed: Aus"
-
-msgid "Sound"
-msgstr "Klang"
 
 msgid "Power"
 msgstr "Stromversorgung"
@@ -2649,9 +2659,6 @@ msgstr "Alle Metadaten aktualisieren"
 msgid "Refresh All Covers"
 msgstr "Alle Cover aktualisieren"
 
-msgid "Library"
-msgstr "Bibliothek"
-
 msgid "Animation Speed"
 msgstr "Animationsgeschwindigkeit"
 
@@ -2663,6 +2670,24 @@ msgstr "QWERTZ"
 
 msgid "Keyboard"
 msgstr "Tastatur"
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+#, fuzzy
+msgid "Quick Drawer"
+msgstr "Schnelleinrichtung"
+
+#, fuzzy
+msgid "Enabled"
+msgstr "Band aktivieren"
+
+#, fuzzy
+msgid "Volume Slider"
+msgstr "Lautstärkeregler im Ausklappmenü"
+
+msgid "Reorder Items"
+msgstr ""
 
 #, fuzzy
 msgid "Volume"
@@ -2712,9 +2737,6 @@ msgstr "Akkustand in Prozent"
 
 msgid "Top Bar"
 msgstr ""
-
-msgid "Drawer Volume Slider"
-msgstr "Lautstärkeregler im Ausklappmenü"
 
 msgid "Artist Images"
 msgstr "Interpretenbilder"
@@ -2820,9 +2842,6 @@ msgstr "Einstellungen"
 
 msgid "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from here."
 msgstr "Deaktiviere zuerst ADB (Einstellungen > System > USB-Modus), und aktiviere danach hier USB-DAC."
-
-msgid "Plugins"
-msgstr "Plugins"
 
 msgid "Now Playing layouts"
 msgstr "„Aktuelle Wiedergabe“-Layouts"

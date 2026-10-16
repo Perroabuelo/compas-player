@@ -78,6 +78,51 @@ static lv_obj_t * settings_sound_effects_screen;
 static lv_obj_t * settings_eq_profiles_menu_screen;
 static lv_obj_t * settings_crossfeed_screen;
 static lv_obj_t * settings_appearance_screen;
+static lv_obj_t * ui_order_screen;
+static lv_obj_t * ui_order_list;
+static lv_obj_t * ui_order_rows[UI_DRAWER_COUNT];
+static lv_obj_t * ui_order_drag_handles[UI_DRAWER_COUNT];
+static lv_obj_t * ui_order_visible_buttons[UI_DRAWER_COUNT];
+static lv_timer_t * ui_order_drag_timer;
+static bool ui_order_drag_active;
+static int ui_order_drag_id = -1;
+static int ui_order_drag_ids[UI_DRAWER_COUNT];
+static int ui_order_drag_count;
+static int32_t ui_order_drag_y;
+static lv_indev_t * ui_order_drag_indev;
+static bool ui_order_drag_list_was_scrollable;
+static bool ui_order_drag_changed;
+static void ui_order_row_translate_anim_cb(void * var, int32_t value) {
+    lv_obj_t * row = var;
+    if (row) lv_obj_set_style_translate_y(row, value, 0);
+}
+static void ui_order_row_stop_translate(lv_obj_t * row) {
+    if (!row) return;
+    lv_anim_delete(row, ui_order_row_translate_anim_cb);
+    lv_obj_set_style_translate_y(row, 0, 0);
+}
+static void ui_order_rows_animate_to_layout(void) {
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id) {
+        lv_obj_t * row = ui_order_rows[id];
+        if (!row) continue;
+        lv_anim_delete(row, ui_order_row_translate_anim_cb);
+        int32_t offset = lv_obj_get_style_translate_y(row, LV_PART_MAIN);
+        if (!offset) continue;
+        lv_anim_t anim;
+        lv_anim_init(&anim);
+        lv_anim_set_var(&anim, row);
+        lv_anim_set_values(&anim, offset, 0);
+        lv_anim_set_duration(&anim, 150);
+        lv_anim_set_path_cb(&anim, lv_anim_path_ease_out);
+        lv_anim_set_exec_cb(&anim, ui_order_row_translate_anim_cb);
+        lv_anim_start(&anim);
+    }
+}
+static lv_obj_t * quick_drawer_settings_screen;
+static lv_obj_t * quick_drawer_settings_list;
+static void populate_quick_drawer_settings(void);
+extern void gui_shell_apply_customization(void);
+static void topbar_set_clicked_row_switch(lv_event_t * e, bool checked);
 static lv_obj_t * settings_topbar_screen;
 static lv_obj_t * settings_topbar_list;
 static lv_obj_t * settings_topbar_clock_position_screen;
@@ -3636,12 +3681,330 @@ static void upside_down_screen_switch_event_cb(lv_event_t * e) {
     gui_display_apply_rotation(current_settings.screen_upside_down);
 }
 
-static void quick_drawer_volume_visible_switch_event_cb(lv_event_t * e) {
+static ui_item_order_t * ui_saved_order(void) {
+    return &current_settings.ui_customization.drawer;
+}
+static void populate_ui_order_screen(void);
+static void ui_order_drag_finish(bool commit);
+static void ui_order_control_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_VALUE_CHANGED) return;
-    current_settings.quick_drawer_volume_visible =
-        lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+    if (ui_order_drag_active) ui_order_drag_finish(false);
+    int id = (int)(intptr_t)lv_event_get_user_data(e);
+    if (id < 0 || id >= UI_DRAWER_COUNT) return;
+    ui_item_order_t * order = ui_saved_order();
+    int at = -1;
+    for (unsigned i = 0; i < order->count; ++i)
+        if (order->ids[i] == id) { at = (int)i; break; }
+    if (at < 0 && order->count < UI_ORDER_MAX) order->ids[order->count++] = (uint8_t)id;
+    else if (at >= 0) {
+        for (unsigned i = (unsigned)at + 1; i < order->count; ++i) order->ids[i - 1] = order->ids[i];
+        --order->count;
+    } else return;
     settings_save_async(&current_settings);
-    gui_shell_refresh_quick_drawer_volume_visibility();
+    populate_ui_order_screen();
+    gui_shell_apply_customization();
+}
+static int ui_order_drag_index(int id) {
+    for (int i = 0; i < ui_order_drag_count; ++i)
+        if (ui_order_drag_ids[i] == id) return i;
+    return -1;
+}
+static void ui_order_drag_reorder(void) {
+    if (!ui_order_drag_active || ui_order_drag_id < 0 || !ui_order_list) return;
+    int from = ui_order_drag_index(ui_order_drag_id);
+    if (from < 0) return;
+    lv_obj_update_layout(ui_order_list);
+    int32_t visual_y[UI_DRAWER_COUNT];
+    for (int i = 0; i < ui_order_drag_count; ++i) {
+        lv_obj_t * row = ui_order_rows[ui_order_drag_ids[i]];
+        lv_area_t row_area;
+        lv_obj_get_coords(row, &row_area);
+        /* Flex layout includes translate_y in the current rendered coordinates. */
+        visual_y[ui_order_drag_ids[i]] = row_area.y1;
+    }
+    int to = from;
+    while (to + 1 < ui_order_drag_count) {
+        lv_area_t next_area;
+        lv_obj_get_coords(ui_order_rows[ui_order_drag_ids[to + 1]], &next_area);
+        int32_t next_center = (next_area.y1 + next_area.y2) / 2 -
+            lv_obj_get_style_translate_y(ui_order_rows[ui_order_drag_ids[to + 1]], LV_PART_MAIN);
+        if (ui_order_drag_y <= next_center) break;
+        ++to;
+    }
+    while (to > 0) {
+        lv_area_t previous_area;
+        lv_obj_get_coords(ui_order_rows[ui_order_drag_ids[to - 1]], &previous_area);
+        int32_t previous_center = (previous_area.y1 + previous_area.y2) / 2 -
+            lv_obj_get_style_translate_y(ui_order_rows[ui_order_drag_ids[to - 1]], LV_PART_MAIN);
+        if (ui_order_drag_y >= previous_center) break;
+        --to;
+    }
+    if (to == from) return;
+    int id = ui_order_drag_ids[from];
+    if (to > from) memmove(&ui_order_drag_ids[from], &ui_order_drag_ids[from + 1], (size_t)(to - from) * sizeof(int));
+    else memmove(&ui_order_drag_ids[to + 1], &ui_order_drag_ids[to], (size_t)(from - to) * sizeof(int));
+    ui_order_drag_ids[to] = id;
+    for (int i = 0; i < ui_order_drag_count; ++i)
+        lv_obj_move_to_index(ui_order_rows[ui_order_drag_ids[i]], i);
+    lv_obj_update_layout(ui_order_list);
+    for (int i = 0; i < ui_order_drag_count; ++i) {
+        int row_id = ui_order_drag_ids[i];
+        lv_obj_t * row = ui_order_rows[row_id];
+        lv_anim_delete(row, ui_order_row_translate_anim_cb);
+        lv_area_t row_area;
+        lv_obj_get_coords(row, &row_area);
+        int32_t offset = visual_y[row_id] - row_area.y1 +
+            lv_obj_get_style_translate_y(row, LV_PART_MAIN);
+        lv_obj_set_style_translate_y(row, offset, 0);
+    }
+    ui_order_rows_animate_to_layout();
+    ui_order_drag_changed = true;
+}
+static void ui_order_drag_finish(bool commit) {
+    if (ui_order_drag_timer) { lv_timer_delete(ui_order_drag_timer); ui_order_drag_timer = NULL; }
+    bool restore_ui = !commit || !ui_order_drag_changed;
+    if (ui_order_drag_active && ui_order_drag_list_was_scrollable && ui_order_list)
+        lv_obj_add_flag(ui_order_list, LV_OBJ_FLAG_SCROLLABLE);
+    if (ui_order_drag_active && commit && ui_order_drag_changed) {
+        ui_item_order_t * order = ui_saved_order();
+        bool final_order_changed = order->count != (unsigned)ui_order_drag_count;
+        for (int i = 0; !final_order_changed && i < ui_order_drag_count; ++i)
+            if (order->ids[i] != (uint8_t)ui_order_drag_ids[i]) final_order_changed = true;
+        if (final_order_changed) {
+            order->count = (uint8_t)ui_order_drag_count;
+            for (int i = 0; i < ui_order_drag_count; ++i) order->ids[i] = (uint8_t)ui_order_drag_ids[i];
+            settings_save_async(&current_settings);
+            gui_shell_apply_customization();
+        }
+    }
+    if (ui_order_drag_id >= 0 && ui_order_rows[ui_order_drag_id])
+        lv_obj_clear_state(ui_order_rows[ui_order_drag_id], LV_STATE_USER_1);
+    if (restore_ui) {
+        for (int id = 0; id < UI_DRAWER_COUNT; ++id)
+            ui_order_row_stop_translate(ui_order_rows[id]);
+    } else {
+        /* The committed order already matches the displayed child order. Let
+         * any in-flight row motion finish without repopulating and snapping it. */
+        ui_order_rows_animate_to_layout();
+    }
+    ui_order_drag_active = false;
+    ui_order_drag_id = -1;
+    ui_order_drag_indev = NULL;
+    ui_order_drag_list_was_scrollable = false;
+    ui_order_drag_changed = false;
+    if (restore_ui && ui_order_screen && ui_order_list)
+        populate_ui_order_screen();
+}
+static void ui_order_screen_unloaded_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_SCREEN_UNLOAD_START &&
+        lv_event_get_code(e) != LV_EVENT_SCREEN_UNLOADED) return;
+    if (ui_order_drag_active) ui_order_drag_finish(false);
+    else for (int id = 0; id < UI_DRAWER_COUNT; ++id)
+        ui_order_row_stop_translate(ui_order_rows[id]);
+}
+static void ui_order_drag_timer_cb(lv_timer_t * timer) {
+    (void)timer;
+    if (!ui_order_drag_active || !ui_order_list) return;
+    if (lv_obj_get_screen(ui_order_list) != lv_screen_active() || !ui_order_drag_indev ||
+        lv_indev_get_state(ui_order_drag_indev) != LV_INDEV_STATE_PRESSED) {
+        ui_order_drag_finish(false); return;
+    }
+    lv_point_t p; lv_indev_get_point(ui_order_drag_indev, &p); ui_order_drag_y = p.y;
+    lv_area_t list_area; lv_obj_get_coords(ui_order_list, &list_area);
+    int32_t edge = BOARD_SCALE_PX(36);
+    if (p.y < list_area.y1 + edge) {
+        int32_t scroll = list_area.y1 + edge - p.y;
+        if (scroll > BOARD_SCALE_PX(24)) scroll = BOARD_SCALE_PX(24);
+        lv_obj_scroll_by_bounded(ui_order_list, 0, scroll, LV_ANIM_OFF);
+    } else if (p.y > list_area.y2 - edge) {
+        int32_t scroll = p.y - (list_area.y2 - edge);
+        if (scroll > BOARD_SCALE_PX(24)) scroll = BOARD_SCALE_PX(24);
+        lv_obj_scroll_by_bounded(ui_order_list, 0, -scroll, LV_ANIM_OFF);
+    }
+    ui_order_drag_reorder();
+}
+static void ui_order_drag_handle_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    int id = (int)(intptr_t)lv_event_get_user_data(e);
+    if (code == LV_EVENT_LONG_PRESSED) {
+        if (ui_order_drag_active) return;
+        ui_item_order_t * order = ui_saved_order();
+        ui_order_drag_count = 0;
+        for (unsigned i = 0; i < order->count; ++i)
+            if (order->ids[i] < UI_DRAWER_COUNT) ui_order_drag_ids[ui_order_drag_count++] = order->ids[i];
+        if (ui_order_drag_index(id) < 0) return;
+        ui_order_drag_active = true; ui_order_drag_id = id;
+        ui_order_drag_indev = lv_indev_active();
+        if (!ui_order_drag_indev) { ui_order_drag_finish(false); return; }
+        lv_point_t p; lv_indev_get_point(ui_order_drag_indev, &p); ui_order_drag_y = p.y;
+        ui_order_drag_list_was_scrollable = lv_obj_has_flag(ui_order_list, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_stop_scroll_anim(ui_order_list);
+        lv_obj_remove_flag(ui_order_list, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_state(ui_order_rows[id], LV_STATE_USER_1);
+        ui_order_drag_timer = lv_timer_create(ui_order_drag_timer_cb, 50, NULL);
+    } else if (code == LV_EVENT_PRESSING && ui_order_drag_active && ui_order_drag_id == id) {
+        if (ui_order_drag_indev) { lv_point_t p; lv_indev_get_point(ui_order_drag_indev, &p); ui_order_drag_y = p.y; }
+        ui_order_drag_reorder();
+    } else if ((code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) &&
+               ui_order_drag_active && ui_order_drag_id == id) {
+        ui_order_drag_finish(code == LV_EVENT_RELEASED);
+    }
+}
+static void add_customization_help(lv_obj_t *list) {
+    lv_obj_t *help = add_section_header(list, TR("Plugins can override these saved preferences."));
+    lv_obj_set_width(help, lv_pct(100));
+    lv_label_set_long_mode(help, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_LEFT, 0);
+}
+
+static void populate_ui_order_screen(void) {
+    if (!ui_order_list) return;
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id)
+        ui_order_row_stop_translate(ui_order_rows[id]);
+    ui_item_order_t * order = ui_saved_order();
+    bool listed[UI_DRAWER_COUNT] = { false };
+    int visual_index = 0;
+    for (unsigned pos = 0; pos < order->count; ++pos) {
+        int id = order->ids[pos];
+        if (id >= UI_DRAWER_COUNT || listed[id] || !ui_order_rows[id]) continue;
+        listed[id] = true;
+        lv_obj_move_to_index(ui_order_rows[id], visual_index++);
+    }
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id) {
+        if (listed[id] || !ui_order_rows[id]) continue;
+        listed[id] = true;
+        lv_obj_move_to_index(ui_order_rows[id], visual_index++);
+    }
+    lv_obj_update_layout(ui_order_list);
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id) {
+        lv_obj_t * row = ui_order_rows[id];
+        if (!row) continue;
+        lv_obj_t * text = lv_obj_get_child(row, 0);
+        int32_t height = lv_obj_get_height(text) + BOARD_SCALE_PX(18);
+        if (height < ui_list_row_height()) height = ui_list_row_height();
+        lv_obj_set_height(row, height);
+        lv_obj_set_height(ui_order_drag_handles[id], height);
+        bool visible = false;
+        for (unsigned i = 0; i < order->count; ++i) if (order->ids[i] == id) { visible = true; break; }
+        lv_obj_t * handle = ui_order_drag_handles[id];
+        if (visible) lv_obj_clear_state(handle, LV_STATE_DISABLED);
+        else lv_obj_add_state(handle, LV_STATE_DISABLED);
+        if (visible) lv_obj_add_state(ui_order_visible_buttons[id], LV_STATE_CHECKED);
+        else lv_obj_clear_state(ui_order_visible_buttons[id], LV_STATE_CHECKED);
+    }
+}
+static lv_obj_t * build_ui_order_screen(void) {
+    lv_obj_t * title_label;
+    ui_order_screen = build_subsonic_list_screen(TR("Quick Drawer"), &title_label, &ui_order_list);
+    memset(ui_order_rows, 0, sizeof(ui_order_rows));
+    memset(ui_order_drag_handles, 0, sizeof(ui_order_drag_handles));
+    memset(ui_order_visible_buttons, 0, sizeof(ui_order_visible_buttons));
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id) {
+        const char * label = ui_order_label(UI_ORDER_DRAWER, id);
+        if (!label) continue;
+        lv_obj_t * row = add_pill_row_base(ui_order_list, TR(label));
+        ui_order_rows[id] = row;
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_style(row, &list_row_pressed_style, LV_STATE_USER_1);
+        int32_t handle_px = BOARD_SCALE_PX(72);
+        if (handle_px < 48) handle_px = 48;
+        int32_t switch_width = BOARD_SCALE_PX(50);
+        int32_t text_width = LIST_ROW_WIDTH - handle_px - switch_width - GUI_TEXT_INSET - BOARD_SCALE_PX(20);
+        lv_obj_t * text = lv_obj_get_child(row, 0);
+        lv_obj_set_width(text, text_width);
+        lv_label_set_long_mode(text, LV_LABEL_LONG_WRAP);
+        lv_obj_remove_flag(text, LV_OBJ_FLAG_USER_3);
+        lv_obj_set_height(text, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_top(text, 0, 0);
+        lv_obj_align(text, LV_ALIGN_LEFT_MID, GUI_TEXT_INSET + handle_px, 0);
+
+        lv_obj_t * handle = lv_button_create(row);
+        ui_order_drag_handles[id] = handle;
+        lv_obj_set_size(handle, handle_px, ui_list_row_height());
+        lv_obj_align(handle, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_add_flag(handle, LV_OBJ_FLAG_PRESS_LOCK);
+        lv_obj_remove_flag(handle, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_style(handle, &list_row_pressed_style, LV_STATE_PRESSED);
+        lv_obj_add_style(handle, &list_row_pressed_style, LV_STATE_USER_1);
+        lv_obj_set_style_radius(handle, BOARD_SCALE_PX(8), 0);
+        lv_obj_set_style_bg_opa(handle, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(handle, 0, 0);
+        lv_obj_set_style_shadow_width(handle, 0, 0);
+        lv_obj_set_style_opa(handle, LV_OPA_30, LV_STATE_DISABLED);
+        lv_obj_set_style_pad_all(handle, 0, 0);
+        lv_obj_t * grip = lv_image_create(handle);
+        lv_obj_set_size(grip, BOARD_SCALE_PX(32), BOARD_SCALE_PX(32));
+        lv_image_set_src(grip, asset_path("navigation/reorder.png"));
+        lv_image_set_inner_align(grip, LV_IMAGE_ALIGN_CONTAIN);
+        lv_obj_add_style(grip, &style_theme_text_primary, 0);
+        lv_obj_center(grip);
+        lv_obj_remove_flag(grip, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(handle, ui_order_drag_handle_cb, LV_EVENT_ALL, (void *)(intptr_t)id);
+        register_swipe_dead_zone(handle);
+
+        lv_obj_t * visible_switch = lv_switch_create(row);
+        ui_order_visible_buttons[id] = visible_switch;
+        lv_obj_add_style(visible_switch, gui_theme_accent_style(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_set_size(visible_switch, switch_width, BOARD_SCALE_PX(28));
+        lv_obj_align(visible_switch, LV_ALIGN_RIGHT_MID, -BOARD_SCALE_PX(6), 0);
+        lv_obj_add_event_cb(visible_switch, ui_order_control_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)id);
+    }
+    populate_ui_order_screen();
+    add_customization_help(ui_order_list);
+    lv_obj_add_event_cb(ui_order_screen, ui_order_screen_unloaded_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
+    lv_obj_add_event_cb(ui_order_screen, ui_order_screen_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, NULL);
+    enable_gesture_bubble_recursive(ui_order_screen);
+    return ui_order_screen;
+}
+static void ui_order_settings_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!ui_order_screen) build_ui_order_screen();
+    else populate_ui_order_screen();
+    nav_push(ui_order_screen);
+}
+static void quick_drawer_setting_toggle_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    int which = (int)(intptr_t)lv_event_get_user_data(e);
+    if (which == 0) current_settings.ui_customization.drawer_enabled = !current_settings.ui_customization.drawer_enabled;
+    else if (which == 1) current_settings.ui_customization.drawer_eq_visible = !current_settings.ui_customization.drawer_eq_visible;
+    else current_settings.quick_drawer_volume_visible = !current_settings.quick_drawer_volume_visible;
+    settings_save_async(&current_settings);
+    bool value = which == 0 ? current_settings.ui_customization.drawer_enabled :
+                 which == 1 ? current_settings.ui_customization.drawer_eq_visible :
+                              current_settings.quick_drawer_volume_visible;
+    topbar_set_clicked_row_switch(e, value);
+    if (which == 2) gui_shell_refresh_quick_drawer_volume_visibility();
+    else gui_shell_apply_customization();
+}
+static void populate_quick_drawer_settings(void) {
+    if (!quick_drawer_settings_list) return;
+    lv_obj_clean(quick_drawer_settings_list);
+    struct { const char * label; bool value; intptr_t which; } toggles[] = {
+        { N_("Enabled"), current_settings.ui_customization.drawer_enabled, 0 },
+        { N_("Equalizer"), current_settings.ui_customization.drawer_eq_visible, 1 },
+        { N_("Volume Slider"), current_settings.quick_drawer_volume_visible, 2 },
+    };
+    for (size_t i = 0; i < sizeof(toggles) / sizeof(toggles[0]); ++i) {
+        lv_obj_t * row = add_pill_toggle_row(quick_drawer_settings_list, TR(toggles[i].label), toggles[i].value, NULL);
+        lv_obj_add_event_cb(row, quick_drawer_setting_toggle_cb, LV_EVENT_CLICKED, (void *)toggles[i].which);
+    }
+    lv_obj_t * reorder = add_pill_chevron_row(quick_drawer_settings_list, TR("Reorder Items"), NULL);
+    lv_obj_add_event_cb(reorder, ui_order_settings_row_cb, LV_EVENT_CLICKED, NULL);
+    add_customization_help(quick_drawer_settings_list);
+    if (quick_drawer_settings_screen) enable_gesture_bubble_recursive(quick_drawer_settings_screen);
+}
+static lv_obj_t * build_quick_drawer_settings_screen(void) {
+    lv_obj_t * title_label;
+    quick_drawer_settings_screen = build_subsonic_list_screen(TR("Quick Drawer"), &title_label, &quick_drawer_settings_list);
+    populate_quick_drawer_settings();
+    enable_gesture_bubble_recursive(quick_drawer_settings_screen);
+    return quick_drawer_settings_screen;
+}
+static void quick_drawer_settings_row_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (!quick_drawer_settings_screen) build_quick_drawer_settings_screen();
+    else populate_quick_drawer_settings();
+    nav_push(quick_drawer_settings_screen);
 }
 
 static void artist_images_switch_event_cb(lv_event_t * e) {
@@ -3811,9 +4174,7 @@ static lv_obj_t * build_settings_appearance_screen(void) {
     items[1] = (pill_list_item_t){ TR("Font"), PILL_ACCESSORY_CHEVRON, false, custom_font_row_cb, NULL, NULL };
     items[2] = (pill_list_item_t){ TR("Font Size"), PILL_ACCESSORY_CHEVRON, false, font_size_settings_row_cb, NULL, NULL };
     items[3] = (pill_list_item_t){ TR("Keyboard"), PILL_ACCESSORY_CHEVRON, false, keyboard_layout_settings_row_cb, NULL, NULL };
-    items[4] = (pill_list_item_t){ TR("Drawer Volume Slider"), PILL_ACCESSORY_TOGGLE,
-                                    current_settings.quick_drawer_volume_visible, NULL,
-                                    quick_drawer_volume_visible_switch_event_cb, NULL };
+    items[4] = (pill_list_item_t){ TR("Quick Drawer"), PILL_ACCESSORY_CHEVRON, false, quick_drawer_settings_row_cb, NULL, NULL };
     items[5] = (pill_list_item_t){ TR("Top Bar"), PILL_ACCESSORY_CHEVRON, false,
                                     topbar_settings_row_cb, NULL, NULL };
     items[6] = (pill_list_item_t){ TR("Artist Images"), PILL_ACCESSORY_TOGGLE,
@@ -6218,6 +6579,16 @@ void gui_settings_teardown(void) {
     if (settings_sound_effects_screen) { lv_obj_delete(settings_sound_effects_screen); settings_sound_effects_screen = NULL; }
     if (settings_eq_profiles_menu_screen) { lv_obj_delete(settings_eq_profiles_menu_screen); settings_eq_profiles_menu_screen = NULL; }
     if (settings_appearance_screen) { lv_obj_delete(settings_appearance_screen); settings_appearance_screen = NULL; }
+    ui_order_drag_finish(false);
+    for (int id = 0; id < UI_DRAWER_COUNT; ++id)
+        if (ui_order_drag_handles[id]) unregister_swipe_dead_zone(ui_order_drag_handles[id]);
+    if (ui_order_screen) { lv_obj_delete(ui_order_screen); ui_order_screen = NULL; }
+    ui_order_list = NULL;
+    memset(ui_order_rows, 0, sizeof(ui_order_rows));
+    memset(ui_order_drag_handles, 0, sizeof(ui_order_drag_handles));
+    memset(ui_order_visible_buttons, 0, sizeof(ui_order_visible_buttons));
+    if (quick_drawer_settings_screen) { lv_obj_delete(quick_drawer_settings_screen); quick_drawer_settings_screen = NULL; }
+    quick_drawer_settings_list = NULL;
     if (settings_topbar_screen) { lv_obj_delete(settings_topbar_screen); settings_topbar_screen = NULL; }
     settings_topbar_list = NULL;
     if (settings_topbar_clock_position_screen) {

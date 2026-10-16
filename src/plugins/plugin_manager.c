@@ -13,6 +13,7 @@
 #include "audio.h"
 #include "audio_output.h"
 #include "settings.h"
+#include "ui_customization.h"
 #include "bluetooth_control.h"
 #include "usb_mode_control.h"
 #include "file_ops.h"
@@ -139,6 +140,9 @@ typedef struct {
      * longjmp-aborted (see plugin_call()). Its lua_State is then left frozen
      * mid-execution and must never be run again. */
     bool aborted;
+    ui_customization_override_t ui_override;
+    uint64_t music_layout_sequence;
+    uint64_t drawer_layout_sequence;
     time_t last_library_refresh;
     /* Source filename (basename, e.g. "Themes.lua"), not just the derived
      * plugin id -- needed by plugin_manager_scan_available() to map a
@@ -163,6 +167,7 @@ static uint64_t plugin_filename_hash(const char * name) {
 }
 static int loading_plugin_slot = -1;
 static lua_State * plugin_led_override_owner = NULL;
+static uint64_t ui_layout_sequence;
 
 /* plugin.storage and plugin.secrets need to know WHICH plugin is calling
  * at arbitrary runtime (not just at plugin.define() time, unlike
@@ -2560,6 +2565,191 @@ static int l_plugin_set_home_layout(lua_State * L) {
     return 0;
 }
 
+/* Structural declarations run during startup, before native screens exist.
+ * Keep each owner's contribution so a failed/disabled plugin cannot leave
+ * a restriction behind or erase another plugin's earlier declaration. */
+static unsigned ui_order_mask(const ui_item_order_t *order) {
+    unsigned mask = 0;
+    for (unsigned i = 0; i < order->count && i < UI_ORDER_MAX; ++i)
+        if (order->ids[i] < UI_ORDER_MAX) mask |= 1u << order->ids[i];
+    return mask;
+}
+
+static void restrict_ui_order(ui_item_order_t *order, unsigned allowed) {
+    unsigned count = 0;
+    for (unsigned i = 0; i < order->count && i < UI_ORDER_MAX; ++i)
+        if (order->ids[i] < UI_ORDER_MAX && (allowed & (1u << order->ids[i])))
+            order->ids[count++] = order->ids[i];
+    order->count = (uint8_t)count;
+}
+
+static void refresh_plugin_ui_customization(void) {
+    ui_customization_override_t merged = {0};
+    uint64_t sequence[6] = {0};
+    unsigned allowed[3] = {UINT_MAX, UINT_MAX, UINT_MAX};
+    bool drawer_disabled = false, eq_hidden = false, volume_hidden = false;
+    for (int i = 0; i < PLUGIN_MAX_FILES; ++i) {
+        const plugin_instance_t *inst = &plugin_instances[i];
+        if (!inst->L || inst->disposing || inst->aborted) continue;
+        const ui_customization_override_t *o = &inst->ui_override;
+        if (o->has_music) {
+            allowed[0] &= ui_order_mask(&o->value.music);
+            if (inst->music_layout_sequence > sequence[0]) {
+                sequence[0] = inst->music_layout_sequence;
+                merged.has_music = true;
+                merged.value.music = o->value.music;
+            }
+        }
+        if (o->has_music_toolbar) {
+            allowed[1] &= ui_order_mask(&o->value.music_toolbar);
+            if (inst->music_layout_sequence > sequence[1]) {
+                sequence[1] = inst->music_layout_sequence;
+                merged.has_music_toolbar = true;
+                merged.value.music_toolbar = o->value.music_toolbar;
+            }
+        }
+        if (o->has_drawer) {
+            allowed[2] &= ui_order_mask(&o->value.drawer);
+            if (inst->drawer_layout_sequence > sequence[2]) {
+                sequence[2] = inst->drawer_layout_sequence;
+                merged.has_drawer = true;
+                merged.value.drawer = o->value.drawer;
+            }
+        }
+        if (o->has_drawer_enabled) {
+            drawer_disabled |= !o->value.drawer_enabled;
+            if (inst->drawer_layout_sequence > sequence[3]) {
+                sequence[3] = inst->drawer_layout_sequence;
+                merged.has_drawer_enabled = true;
+                merged.value.drawer_enabled = o->value.drawer_enabled;
+            }
+        }
+        if (o->has_drawer_eq_visible) {
+            eq_hidden |= !o->value.drawer_eq_visible;
+            if (inst->drawer_layout_sequence > sequence[4]) {
+                sequence[4] = inst->drawer_layout_sequence;
+                merged.has_drawer_eq_visible = true;
+                merged.value.drawer_eq_visible = o->value.drawer_eq_visible;
+            }
+        }
+        if (o->has_drawer_volume_visible) {
+            volume_hidden |= !o->drawer_volume_visible;
+            if (inst->drawer_layout_sequence > sequence[5]) {
+                sequence[5] = inst->drawer_layout_sequence;
+                merged.has_drawer_volume_visible = true;
+                merged.drawer_volume_visible = o->drawer_volume_visible;
+            }
+        }
+    }
+    restrict_ui_order(&merged.value.music, allowed[0]);
+    restrict_ui_order(&merged.value.music_toolbar, allowed[1]);
+    restrict_ui_order(&merged.value.drawer, allowed[2]);
+    if (drawer_disabled) merged.value.drawer_enabled = false;
+    if (eq_hidden) merged.value.drawer_eq_visible = false;
+    if (volume_hidden) merged.drawer_volume_visible = false;
+    ui_customization_set_override(&merged);
+}
+
+static plugin_instance_t *require_ui_layout_load(lua_State *L, const char *api) {
+    lua_State *main = plugin_main_state(L);
+    plugin_instance_t *inst = plugin_instance_for_state(main);
+    if (!inst || !inst->defined || inst->disposing || inst->aborted ||
+        loading_plugin_slot < 0 || loading_plugin_slot >= PLUGIN_MAX_FILES ||
+        &plugin_instances[loading_plugin_slot] != inst) {
+        luaL_error(L, "%s must run after plugin.define during plugin startup; use plugin.reload_ui to apply changes", api);
+        return NULL;
+    }
+    return inst;
+}
+
+static bool parse_ui_order_field(lua_State *L, const char *field, ui_order_kind_t kind,
+                                 ui_item_order_t *out, const char *api) {
+    lua_getfield(L, 1, field);
+    if (lua_isnil(L, -1)) { lua_pop(L, 1); return false; }
+    if (!lua_istable(L, -1)) luaL_error(L, "%s: %s must be an array", api, field);
+    lua_Unsigned count = lua_rawlen(L, -1);
+    if (count > (lua_Unsigned)ui_order_size(kind))
+        luaL_error(L, "%s: too many %s entries", api, field);
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+        if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) < 1 ||
+            (lua_Unsigned)lua_tointeger(L, -2) > count)
+            luaL_error(L, "%s: %s must be a contiguous array", api, field);
+        lua_pop(L, 1);
+    }
+    ui_item_order_t order = { .count = (uint8_t)count };
+    unsigned seen = 0;
+    for (lua_Unsigned i = 0; i < count; ++i) {
+        lua_rawgeti(L, -1, (lua_Integer)i + 1);
+        if (lua_type(L, -1) != LUA_TSTRING)
+            luaL_error(L, "%s: %s entries must be strings", api, field);
+        size_t len;
+        const char *key = lua_tolstring(L, -1, &len);
+        int id = strlen(key) == len ? ui_order_find_key(kind, key) : -1;
+        if (id < 0) luaL_error(L, "%s: unknown %s entry", api, field);
+        if (seen & (1u << id)) luaL_error(L, "%s: duplicate %s entry", api, field);
+        seen |= 1u << id;
+        order.ids[i] = (uint8_t)id;
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    *out = order;
+    return true;
+}
+
+static bool parse_ui_bool_field(lua_State *L, const char *field, bool *out, const char *api) {
+    lua_getfield(L, 1, field);
+    if (lua_isnil(L, -1)) { lua_pop(L, 1); return false; }
+    if (!lua_isboolean(L, -1)) luaL_error(L, "%s: %s must be a boolean", api, field);
+    *out = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    return true;
+}
+
+static int l_plugin_set_music_layout(lua_State *L) {
+    const char *api = "plugin.set_music_layout";
+    plugin_instance_t *inst = require_ui_layout_load(L, api);
+    ui_customization_override_t parsed = {0};
+    if (!lua_isnoneornil(L, 1)) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        parsed.has_music = parse_ui_order_field(L, "order", UI_ORDER_MUSIC, &parsed.value.music, api);
+        parsed.has_music_toolbar = parse_ui_order_field(L, "toolbar", UI_ORDER_MUSIC_TOOLBAR,
+                                                       &parsed.value.music_toolbar, api);
+    }
+    inst->ui_override.has_music = parsed.has_music;
+    inst->ui_override.has_music_toolbar = parsed.has_music_toolbar;
+    inst->ui_override.value.music = parsed.value.music;
+    inst->ui_override.value.music_toolbar = parsed.value.music_toolbar;
+    inst->music_layout_sequence = parsed.has_music || parsed.has_music_toolbar ? ++ui_layout_sequence : 0;
+    refresh_plugin_ui_customization();
+    return 0;
+}
+
+static int l_plugin_set_quick_drawer_layout(lua_State *L) {
+    const char *api = "plugin.set_quick_drawer_layout";
+    plugin_instance_t *inst = require_ui_layout_load(L, api);
+    ui_customization_override_t parsed = {0};
+    if (!lua_isnoneornil(L, 1)) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        parsed.has_drawer = parse_ui_order_field(L, "order", UI_ORDER_DRAWER, &parsed.value.drawer, api);
+        parsed.has_drawer_enabled = parse_ui_bool_field(L, "enabled", &parsed.value.drawer_enabled, api);
+        parsed.has_drawer_eq_visible = parse_ui_bool_field(L, "eq_visible", &parsed.value.drawer_eq_visible, api);
+        parsed.has_drawer_volume_visible = parse_ui_bool_field(L, "volume_visible", &parsed.drawer_volume_visible, api);
+    }
+    inst->ui_override.has_drawer = parsed.has_drawer;
+    inst->ui_override.has_drawer_enabled = parsed.has_drawer_enabled;
+    inst->ui_override.has_drawer_eq_visible = parsed.has_drawer_eq_visible;
+    inst->ui_override.has_drawer_volume_visible = parsed.has_drawer_volume_visible;
+    inst->ui_override.value.drawer = parsed.value.drawer;
+    inst->ui_override.value.drawer_enabled = parsed.value.drawer_enabled;
+    inst->ui_override.value.drawer_eq_visible = parsed.value.drawer_eq_visible;
+    inst->ui_override.drawer_volume_visible = parsed.drawer_volume_visible;
+    inst->drawer_layout_sequence = parsed.has_drawer || parsed.has_drawer_enabled ||
+        parsed.has_drawer_eq_visible || parsed.has_drawer_volume_visible ? ++ui_layout_sequence : 0;
+    refresh_plugin_ui_customization();
+    return 0;
+}
+
 static void parse_launcher_menu_layout(lua_State * L, int idx, const char * menu,
                                        launcher_menu_layout_t * out) {
     idx = lua_absindex(L, idx);
@@ -4873,6 +5063,7 @@ static int l_plugin_led_release(lua_State * L) {
 }
 
 static const char * const plugin_capabilities[] = {
+    "ui.music_layout", "ui.quick_drawer_layout",
     "ui.progress", "network.http.download_progress", "ui.list", "ui.settings", "ui.row_width", "ui.text_input", "ui.toast", "ui.screenshot", "ui.theme",
     "filesystem.sd", "playback.control", "playback.state", "playback.events",
     "library.artist_albums", "library.paged", "network.http.sync", "network.http.async",
@@ -5692,6 +5883,8 @@ static int l_plugin_show_text_view(lua_State * L) {
 }
 
 static const luaL_Reg plugin_funcs[] = {
+    { "set_music_layout",          l_plugin_set_music_layout },
+    { "set_quick_drawer_layout",   l_plugin_set_quick_drawer_layout },
     { "define",                    l_plugin_define },
     { "api_version",               l_plugin_api_version },
     { "has_capability",            l_plugin_has_capability },
@@ -6162,6 +6355,13 @@ static void discard_failed_plugin_intervals(lua_State * L, bool aborted) {
 }
 
 static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
+    for (int i = 0; i < PLUGIN_MAX_FILES; ++i) {
+        plugin_instance_t *inst = &plugin_instances[i];
+        if (!failed_load_owner_matches(inst->L, L, aborted)) continue;
+        memset(&inst->ui_override, 0, sizeof(inst->ui_override));
+        inst->music_layout_sequence = inst->drawer_layout_sequence = 0;
+    }
+    refresh_plugin_ui_customization();
     if (failed_load_owner_matches(plugin_progress_owner, L, aborted))
         plugin_progress_reset();
     bool removed_list_item = false;
@@ -6699,6 +6899,8 @@ static void plugin_manager_mark_disposing(void) {
 void plugin_manager_deinit(void) {
     advance_list_registry_generation();
     plugin_manager_mark_disposing();
+    ui_customization_set_override(NULL);
+    ui_layout_sequence = 0;
     plugin_progress_reset();
     deinit_diag("plugin_manager_deinit: reset_home_layout before");
     gui_plugin_reset_home_layout();

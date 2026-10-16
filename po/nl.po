@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -210,6 +210,67 @@ msgstr "Schermafbeelding mislukt (framebuffer)"
 
 msgid "Screenshot failed (worker)"
 msgstr "Schermafbeelding mislukt (worker)"
+
+msgid "Files"
+msgstr "Bestanden"
+
+msgid "Artists"
+msgstr "Artiesten"
+
+msgid "Albums"
+msgstr "Albums"
+
+msgid "Album Artist"
+msgstr "Albumartiest"
+
+msgid "Genres"
+msgstr "Genres"
+
+msgid "All Songs"
+msgstr "Alle nummers"
+
+msgid "Playlists"
+msgstr "Afspeellijsten"
+
+msgid "Sound"
+msgstr "Geluid"
+
+#, fuzzy
+msgid "Playback"
+msgstr "Afspeelfout"
+
+msgid "Library"
+msgstr "Bibliotheek"
+
+msgid "Wi-Fi"
+msgstr "Wifi"
+
+msgid "Bluetooth"
+msgstr "Bluetooth"
+
+msgid "Sleep Timer"
+msgstr "Slaaptimer"
+
+msgid "Crossfade"
+msgstr "Overlappend afspelen"
+
+msgid "AirPlay"
+msgstr "AirPlay"
+
+msgid "DLNA"
+msgstr "DLNA"
+
+msgid "Gapless"
+msgstr "Naadloos"
+
+msgid "Remote Control"
+msgstr "Afstandsbediening"
+
+msgid "Car Mode"
+msgstr "Automodus"
+
+msgid "Plugins"
+msgstr "Plugins"
 
 #, c-format
 msgid "Page %d of %d"
@@ -711,9 +772,6 @@ msgstr "Toevoegen aan afspeellijst"
 msgid "+ New Playlist"
 msgstr "+ Nieuwe afspeellijst"
 
-msgid "Files"
-msgstr "Bestanden"
-
 msgid "Audio"
 msgstr "Audio"
 
@@ -731,9 +789,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] "%lld nummer"
 msgstr[1] "%lld nummers"
-
-msgid "All Songs"
-msgstr "Alle nummers"
 
 msgid "Recently Added"
 msgstr "Recent toegevoegd"
@@ -792,23 +847,11 @@ msgstr "Bibliotheek gewijzigd. Open het album opnieuw."
 msgid "Cannot load album tracks"
 msgstr "Kan albumtracks niet laden"
 
-msgid "Artists"
-msgstr "Artiesten"
-
-msgid "Albums"
-msgstr "Albums"
-
-msgid "Album Artist"
-msgstr "Albumartiest"
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] "%d nummer"
 msgstr[1] "%d nummers"
-
-msgid "Genres"
-msgstr "Genres"
 
 msgid "Recently Played"
 msgstr "Recent afgespeeld"
@@ -872,9 +915,6 @@ msgstr "Maak hierboven een afspeellijst of kopieer er een naar de map Playlists 
 
 msgid "SD card not available"
 msgstr "SD-kaart niet beschikbaar"
-
-msgid "Playlists"
-msgstr "Afspeellijsten"
 
 msgid "Not enough memory to load CUE tracks"
 msgstr "Onvoldoende geheugen om CUE-nummers te laden"
@@ -1398,9 +1438,6 @@ msgstr "Niet ingesteld"
 msgid "DNS Settings"
 msgstr "DNS-instellingen"
 
-msgid "Wi-Fi"
-msgstr "Wifi"
-
 msgid "Manual SSID Entry"
 msgstr "SSID handmatig invoeren"
 
@@ -1622,9 +1659,6 @@ msgstr "USB-ingang: %s · %u-bits"
 msgid "DAC path: %s · %u-bit"
 msgstr "DAC-pad: %s · %u-bits"
 
-msgid "Bluetooth"
-msgstr "Bluetooth"
-
 msgid "Bluetooth is off"
 msgstr "Bluetooth is uitgeschakeld"
 
@@ -1669,9 +1703,6 @@ msgstr "Schakel wifi in voor toegang"
 msgid "Web Server is busy"
 msgstr "Webserver is bezet"
 
-msgid "AirPlay"
-msgstr "AirPlay"
-
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Als deze optie aanstaat, is dit apparaat zichtbaar voor AirPlay-zenders op je wifi-netwerk. Stream audio vanaf een iPhone, iPad of Mac om die via de eigen uitgang van dit apparaat af te spelen."
 
@@ -1689,9 +1720,6 @@ msgstr "Als deze optie aanstaat, is dit apparaat zichtbaar voor DLNA/UPnP-contro
 
 msgid "Service is busy"
 msgstr "Service is bezet"
-
-msgid "DLNA"
-msgstr "DLNA"
 
 msgid "Unavailable"
 msgstr "Niet beschikbaar"
@@ -1734,9 +1762,6 @@ msgstr "Apps en browsers die de huidige pincode gebruiken, moeten opnieuw verbin
 
 msgid "Generate"
 msgstr "Genereren"
-
-msgid "Remote Control"
-msgstr "Afstandsbediening"
 
 msgid "Connection PIN"
 msgstr "Verbindingspincode"
@@ -2398,9 +2423,6 @@ msgstr "Maximaal volume"
 msgid "Limits the player volume, including buttons, remote controls and plugins."
 msgstr "Beperkt het volume van de speler, inclusief knoppen, afstandsbedieningen en plugins."
 
-msgid "Car Mode"
-msgstr "Automodus"
-
 msgid "Car Mode is disabled."
 msgstr "Automodus is uitgeschakeld."
 
@@ -2442,9 +2464,6 @@ msgstr "Resterende tijd: %d:%02d:%02d"
 #, c-format
 msgid "Time remaining: %d:%02d"
 msgstr "Resterende tijd: %d:%02d"
-
-msgid "Sleep Timer"
-msgstr "Slaaptimer"
 
 msgid "Enable Sleep Timer"
 msgstr "Slaaptimer inschakelen"
@@ -2519,12 +2538,6 @@ msgstr "Geluidseffecten"
 msgid "Download Profiles"
 msgstr "Profielen downloaden"
 
-msgid "Crossfade"
-msgstr "Overlappend afspelen"
-
-msgid "Gapless"
-msgstr "Naadloos"
-
 msgid "Buttons & Remote"
 msgstr "Knoppen en afstandsbediening"
 
@@ -2537,9 +2550,6 @@ msgstr "Equalizer"
 #, fuzzy
 msgid "Crossfeed"
 msgstr "Crossfeed: uit"
-
-msgid "Sound"
-msgstr "Geluid"
 
 msgid "Power"
 msgstr "Voeding"
@@ -2661,9 +2671,6 @@ msgstr "Alle metadata vernieuwen"
 msgid "Refresh All Covers"
 msgstr "Alle covers vernieuwen"
 
-msgid "Library"
-msgstr "Bibliotheek"
-
 msgid "Animation Speed"
 msgstr "Animatiesnelheid"
 
@@ -2675,6 +2682,24 @@ msgstr "QWERTY"
 
 msgid "Keyboard"
 msgstr "Toetsenbord"
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+#, fuzzy
+msgid "Quick Drawer"
+msgstr "Snelle installatie"
+
+#, fuzzy
+msgid "Enabled"
+msgstr "Band inschakelen"
+
+#, fuzzy
+msgid "Volume Slider"
+msgstr "Volumeschuifregelaar in lade"
+
+msgid "Reorder Items"
+msgstr ""
 
 #, fuzzy
 msgid "Volume"
@@ -2724,9 +2749,6 @@ msgstr "Batterijpercentage"
 
 msgid "Top Bar"
 msgstr ""
-
-msgid "Drawer Volume Slider"
-msgstr "Volumeschuifregelaar in lade"
 
 msgid "Artist Images"
 msgstr "Artiestenafbeeldingen"
@@ -2832,9 +2854,6 @@ msgstr "Instellingen"
 
 msgid "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from here."
 msgstr "Schakel ADB eerst uit (Instellingen > Systeem > USB-modus) en schakel daarna hier USB-DAC in."
-
-msgid "Plugins"
-msgstr "Plugins"
 
 msgid "Now Playing layouts"
 msgstr "Nu aan het afspelen-indelingen"

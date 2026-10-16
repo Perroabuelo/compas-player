@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "button_mapping.h"
+#include "ui_customization.h"
 
 #define DEFAULT_ACCENT_COLOR 0xF4E58C /* soft light yellow */
 
@@ -264,6 +265,7 @@ typedef struct {
      * degrees so the device can be used with the headphone jack on top. */
     bool screen_upside_down;
     bool quick_drawer_volume_visible;
+    ui_customization_t ui_customization;
 
     /* Charge-status LEDs (/sys/class/leds/{red,blue}, see led_control.h) --
      * false forces both off regardless of charge state, for e.g. leaving the

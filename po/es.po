@@ -23,7 +23,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Spanish\n"
@@ -235,6 +235,67 @@ msgstr "Falló la captura (framebuffer)"
 
 msgid "Screenshot failed (worker)"
 msgstr "Falló la captura (proceso)"
+
+msgid "Files"
+msgstr "Archivos"
+
+msgid "Artists"
+msgstr "Artistas"
+
+msgid "Albums"
+msgstr "Álbumes"
+
+msgid "Album Artist"
+msgstr "Artista del álbum"
+
+msgid "Genres"
+msgstr "Géneros"
+
+msgid "All Songs"
+msgstr "Todas las canciones"
+
+msgid "Playlists"
+msgstr "Listas"
+
+msgid "Sound"
+msgstr "Sonido"
+
+#, fuzzy
+msgid "Playback"
+msgstr "Error de reproducción"
+
+msgid "Library"
+msgstr "Biblioteca"
+
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+msgid "Bluetooth"
+msgstr "Bluetooth"
+
+msgid "Sleep Timer"
+msgstr "Temporizador de sueño"
+
+msgid "Crossfade"
+msgstr "Crossfade"
+
+msgid "AirPlay"
+msgstr "AirPlay"
+
+msgid "DLNA"
+msgstr "DLNA"
+
+msgid "Gapless"
+msgstr "Gapless"
+
+msgid "Remote Control"
+msgstr "Control remoto"
+
+msgid "Car Mode"
+msgstr "Modo auto"
+
+msgid "Plugins"
+msgstr "Plugins"
 
 #, fuzzy, c-format
 msgid "Page %d of %d"
@@ -766,9 +827,6 @@ msgstr "Agregar a lista"
 msgid "+ New Playlist"
 msgstr "+ Nueva lista"
 
-msgid "Files"
-msgstr "Archivos"
-
 msgid "Audio"
 msgstr "Audio"
 
@@ -786,9 +844,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] "%lld pista"
 msgstr[1] "%lld pistas"
-
-msgid "All Songs"
-msgstr "Todas las canciones"
 
 msgid "Recently Added"
 msgstr "Agregadas recientemente"
@@ -847,23 +902,11 @@ msgstr "La biblioteca cambió. Abre el álbum otra vez."
 msgid "Cannot load album tracks"
 msgstr "No se pueden cargar las pistas del álbum"
 
-msgid "Artists"
-msgstr "Artistas"
-
-msgid "Albums"
-msgstr "Álbumes"
-
-msgid "Album Artist"
-msgstr "Artista del álbum"
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] "%d canción"
 msgstr[1] "%d canciones"
-
-msgid "Genres"
-msgstr "Géneros"
 
 msgid "Recently Played"
 msgstr "Reproducidas recientemente"
@@ -927,9 +970,6 @@ msgstr "Crea una lista arriba o copia una a la carpeta Playlists de la tarjeta S
 
 msgid "SD card not available"
 msgstr "Tarjeta SD no disponible"
-
-msgid "Playlists"
-msgstr "Listas"
 
 msgid "Not enough memory to load CUE tracks"
 msgstr "No hay memoria suficiente para cargar las pistas CUE"
@@ -1460,9 +1500,6 @@ msgstr "Sin definir"
 msgid "DNS Settings"
 msgstr "Ajustes de DNS"
 
-msgid "Wi-Fi"
-msgstr "Wi-Fi"
-
 msgid "Manual SSID Entry"
 msgstr "SSID manual"
 
@@ -1684,9 +1721,6 @@ msgstr "Entrada USB: %s · %u bits"
 msgid "DAC path: %s · %u-bit"
 msgstr "Ruta DAC: %s · %u bits"
 
-msgid "Bluetooth"
-msgstr "Bluetooth"
-
 msgid "Bluetooth is off"
 msgstr "Bluetooth apagado"
 
@@ -1733,9 +1767,6 @@ msgstr "Activa el Wi-Fi para acceder"
 msgid "Web Server is busy"
 msgstr "El servidor web está ocupado"
 
-msgid "AirPlay"
-msgstr "AirPlay"
-
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Si está activado, este equipo es visible para emisores AirPlay en tu red Wi-Fi: envía audio desde un iPhone, iPad o Mac para reproducirlo por su propia salida."
 
@@ -1753,9 +1784,6 @@ msgstr "Si está activado, este equipo es visible para apps controladoras DLNA/U
 
 msgid "Service is busy"
 msgstr "El servicio está ocupado"
-
-msgid "DLNA"
-msgstr "DLNA"
 
 msgid "Unavailable"
 msgstr "No disponible"
@@ -1798,9 +1826,6 @@ msgstr "Las apps y navegadores que usen el PIN actual necesitarán el nuevo para
 
 msgid "Generate"
 msgstr "Generar"
-
-msgid "Remote Control"
-msgstr "Control remoto"
 
 msgid "Connection PIN"
 msgstr "PIN de conexión"
@@ -2472,9 +2497,6 @@ msgstr "Volumen de inicio"
 msgid "Limits the player volume, including buttons, remote controls and plugins."
 msgstr ""
 
-msgid "Car Mode"
-msgstr "Modo auto"
-
 msgid "Car Mode is disabled."
 msgstr "El modo auto está desactivado."
 
@@ -2516,9 +2538,6 @@ msgstr "Tiempo restante: %d:%02d:%02d"
 #, c-format
 msgid "Time remaining: %d:%02d"
 msgstr "Tiempo restante: %d:%02d"
-
-msgid "Sleep Timer"
-msgstr "Temporizador de sueño"
 
 msgid "Enable Sleep Timer"
 msgstr "Activar temporizador de sueño"
@@ -2593,12 +2612,6 @@ msgstr "Efectos de sonido"
 msgid "Download Profiles"
 msgstr "Descargar perfiles"
 
-msgid "Crossfade"
-msgstr "Crossfade"
-
-msgid "Gapless"
-msgstr "Gapless"
-
 msgid "Buttons & Remote"
 msgstr "Botones y control remoto"
 
@@ -2611,9 +2624,6 @@ msgstr "Ecualizador"
 #, fuzzy
 msgid "Crossfeed"
 msgstr "Crossfade"
-
-msgid "Sound"
-msgstr "Sonido"
 
 msgid "Power"
 msgstr "Energía"
@@ -2736,9 +2746,6 @@ msgstr "Actualizar todos los metadatos"
 msgid "Refresh All Covers"
 msgstr "Actualizar todas las carátulas"
 
-msgid "Library"
-msgstr "Biblioteca"
-
 msgid "Animation Speed"
 msgstr "Velocidad de animación"
 
@@ -2750,6 +2757,24 @@ msgstr "QWERTY"
 
 msgid "Keyboard"
 msgstr "Teclado"
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+#, fuzzy
+msgid "Quick Drawer"
+msgstr "Configuración rápida"
+
+#, fuzzy
+msgid "Enabled"
+msgstr "Activar banda"
+
+#, fuzzy
+msgid "Volume Slider"
+msgstr "Control de volumen del panel"
+
+msgid "Reorder Items"
+msgstr ""
 
 #, fuzzy
 msgid "Volume"
@@ -2799,9 +2824,6 @@ msgstr "Porcentaje de batería"
 
 msgid "Top Bar"
 msgstr ""
-
-msgid "Drawer Volume Slider"
-msgstr "Control de volumen del panel"
 
 msgid "Artist Images"
 msgstr "Imágenes de artistas"
@@ -2907,9 +2929,6 @@ msgstr "Ajustes"
 
 msgid "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from here."
 msgstr "Desactiva primero ADB (Ajustes > Sistema > Modo USB) y luego activa el DAC USB desde aquí."
-
-msgid "Plugins"
-msgstr "Plugins"
 
 msgid "Now Playing layouts"
 msgstr "Diseños del reproductor"

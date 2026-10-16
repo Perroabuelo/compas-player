@@ -513,6 +513,68 @@ programmatic UI styling.
 | icons, Home and launcher layouts | `plugin.refresh_theme()` |
 | anything, the heavy way | `plugin.reload_ui()` |
 
+### Music menu and Quick Drawer customization
+
+Additive API 16 capabilities: `ui.music_layout` and `ui.quick_drawer_layout`.
+Check these capabilities before calling the new functions on an older player.
+Declare layouts after `plugin.define()` during startup; use `plugin.reload_ui()`
+after saving a change in your plugin's own settings. These declarations do not
+write the user's preferences to storage.
+
+```lua
+if plugin.has_capability("ui.music_layout") then
+    plugin.set_music_layout({
+        order = { "albums", "artists", "files", "playlists" },
+        toolbar = { "library" },
+    })
+end
+if plugin.has_capability("ui.quick_drawer_layout") then
+    plugin.set_quick_drawer_layout({
+        enabled = true,
+        order = { "sleep", "bluetooth", "wifi", "plugins" },
+        eq_visible = false,
+        volume_visible = true,
+    })
+end
+```
+
+`plugin.set_music_layout(options)` accepts `order` and `toolbar` arrays.
+Music keys are `files`, `artists`, `albums`, `album_artist`, `genres`,
+`all_songs`, and `playlists`. Toolbar keys are `sound`, `playback`, and
+`library`, ordered left to right. Existing `plugin.set_icon()` overrides still
+apply to their native icons. Native library browsing, artwork, and paging are
+preserved.
+
+`plugin.set_quick_drawer_layout(options)` accepts `enabled`, `order`,
+`eq_visible`, and `volume_visible`. Drawer keys are `wifi`, `bluetooth`,
+`sleep`, `crossfade`, `airplay`, `dlna`, `gapless`, `remote_control`,
+`car_mode`, and `plugins`. The `plugins` key places all registered quick
+toggles as a block in their registration order. The first four visible toggles
+appear collapsed; the remaining toggles appear in the expanded area.
+Brightness and the now-playing card retain their native layout. Hiding a
+control does not turn off its feature or cancel an active sleep timer.
+
+Omitted Music options use the standard native layout; omitted Drawer options
+inherit saved preferences. Within an explicit array,
+omitted keys are hidden; an empty array hides all entries in that section.
+Unknown, duplicate, sparse, or incorrectly typed entries raise an error before
+changing the previous declaration. Passing `nil` releases that plugin's
+declaration for the corresponding function.
+
+The latest declaration for each option determines its order or value; an
+omitted option leaves other plugins' declarations intact. Visibility restrictions
+combine: an item hidden by any plugin stays hidden, and a `false` request for
+drawer enablement, EQ visibility, or volume visibility wins over `true`.
+This keeps a later theme from undoing Kids Mode restrictions. Failed or unloaded plugins lose their
+declarations, restoring another plugin's declaration or the saved preferences.
+Music menu and toolbar customization is available only to plugins and themes.
+Users can configure the Quick Drawer under Settings > Display > Appearance >
+Quick Drawer. Plugin overrides can take precedence over these choices. These
+controls simplify navigation; they are not a device security boundary.
+Customized saved Drawer orders are explicit selections:
+new entries added in future releases remain hidden until selected. Unchanged
+default orders follow the defaults of the installed release.
+
 ### `plugin.set_icon(theme_path, source_file)`
 
 Replaces a built-in icon. `theme_path` is the icon's path in the theme (for

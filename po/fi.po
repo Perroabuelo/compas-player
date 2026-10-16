@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Finnish\n"
@@ -210,6 +210,67 @@ msgstr "Kuvakaappaus epäonnistui (framebuffer)"
 
 msgid "Screenshot failed (worker)"
 msgstr "Kuvakaappaus epäonnistui (työntekijäprosessi)"
+
+msgid "Files"
+msgstr "Tiedostot"
+
+msgid "Artists"
+msgstr "Esittäjät"
+
+msgid "Albums"
+msgstr "Albumit"
+
+msgid "Album Artist"
+msgstr "Albumin esittäjä"
+
+msgid "Genres"
+msgstr "Tyylilajit"
+
+msgid "All Songs"
+msgstr "Kaikki kappaleet"
+
+msgid "Playlists"
+msgstr "Soittolistat"
+
+msgid "Sound"
+msgstr "Ääni"
+
+#, fuzzy
+msgid "Playback"
+msgstr "Toistovirhe"
+
+msgid "Library"
+msgstr "Kirjasto"
+
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+msgid "Bluetooth"
+msgstr "Bluetooth"
+
+msgid "Sleep Timer"
+msgstr "Uniajastin"
+
+msgid "Crossfade"
+msgstr "Ristiinhäivytys"
+
+msgid "AirPlay"
+msgstr "AirPlay"
+
+msgid "DLNA"
+msgstr "DLNA"
+
+msgid "Gapless"
+msgstr "Katkeamaton toisto"
+
+msgid "Remote Control"
+msgstr "Kauko-ohjaus"
+
+msgid "Car Mode"
+msgstr "Autotila"
+
+msgid "Plugins"
+msgstr "Liitännäiset"
 
 #, c-format
 msgid "Page %d of %d"
@@ -711,9 +772,6 @@ msgstr "Lisää soittolistaan"
 msgid "+ New Playlist"
 msgstr "+ Uusi soittolista"
 
-msgid "Files"
-msgstr "Tiedostot"
-
 msgid "Audio"
 msgstr "Ääni"
 
@@ -731,9 +789,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] "%lld kappale"
 msgstr[1] "%lld kappaletta"
-
-msgid "All Songs"
-msgstr "Kaikki kappaleet"
 
 msgid "Recently Added"
 msgstr "Äskettäin lisätyt"
@@ -792,23 +847,11 @@ msgstr "Kirjasto muuttui. Avaa albumi uudelleen."
 msgid "Cannot load album tracks"
 msgstr "Albumin kappaleiden lataus epäonnistui"
 
-msgid "Artists"
-msgstr "Esittäjät"
-
-msgid "Albums"
-msgstr "Albumit"
-
-msgid "Album Artist"
-msgstr "Albumin esittäjä"
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] "%d kappale"
 msgstr[1] "%d kappaletta"
-
-msgid "Genres"
-msgstr "Tyylilajit"
 
 msgid "Recently Played"
 msgstr "Äskettäin toistetut"
@@ -872,9 +915,6 @@ msgstr "Luo soittolista yllä tai kopioi sellainen SD-kortin Playlists-kansioon.
 
 msgid "SD card not available"
 msgstr "SD-kortti ei ole käytettävissä"
-
-msgid "Playlists"
-msgstr "Soittolistat"
 
 msgid "Not enough memory to load CUE tracks"
 msgstr "CUE-kappaleiden lataamiseen ei ole riittävästi muistia"
@@ -1398,9 +1438,6 @@ msgstr "Ei asetettu"
 msgid "DNS Settings"
 msgstr "DNS-asetukset"
 
-msgid "Wi-Fi"
-msgstr "Wi-Fi"
-
 msgid "Manual SSID Entry"
 msgstr "Anna SSID manuaalisesti"
 
@@ -1622,9 +1659,6 @@ msgstr "USB-tulo: %s · %u-bittinen"
 msgid "DAC path: %s · %u-bit"
 msgstr "DAC-polku: %s · %u-bittinen"
 
-msgid "Bluetooth"
-msgstr "Bluetooth"
-
 msgid "Bluetooth is off"
 msgstr "Bluetooth ei ole käytössä"
 
@@ -1671,9 +1705,6 @@ msgstr "Ota Wi-Fi käyttöön käyttöä varten"
 msgid "Web Server is busy"
 msgstr "Verkkopalvelin on varattu"
 
-msgid "AirPlay"
-msgstr "AirPlay"
-
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Kun tämä on käytössä, laite näkyy Wi-Fi-verkon AirPlay-lähettimille. Voit suoratoistaa ääntä iPhonesta, iPadista tai Macista ja toistaa sen tämän laitteen oman ulostulon kautta."
 
@@ -1691,9 +1722,6 @@ msgstr "Kun tämä on käytössä, laite näkyy Wi-Fi-verkon DLNA/UPnP-ohjaussov
 
 msgid "Service is busy"
 msgstr "Palvelu on varattu"
-
-msgid "DLNA"
-msgstr "DLNA"
 
 msgid "Unavailable"
 msgstr "Ei käytettävissä"
@@ -1736,9 +1764,6 @@ msgstr "Nykyistä PIN-koodia käyttävien sovellusten ja selainten on muodostett
 
 msgid "Generate"
 msgstr "Luo"
-
-msgid "Remote Control"
-msgstr "Kauko-ohjaus"
 
 msgid "Connection PIN"
 msgstr "Yhteyden PIN-koodi"
@@ -2400,9 +2425,6 @@ msgstr "Enimmäisäänenvoimakkuus"
 msgid "Limits the player volume, including buttons, remote controls and plugins."
 msgstr "Rajoittaa soittimen äänenvoimakkuutta, myös painikkeiden, kauko-ohjainten ja liitännäisten kautta."
 
-msgid "Car Mode"
-msgstr "Autotila"
-
 msgid "Car Mode is disabled."
 msgstr "Autotila ei ole käytössä."
 
@@ -2444,9 +2466,6 @@ msgstr "Aikaa jäljellä: %d:%02d:%02d"
 #, c-format
 msgid "Time remaining: %d:%02d"
 msgstr "Aikaa jäljellä: %d:%02d"
-
-msgid "Sleep Timer"
-msgstr "Uniajastin"
 
 msgid "Enable Sleep Timer"
 msgstr "Ota uniajastin käyttöön"
@@ -2521,12 +2540,6 @@ msgstr "Äänitehosteet"
 msgid "Download Profiles"
 msgstr "Lataa profiileja"
 
-msgid "Crossfade"
-msgstr "Ristiinhäivytys"
-
-msgid "Gapless"
-msgstr "Katkeamaton toisto"
-
 msgid "Buttons & Remote"
 msgstr "Painikkeet ja kauko-ohjain"
 
@@ -2539,9 +2552,6 @@ msgstr "Taajuuskorjain"
 #, fuzzy
 msgid "Crossfeed"
 msgstr "Crossfeed: pois"
-
-msgid "Sound"
-msgstr "Ääni"
 
 msgid "Power"
 msgstr "Virta"
@@ -2663,9 +2673,6 @@ msgstr "Päivitä kaikki metatiedot"
 msgid "Refresh All Covers"
 msgstr "Päivitä kaikki kansikuvat"
 
-msgid "Library"
-msgstr "Kirjasto"
-
 msgid "Animation Speed"
 msgstr "Animaation nopeus"
 
@@ -2677,6 +2684,24 @@ msgstr "QWERTY"
 
 msgid "Keyboard"
 msgstr "Näppäimistö"
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+#, fuzzy
+msgid "Quick Drawer"
+msgstr "Pika-asennus"
+
+#, fuzzy
+msgid "Enabled"
+msgstr "Ota kaista käyttöön"
+
+#, fuzzy
+msgid "Volume Slider"
+msgstr "Laatikon äänenvoimakkuuden liukusäädin"
+
+msgid "Reorder Items"
+msgstr ""
 
 #, fuzzy
 msgid "Volume"
@@ -2726,9 +2751,6 @@ msgstr "Akun varausprosentti"
 
 msgid "Top Bar"
 msgstr ""
-
-msgid "Drawer Volume Slider"
-msgstr "Laatikon äänenvoimakkuuden liukusäädin"
 
 msgid "Artist Images"
 msgstr "Esittäjien kuvat"
@@ -2834,9 +2856,6 @@ msgstr "Asetukset"
 
 msgid "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from here."
 msgstr "Poista ADB ensin käytöstä (Asetukset > Järjestelmä > USB-tila) ja ota sitten USB-DAC käyttöön täällä."
-
-msgid "Plugins"
-msgstr "Liitännäiset"
 
 msgid "Now Playing layouts"
 msgstr "Nyt soi -asettelut"

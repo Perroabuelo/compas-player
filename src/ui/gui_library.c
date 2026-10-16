@@ -50,6 +50,7 @@ void refresh_artist_albums_now_playing_indicator(void);
 #include "albumart.h"
 #include "artwork_coordinator.h"
 #include "device_config.h"
+#include "ui_customization.h"
 #include "settings.h"
 #include "audio.h"
 #include "track_probe.h"
@@ -9440,7 +9441,7 @@ static void music_screen_library_settings_cb(lv_event_t * e) {
 }
 
 static lv_obj_t * build_music_screen(void) {
-    const icon_grid_item_t items[] = {
+    const icon_grid_item_t items[UI_MUSIC_COUNT] = {
         { "submenu/files.png", NULL, TR("Files"), music_files_tile_cb, NULL },
         { "submenu/artists.png", NULL, TR("Artists"), artists_tile_cb, NULL },
         { "submenu/albums.png", NULL, TR("Albums"), albums_tile_cb, NULL },
@@ -9449,23 +9450,72 @@ static lv_obj_t * build_music_screen(void) {
         { "submenu/all_songs.png", NULL, TR("All Songs"), all_songs_tile_cb, NULL },
         { "submenu/playlists.png", NULL, TR("Playlists"), playlists_tile_cb, NULL },
     };
-    lv_obj_t * scr = build_category_menu_screen(TR("Music"), generic_back_cb, items, 7,
-                                                &launcher_layout_config.music);
-    lv_obj_t * sound = build_top_right_icon_button(scr, asset_path("settings/sound.png"),
-                                                   music_screen_sound_settings_cb);
-    lv_obj_align(sound, LV_ALIGN_TOP_RIGHT, -2 * HEADER_BUTTON_WIDTH,
-                 STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
-    lv_obj_t * playback = build_top_right_icon_button(scr, asset_path("settings/playback.png"),
-                                                     music_screen_playback_settings_cb);
-    lv_obj_align(playback, LV_ALIGN_TOP_RIGHT, -HEADER_BUTTON_WIDTH,
-                 STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
-    build_top_right_icon_button(scr, asset_path("submenu/music_database.png"), music_screen_library_settings_cb);
-    /* Reserve the title against the leftmost of the three 64px touch targets. */
+    const ui_customization_t customization = ui_customization_effective();
+    icon_grid_item_t ordered_items[UI_MUSIC_COUNT];
+    int ordered_count = 0;
+    bool music_seen[UI_MUSIC_COUNT] = { false };
+    int configured_music_count = customization.music.count;
+    if (configured_music_count > UI_ORDER_MAX) configured_music_count = UI_ORDER_MAX;
+    for (int i = 0; i < configured_music_count; ++i) {
+        int id = customization.music.ids[i];
+        if (id < 0 || id >= UI_MUSIC_COUNT || music_seen[id]) continue;
+        music_seen[id] = true;
+        ordered_items[ordered_count++] = items[id];
+    }
+
+    /* Native Music remains a category list, with launcher theme styling
+     * applied by the same builder as before. A zero-count order is an
+     * intentional empty menu; build_pill_list_screen keeps its title and
+     * native scroll area without inventing a placeholder row. */
+    lv_obj_t * scr = ordered_count > 0
+        ? build_category_menu_screen(TR("Music"), generic_back_cb, ordered_items, ordered_count,
+                                     &launcher_layout_config.music)
+        : build_pill_list_screen(TR("Music"), generic_back_cb, NULL, 0,
+                                 gui_theme_accent_style(),
+                                 launcher_layout_config.music.row_gap > 0
+                                     ? launcher_layout_config.music.row_gap : GUI_ROW_GAP,
+                                 100);
+    if (!scr) return NULL;
+
+    static const char * toolbar_icons[UI_MUSIC_TOOLBAR_COUNT] = {
+        "settings/sound.png", "settings/playback.png", "submenu/music_database.png"
+    };
+    static lv_event_cb_t toolbar_callbacks[UI_MUSIC_TOOLBAR_COUNT] = {
+        music_screen_sound_settings_cb, music_screen_playback_settings_cb,
+        music_screen_library_settings_cb
+    };
+    lv_obj_t * toolbar_buttons[UI_MUSIC_TOOLBAR_COUNT] = { NULL };
+    bool toolbar_seen[UI_MUSIC_TOOLBAR_COUNT] = { false };
+    int toolbar_count = 0;
+    int configured_toolbar_count = customization.music_toolbar.count;
+    if (configured_toolbar_count > UI_ORDER_MAX) configured_toolbar_count = UI_ORDER_MAX;
+    for (int i = 0; i < configured_toolbar_count && toolbar_count < UI_MUSIC_TOOLBAR_COUNT; ++i) {
+        int id = customization.music_toolbar.ids[i];
+        if (id < 0 || id >= UI_MUSIC_TOOLBAR_COUNT || toolbar_seen[id]) continue;
+        toolbar_seen[id] = true;
+        toolbar_buttons[toolbar_count] = build_top_right_icon_button(
+            scr, asset_path(toolbar_icons[id]), toolbar_callbacks[id]);
+        toolbar_count++;
+    }
+    /* The configured sequence is left-to-right. Since each action is
+     * aligned from the right edge, place later entries farther right. */
+    for (int i = 0; i < toolbar_count; ++i) {
+        lv_obj_align(toolbar_buttons[i], LV_ALIGN_TOP_RIGHT,
+                     -(toolbar_count - 1 - i) * HEADER_BUTTON_WIDTH,
+                     STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
+    }
+
+    /* build_top_right_icon_button() gives a title room for one icon while
+     * constructing each button. Recompute against the actual leftmost
+     * visible button, or restore the normal full title width if none remain. */
     for (uint32_t i = 0; i < lv_obj_get_child_count(scr); ++i) {
         lv_obj_t * child = lv_obj_get_child(scr, i);
         if (lv_obj_check_type(child, &lv_label_class) &&
-            lv_obj_has_flag(child, LV_OBJ_FLAG_USER_4) && !lv_obj_get_user_data(child))
-            reserve_title_width_before(child, sound);
+            lv_obj_has_flag(child, LV_OBJ_FLAG_USER_4) && !lv_obj_get_user_data(child)) {
+            if (toolbar_count > 0) {
+                reserve_title_width_before(child, toolbar_buttons[0]);
+            }
+        }
     }
     finalize_screen_navigation(scr);
     return scr;

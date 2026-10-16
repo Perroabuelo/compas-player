@@ -273,6 +273,7 @@ static void set_defaults(player_settings_t * out) {
     out->play_mode = 0; /* PLAY_MODE_SEQUENTIAL */
     out->swipe_up_home_enabled = true;
     out->quick_drawer_volume_visible = true;
+    ui_customization_defaults(&out->ui_customization);
     out->startup_volume_fixed_enabled = true; /* matches stock's own default */
     out->startup_volume_fixed_percent = 20;
     out->car_mode_volume_percent = 80;
@@ -515,7 +516,7 @@ bool settings_load(player_settings_t * out) {
             out->bt_volume_sync_enabled = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "bt_device_rate") == 0) {
             /* "AA:BB:CC:DD:EE:FF,44100" */
-            char * comma = strchr(value, ',');
+            const char * comma = strchr(value, ',');
             char * rate_end = NULL;
             unsigned long parsed = comma ? strtoul(comma + 1, &rate_end, 10) : 0;
             /* A malformed line is dropped rather than stored: a bad rate here
@@ -614,6 +615,13 @@ bool settings_load(player_settings_t * out) {
             out->swipe_up_home_enabled = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "quick_drawer_volume_visible") == 0) {
             out->quick_drawer_volume_visible = (strcmp(value, "1") == 0);
+        } else if (strcmp(key, "quick_drawer_order") == 0) {
+            ui_item_order_t order;
+            if (ui_order_parse(UI_ORDER_DRAWER, value, &order)) out->ui_customization.drawer = order;
+        } else if (strcmp(key, "quick_drawer_enabled") == 0) {
+            out->ui_customization.drawer_enabled = strcmp(value, "1") == 0;
+        } else if (strcmp(key, "quick_drawer_eq_visible") == 0) {
+            out->ui_customization.drawer_eq_visible = strcmp(value, "1") == 0;
         } else if (strcmp(key, "startup_volume_fixed_enabled") == 0) {
             out->startup_volume_fixed_enabled = (strcmp(value, "1") == 0);
         } else if (strcmp(key, "startup_volume_fixed_percent") == 0) {
@@ -675,7 +683,8 @@ bool settings_load(player_settings_t * out) {
                 char c = value[i];
                 ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
             }
-            snprintf(out->language, sizeof(out->language), "%s", ok ? value : "en");
+            snprintf(out->language, sizeof(out->language), "%.*s",
+                     (int)sizeof(out->language) - 1, ok ? value : "en");
         }
     }
 
@@ -740,7 +749,19 @@ static void fsync_settings_dir(void) {
     close(dir_fd);
 }
 
+static bool ui_drawer_order_matches_default(const ui_item_order_t * order,
+                                     const ui_customization_t * defaults) {
+    if (!order || !defaults) return false;
+    const ui_item_order_t * default_order = &defaults->drawer;
+    if (order->count != default_order->count) return false;
+    for (unsigned i = 0; i < order->count; ++i)
+        if (order->ids[i] != default_order->ids[i]) return false;
+    return true;
+}
+
 static void settings_write_file(const player_settings_t * settings) {
+    ui_customization_t ui_defaults;
+    ui_customization_defaults(&ui_defaults);
     char subsonic_download_subfolder[SETTINGS_SUBSONIC_DOWNLOAD_SUBFOLDER_MAX] = "";
     (void) settings_validate_subsonic_download_subfolder(settings->subsonic_download_subfolder,
         subsonic_download_subfolder, sizeof(subsonic_download_subfolder));
@@ -846,6 +867,13 @@ static void settings_write_file(const player_settings_t * settings) {
     fprintf(f, "play_mode=%d\n", settings->play_mode);
     fprintf(f, "swipe_up_home_enabled=%d\n", settings->swipe_up_home_enabled ? 1 : 0);
     fprintf(f, "quick_drawer_volume_visible=%d\n", settings->quick_drawer_volume_visible ? 1 : 0);
+    char ui_order_text[UI_ORDER_MAX * 24];
+    if (!ui_drawer_order_matches_default(&settings->ui_customization.drawer, &ui_defaults)) {
+        ui_order_format(UI_ORDER_DRAWER, &settings->ui_customization.drawer, ui_order_text, sizeof(ui_order_text));
+        fprintf(f, "quick_drawer_order=%s\n", ui_order_text);
+    }
+    fprintf(f, "quick_drawer_enabled=%d\n", settings->ui_customization.drawer_enabled ? 1 : 0);
+    fprintf(f, "quick_drawer_eq_visible=%d\n", settings->ui_customization.drawer_eq_visible ? 1 : 0);
     fprintf(f, "startup_volume_fixed_enabled=%d\n", settings->startup_volume_fixed_enabled ? 1 : 0);
     fprintf(f, "startup_volume_fixed_percent=%d\n", settings->startup_volume_fixed_percent);
     fprintf(f, "car_mode_volume_percent=%d\n", settings->car_mode_volume_percent);

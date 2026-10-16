@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -202,6 +202,66 @@ msgid "Screenshot failed (framebuffer)"
 msgstr ""
 
 msgid "Screenshot failed (worker)"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "Artists"
+msgstr ""
+
+msgid "Albums"
+msgstr ""
+
+msgid "Album Artist"
+msgstr ""
+
+msgid "Genres"
+msgstr ""
+
+msgid "All Songs"
+msgstr ""
+
+msgid "Playlists"
+msgstr ""
+
+msgid "Sound"
+msgstr ""
+
+msgid "Playback"
+msgstr ""
+
+msgid "Library"
+msgstr ""
+
+msgid "Wi-Fi"
+msgstr ""
+
+msgid "Bluetooth"
+msgstr ""
+
+msgid "Sleep Timer"
+msgstr ""
+
+msgid "Crossfade"
+msgstr ""
+
+msgid "AirPlay"
+msgstr ""
+
+msgid "DLNA"
+msgstr ""
+
+msgid "Gapless"
+msgstr ""
+
+msgid "Remote Control"
+msgstr ""
+
+msgid "Car Mode"
+msgstr ""
+
+msgid "Plugins"
 msgstr ""
 
 #, c-format
@@ -711,9 +771,6 @@ msgstr ""
 msgid "+ New Playlist"
 msgstr ""
 
-msgid "Files"
-msgstr ""
-
 msgid "Audio"
 msgstr ""
 
@@ -731,9 +788,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] ""
 msgstr[1] ""
-
-msgid "All Songs"
-msgstr ""
 
 msgid "Recently Added"
 msgstr ""
@@ -792,23 +846,11 @@ msgstr ""
 msgid "Cannot load album tracks"
 msgstr ""
 
-msgid "Artists"
-msgstr ""
-
-msgid "Albums"
-msgstr ""
-
-msgid "Album Artist"
-msgstr ""
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] ""
 msgstr[1] ""
-
-msgid "Genres"
-msgstr ""
 
 msgid "Recently Played"
 msgstr ""
@@ -871,9 +913,6 @@ msgid "Create a playlist above or copy one to the SD card's Playlists folder."
 msgstr ""
 
 msgid "SD card not available"
-msgstr ""
-
-msgid "Playlists"
 msgstr ""
 
 msgid "Not enough memory to load CUE tracks"
@@ -1377,9 +1416,6 @@ msgstr ""
 msgid "DNS Settings"
 msgstr ""
 
-msgid "Wi-Fi"
-msgstr ""
-
 msgid "Manual SSID Entry"
 msgstr ""
 
@@ -1602,9 +1638,6 @@ msgstr ""
 msgid "DAC path: %s · %u-bit"
 msgstr ""
 
-msgid "Bluetooth"
-msgstr ""
-
 msgid "Bluetooth is off"
 msgstr ""
 
@@ -1649,9 +1682,6 @@ msgstr ""
 msgid "Web Server is busy"
 msgstr ""
 
-msgid "AirPlay"
-msgstr ""
-
 msgid ""
 "When on, this device is visible to AirPlay senders on your Wi-Fi network -- "
 "stream audio from an iPhone, iPad, or Mac to be played through this device's "
@@ -1675,9 +1705,6 @@ msgid ""
 msgstr ""
 
 msgid "Service is busy"
-msgstr ""
-
-msgid "DLNA"
 msgstr ""
 
 msgid "Unavailable"
@@ -1721,9 +1748,6 @@ msgid ""
 msgstr ""
 
 msgid "Generate"
-msgstr ""
-
-msgid "Remote Control"
 msgstr ""
 
 msgid "Connection PIN"
@@ -2380,9 +2404,6 @@ msgid ""
 "Limits the player volume, including buttons, remote controls and plugins."
 msgstr ""
 
-msgid "Car Mode"
-msgstr ""
-
 msgid "Car Mode is disabled."
 msgstr ""
 
@@ -2421,9 +2442,6 @@ msgstr ""
 
 #, c-format
 msgid "Time remaining: %d:%02d"
-msgstr ""
-
-msgid "Sleep Timer"
 msgstr ""
 
 msgid "Enable Sleep Timer"
@@ -2499,12 +2517,6 @@ msgstr ""
 msgid "Download Profiles"
 msgstr ""
 
-msgid "Crossfade"
-msgstr ""
-
-msgid "Gapless"
-msgstr ""
-
 msgid "Buttons & Remote"
 msgstr ""
 
@@ -2515,9 +2527,6 @@ msgid "Equalizer"
 msgstr ""
 
 msgid "Crossfeed"
-msgstr ""
-
-msgid "Sound"
 msgstr ""
 
 msgid "Power"
@@ -2643,9 +2652,6 @@ msgstr ""
 msgid "Refresh All Covers"
 msgstr ""
 
-msgid "Library"
-msgstr ""
-
 msgid "Animation Speed"
 msgstr ""
 
@@ -2656,6 +2662,21 @@ msgid "QWERTY"
 msgstr ""
 
 msgid "Keyboard"
+msgstr ""
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+msgid "Quick Drawer"
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Volume Slider"
+msgstr ""
+
+msgid "Reorder Items"
 msgstr ""
 
 msgid "Volume"
@@ -2698,9 +2719,6 @@ msgid "Battery Percentage"
 msgstr ""
 
 msgid "Top Bar"
-msgstr ""
-
-msgid "Drawer Volume Slider"
 msgstr ""
 
 msgid "Artist Images"
@@ -2807,9 +2825,6 @@ msgstr ""
 msgid ""
 "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from "
 "here."
-msgstr ""
-
-msgid "Plugins"
 msgstr ""
 
 msgid "Now Playing layouts"

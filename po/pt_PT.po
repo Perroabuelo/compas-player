@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:05-0600\n"
+"POT-Creation-Date: 2026-10-15 23:58-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Portuguese (Portugal)\n"
@@ -211,6 +211,67 @@ msgstr "Falha na captura de ecrã (framebuffer)"
 
 msgid "Screenshot failed (worker)"
 msgstr "Falha na captura de ecrã (processo auxiliar)"
+
+msgid "Files"
+msgstr "Ficheiros"
+
+msgid "Artists"
+msgstr "Artistas"
+
+msgid "Albums"
+msgstr "Álbuns"
+
+msgid "Album Artist"
+msgstr "Artista do álbum"
+
+msgid "Genres"
+msgstr "Géneros"
+
+msgid "All Songs"
+msgstr "Todas as faixas"
+
+msgid "Playlists"
+msgstr "Listas de reprodução"
+
+msgid "Sound"
+msgstr "Som"
+
+#, fuzzy
+msgid "Playback"
+msgstr "Erro de reprodução"
+
+msgid "Library"
+msgstr "Biblioteca"
+
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+msgid "Bluetooth"
+msgstr "Bluetooth"
+
+msgid "Sleep Timer"
+msgstr "Temporizador"
+
+msgid "Crossfade"
+msgstr "Sobreposição"
+
+msgid "AirPlay"
+msgstr "AirPlay"
+
+msgid "DLNA"
+msgstr "DLNA"
+
+msgid "Gapless"
+msgstr "Sem pausas"
+
+msgid "Remote Control"
+msgstr "Comando remoto"
+
+msgid "Car Mode"
+msgstr "Modo automóvel"
+
+msgid "Plugins"
+msgstr "Módulos"
 
 #, c-format
 msgid "Page %d of %d"
@@ -712,9 +773,6 @@ msgstr "Adicionar à lista de reprodução"
 msgid "+ New Playlist"
 msgstr "+ Nova lista de reprodução"
 
-msgid "Files"
-msgstr "Ficheiros"
-
 msgid "Audio"
 msgstr "Áudio"
 
@@ -732,9 +790,6 @@ msgid "%lld track"
 msgid_plural "%lld tracks"
 msgstr[0] "%lld faixa"
 msgstr[1] "%lld faixas"
-
-msgid "All Songs"
-msgstr "Todas as faixas"
 
 msgid "Recently Added"
 msgstr "Adicionados recentemente"
@@ -793,23 +848,11 @@ msgstr "A biblioteca foi alterada. Abra novamente o álbum."
 msgid "Cannot load album tracks"
 msgstr "Não foi possível carregar as faixas do álbum"
 
-msgid "Artists"
-msgstr "Artistas"
-
-msgid "Albums"
-msgstr "Álbuns"
-
-msgid "Album Artist"
-msgstr "Artista do álbum"
-
 #, c-format
 msgid "%d song"
 msgid_plural "%d songs"
 msgstr[0] "%d canção"
 msgstr[1] "%d canções"
-
-msgid "Genres"
-msgstr "Géneros"
 
 msgid "Recently Played"
 msgstr "Reproduzidas recentemente"
@@ -873,9 +916,6 @@ msgstr "Crie uma lista de reprodução acima ou copie uma para a pasta Playlists
 
 msgid "SD card not available"
 msgstr "Cartão SD indisponível"
-
-msgid "Playlists"
-msgstr "Listas de reprodução"
 
 msgid "Not enough memory to load CUE tracks"
 msgstr "Memória insuficiente para carregar faixas CUE"
@@ -1399,9 +1439,6 @@ msgstr "Não definido"
 msgid "DNS Settings"
 msgstr "Definições de DNS"
 
-msgid "Wi-Fi"
-msgstr "Wi-Fi"
-
 msgid "Manual SSID Entry"
 msgstr "Introdução manual do SSID"
 
@@ -1623,9 +1660,6 @@ msgstr "Entrada USB: %s · %u bits"
 msgid "DAC path: %s · %u-bit"
 msgstr "Percurso DAC: %s · %u bits"
 
-msgid "Bluetooth"
-msgstr "Bluetooth"
-
 msgid "Bluetooth is off"
 msgstr "O Bluetooth está desligado"
 
@@ -1672,9 +1706,6 @@ msgstr "Ative o Wi-Fi para aceder"
 msgid "Web Server is busy"
 msgstr "O servidor Web está ocupado"
 
-msgid "AirPlay"
-msgstr "AirPlay"
-
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Quando ativado, este dispositivo fica visível para emissores AirPlay na rede Wi-Fi. Transmita áudio de um iPhone, iPad ou Mac para o reproduzir pela saída do próprio dispositivo."
 
@@ -1692,9 +1723,6 @@ msgstr "Quando ativado, este dispositivo fica visível para aplicações de cont
 
 msgid "Service is busy"
 msgstr "O serviço está ocupado"
-
-msgid "DLNA"
-msgstr "DLNA"
 
 msgid "Unavailable"
 msgstr "Indisponível"
@@ -1737,9 +1765,6 @@ msgstr "As aplicações e os navegadores que utilizam o PIN atual terão de volt
 
 msgid "Generate"
 msgstr "Gerar"
-
-msgid "Remote Control"
-msgstr "Comando remoto"
 
 msgid "Connection PIN"
 msgstr "PIN de ligação"
@@ -2401,9 +2426,6 @@ msgstr "Volume máximo"
 msgid "Limits the player volume, including buttons, remote controls and plugins."
 msgstr "Limita o volume do leitor, incluindo os botões, comandos remotos e módulos."
 
-msgid "Car Mode"
-msgstr "Modo automóvel"
-
 msgid "Car Mode is disabled."
 msgstr "O modo automóvel está desativado."
 
@@ -2445,9 +2467,6 @@ msgstr "Tempo restante: %d:%02d:%02d"
 #, c-format
 msgid "Time remaining: %d:%02d"
 msgstr "Tempo restante: %d:%02d"
-
-msgid "Sleep Timer"
-msgstr "Temporizador"
 
 msgid "Enable Sleep Timer"
 msgstr "Ativar temporizador"
@@ -2522,12 +2541,6 @@ msgstr "Efeitos sonoros"
 msgid "Download Profiles"
 msgstr "Transferir perfis"
 
-msgid "Crossfade"
-msgstr "Sobreposição"
-
-msgid "Gapless"
-msgstr "Sem pausas"
-
 msgid "Buttons & Remote"
 msgstr "Botões e comando remoto"
 
@@ -2540,9 +2553,6 @@ msgstr "Equalizador"
 #, fuzzy
 msgid "Crossfeed"
 msgstr "Crossfeed: desligado"
-
-msgid "Sound"
-msgstr "Som"
 
 msgid "Power"
 msgstr "Energia"
@@ -2664,9 +2674,6 @@ msgstr "Atualizar todos os metadados"
 msgid "Refresh All Covers"
 msgstr "Atualizar todas as capas"
 
-msgid "Library"
-msgstr "Biblioteca"
-
 msgid "Animation Speed"
 msgstr "Velocidade da animação"
 
@@ -2678,6 +2685,24 @@ msgstr "QWERTY"
 
 msgid "Keyboard"
 msgstr "Teclado"
+
+msgid "Plugins can override these saved preferences."
+msgstr ""
+
+#, fuzzy
+msgid "Quick Drawer"
+msgstr "Configuração rápida"
+
+#, fuzzy
+msgid "Enabled"
+msgstr "Ativar banda"
+
+#, fuzzy
+msgid "Volume Slider"
+msgstr "Controlo de volume no painel"
+
+msgid "Reorder Items"
+msgstr ""
 
 #, fuzzy
 msgid "Volume"
@@ -2727,9 +2752,6 @@ msgstr "Percentagem da bateria"
 
 msgid "Top Bar"
 msgstr ""
-
-msgid "Drawer Volume Slider"
-msgstr "Controlo de volume no painel"
 
 msgid "Artist Images"
 msgstr "Imagens dos artistas"
@@ -2835,9 +2857,6 @@ msgstr "Definições"
 
 msgid "Turn off ADB first (Settings > System > USB Mode), then enable USB DAC from here."
 msgstr "Desative primeiro o ADB (Definições > Sistema > Modo USB) e, em seguida, ative aqui o DAC USB."
-
-msgid "Plugins"
-msgstr "Módulos"
 
 msgid "Now Playing layouts"
 msgstr "Esquemas Em reprodução"
