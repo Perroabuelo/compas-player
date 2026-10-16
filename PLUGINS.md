@@ -178,7 +178,7 @@ plugin.define({
 
   | Area | Tokens |
   | --- | --- |
-  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker`, `ui.startup_image` |
+  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.order_editor`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker`, `ui.startup_image` |
   | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.crossfeed.angle`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
@@ -373,6 +373,30 @@ plugin.show_settings_list("My Plugin", {
 - `options.preview` accepts the same `mode`, `image_path`, `image_fit`, and
   `clock_24h` fields as `plugin.show_lock_screen()`. It embeds a live lock
   screen preview above the settings rows.
+
+### `plugin.show_order_editor(title, items, on_change)`
+
+Opens the native drag-and-toggle editor for an ordered set of plugin settings.
+Hold the leading grip to drag an item; use the trailing switch to change its
+visibility. Each item is `{ key, label, visible }`, where `key` is a unique
+stable string and `visible` is a boolean. The list must contain 1–24 entries.
+
+```lua
+plugin.show_order_editor("Music Menus", {
+    { key = "albums", label = "Albums", visible = true },
+    { key = "artists", label = "Artists", visible = true },
+    { key = "genres", label = "Genres", visible = false },
+}, function(items)
+    -- Save the complete ordered list, including hidden entries.
+end)
+```
+
+`on_change(items)` runs after each switch change and after a completed drag.
+It receives a fresh, dense array in the current order, with each entry keeping
+its `key`, `label` and `visible` fields. Changes are delivered immediately so
+the plugin can save or apply them; Back does not send another callback.
+Only one order editor can be open at a time. Check `ui.order_editor` before
+using this API.
 
 ### Row options
 

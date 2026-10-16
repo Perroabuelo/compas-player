@@ -371,6 +371,12 @@ static plugin_settings_list_row_ref_t
     plugin_settings_list_rows[PLUGIN_SETTINGS_LIST_SCREEN_POOL_SIZE][PLUGIN_SETTINGS_LIST_MAX_ROWS];
 static int plugin_settings_list_row_counts[PLUGIN_SETTINGS_LIST_SCREEN_POOL_SIZE];
 
+typedef struct {
+    lua_State * L;
+    int callback_ref;
+} plugin_order_editor_callback_t;
+static plugin_order_editor_callback_t plugin_order_editor_callback = { NULL, LUA_NOREF };
+
 /* ---- plugin.* C API, exposed as a global table `plugin` in every loaded
  * script's own lua_State (see register_plugin_api() below):
  *
@@ -1466,6 +1472,94 @@ static int l_plugin_show_settings_list(lua_State * L) {
     }
     plugin_settings_list_row_counts[slot] = count;
 
+    return 0;
+}
+
+/* Opens the native drag-and-toggle order editor for plugin-owned settings.
+ * The UI owns copies of all strings/state; Lua only retains the callback. */
+static int l_plugin_show_order_editor(lua_State * L) {
+    if (lua_type(L, 1) != LUA_TSTRING)
+        return luaL_error(L, "plugin.show_order_editor: title must be a string");
+    size_t title_len = 0;
+    const char * title = lua_tolstring(L, 1, &title_len);
+    if (title_len > 127 || memchr(title, '\0', title_len))
+        return luaL_error(L, "plugin.show_order_editor: title must be at most 127 bytes and contain no NUL");
+    luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+    lua_Unsigned raw_n = lua_rawlen(L, 2);
+    if (raw_n < 1 || raw_n > PLUGIN_ORDER_EDITOR_MAX_ITEMS)
+        return luaL_error(L, "plugin.show_order_editor: items must contain 1 to %d entries",
+                          PLUGIN_ORDER_EDITOR_MAX_ITEMS);
+
+    int seen_count = 0;
+    lua_pushnil(L);
+    while (lua_next(L, 2) != 0) {
+        if (!lua_isinteger(L, -2))
+            return luaL_error(L, "plugin.show_order_editor: items must be a dense array");
+        lua_Integer index = lua_tointeger(L, -2);
+        if (index < 1 || index > (lua_Integer)raw_n)
+            return luaL_error(L, "plugin.show_order_editor: items must be a dense array");
+        ++seen_count;
+        lua_pop(L, 1);
+    }
+    if (seen_count != (int)raw_n)
+        return luaL_error(L, "plugin.show_order_editor: items must be a dense array");
+
+    char key_bufs[PLUGIN_ORDER_EDITOR_MAX_ITEMS][64];
+    char label_bufs[PLUGIN_ORDER_EDITOR_MAX_ITEMS][128];
+    const char * keys[PLUGIN_ORDER_EDITOR_MAX_ITEMS];
+    const char * labels[PLUGIN_ORDER_EDITOR_MAX_ITEMS];
+    bool visible[PLUGIN_ORDER_EDITOR_MAX_ITEMS];
+    int count = (int)raw_n;
+    for (int i = 0; i < count; ++i) {
+        lua_rawgeti(L, 2, i + 1);
+        if (!lua_istable(L, -1))
+            return luaL_error(L, "plugin.show_order_editor: item %d must be a table", i + 1);
+        lua_getfield(L, -1, "key");
+        size_t key_len = 0;
+        const char * key = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &key_len) : NULL;
+        if (!key || key_len == 0 || key_len >= sizeof(key_bufs[i]) || memchr(key, '\0', key_len))
+            return luaL_error(L, "plugin.show_order_editor: item %d key must be 1 to %zu bytes",
+                              i + 1, sizeof(key_bufs[i]) - 1);
+        memcpy(key_bufs[i], key, key_len);
+        key_bufs[i][key_len] = '\0';
+        lua_pop(L, 1);
+        for (int j = 0; j < i; ++j)
+            if (strcmp(key_bufs[i], key_bufs[j]) == 0)
+                return luaL_error(L, "plugin.show_order_editor: duplicate key '%s'", key_bufs[i]);
+
+        lua_getfield(L, -1, "label");
+        size_t label_len = 0;
+        const char * label = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &label_len) : NULL;
+        if (!label || label_len >= sizeof(label_bufs[i]) || memchr(label, '\0', label_len))
+            return luaL_error(L, "plugin.show_order_editor: item %d label must be at most %zu bytes",
+                              i + 1, sizeof(label_bufs[i]) - 1);
+        memcpy(label_bufs[i], label, label_len);
+        label_bufs[i][label_len] = '\0';
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "visible");
+        if (!lua_isboolean(L, -1))
+            return luaL_error(L, "plugin.show_order_editor: item %d visible must be a boolean", i + 1);
+        visible[i] = lua_toboolean(L, -1);
+        lua_pop(L, 2); /* visible, item table */
+        keys[i] = key_bufs[i];
+        labels[i] = label_bufs[i];
+    }
+
+    lua_pushvalue(L, 3);
+    int new_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    int slot = gui_plugin_show_order_editor(title, keys, labels, visible, count);
+    if (slot != 0) {
+        luaL_unref(L, LUA_REGISTRYINDEX, new_ref);
+        return luaL_error(L, "plugin.show_order_editor: editor is already open or unavailable");
+    }
+    if (plugin_order_editor_callback.L &&
+        plugin_order_editor_callback.callback_ref != LUA_NOREF)
+        luaL_unref(plugin_order_editor_callback.L, LUA_REGISTRYINDEX,
+                   plugin_order_editor_callback.callback_ref);
+    plugin_order_editor_callback.L = plugin_main_state(L);
+    plugin_order_editor_callback.callback_ref = new_ref;
     return 0;
 }
 
@@ -5154,7 +5248,7 @@ static const char * const plugin_capabilities[] = {
     "ui.home_layout", "ui.theme_refresh", "ui.reload", "ui.home_tiles", "ui.launcher_layout",
     "audio.stereo_width", "audio.crossfeed", "audio.crossfeed.angle", "playback.speed", "ui.home_background", "audio.hw_volume_curve", "ui.lock_screen", "ui.quick_toggle",
     "data.zip", "data.html", "ui.text_view", "data.zip_image", "data.image_thumbnail", "data.wallpaper", "ui.list_grid", "ui.list_showing",
-    "ui.list_update", "ui.text_view_images", "ui.list_wrap", "ui.settings_list_wrap", "playback.transport_skip",
+    "ui.list_update", "ui.text_view_images", "ui.list_wrap", "ui.settings_list_wrap", "ui.order_editor", "playback.transport_skip",
     "ui.player_layout_xml", "storage.secrets_get", "playback.progress",
     "playback.format", "playback.output_info", "playback.silent_volume", "audio.peq.transient",
     "playback.output_events", "playback.settings", "playback.ab_loop", "playback.ab_switch", "playback.http_seek",
@@ -6064,6 +6158,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "show_list",                 l_plugin_show_list },
     { "is_list_showing",           l_plugin_is_list_showing },
     { "show_settings_list",        l_plugin_show_settings_list },
+    { "show_order_editor",         l_plugin_show_order_editor },
     { "list_dir",                  l_plugin_list_dir },
     { "sd_root",                   l_plugin_sd_root },
     { "playlist_list",             l_plugin_playlist_list },
@@ -6521,6 +6616,12 @@ static void discard_failed_plugin_intervals(lua_State * L, bool aborted) {
 }
 
 static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
+    if (failed_load_owner_matches(plugin_order_editor_callback.L, L, aborted)) {
+        if (!aborted && plugin_order_editor_callback.callback_ref != LUA_NOREF)
+            luaL_unref(L, LUA_REGISTRYINDEX, plugin_order_editor_callback.callback_ref);
+        plugin_order_editor_callback.L = NULL;
+        plugin_order_editor_callback.callback_ref = LUA_NOREF;
+    }
     if (failed_load_owner_matches(mseb_owner, L, aborted)) {
         mseb_reset();
         mseb_owner = NULL;
@@ -7073,6 +7174,11 @@ static void plugin_manager_mark_disposing(void) {
 void plugin_manager_deinit(void) {
     advance_list_registry_generation();
     plugin_manager_mark_disposing();
+    if (plugin_order_editor_callback.L && plugin_order_editor_callback.callback_ref != LUA_NOREF)
+        luaL_unref(plugin_order_editor_callback.L, LUA_REGISTRYINDEX,
+                   plugin_order_editor_callback.callback_ref);
+    plugin_order_editor_callback.L = NULL;
+    plugin_order_editor_callback.callback_ref = LUA_NOREF;
     mseb_reset();
     mseb_owner = NULL;
     ui_customization_set_override(NULL);
@@ -7572,6 +7678,40 @@ void plugin_manager_settings_list_slid(int slot, int row, int new_value) {
         fprintf(stderr, "[plugins] show_settings_list on_change error: %s\n", err ? err : "unknown error");
         lua_pop(L, 1);
     }
+}
+
+void plugin_manager_order_editor_changed(int slot, const char * const * keys,
+                                         const char * const * labels, const bool * visible, int count) {
+    if (slot != 0 || !plugin_order_editor_callback.L ||
+        plugin_order_editor_callback.callback_ref == LUA_NOREF ||
+        !keys || !labels || !visible || count < 1 || count > PLUGIN_ORDER_EDITOR_MAX_ITEMS) return;
+    lua_State * L = plugin_order_editor_callback.L;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, plugin_order_editor_callback.callback_ref);
+    lua_createtable(L, count, 0);
+    for (int i = 0; i < count; ++i) {
+        lua_createtable(L, 0, 3);
+        lua_pushstring(L, keys[i] ? keys[i] : "");
+        lua_setfield(L, -2, "key");
+        lua_pushstring(L, labels[i] ? labels[i] : "");
+        lua_setfield(L, -2, "label");
+        lua_pushboolean(L, visible[i]);
+        lua_setfield(L, -2, "visible");
+        lua_rawseti(L, -2, i + 1);
+    }
+    if (plugin_call(L, 1, 0, 0) != LUA_OK) {
+        const char * err = lua_tostring(L, -1);
+        fprintf(stderr, "[plugins] show_order_editor on_change error: %s\n", err ? err : "unknown error");
+        lua_pop(L, 1);
+    }
+}
+
+void plugin_manager_order_editor_closed(int slot) {
+    if (slot != 0) return;
+    if (plugin_order_editor_callback.L && plugin_order_editor_callback.callback_ref != LUA_NOREF)
+        luaL_unref(plugin_order_editor_callback.L, LUA_REGISTRYINDEX,
+                   plugin_order_editor_callback.callback_ref);
+    plugin_order_editor_callback.L = NULL;
+    plugin_order_editor_callback.callback_ref = LUA_NOREF;
 }
 
 void plugin_manager_notify_track_started(const char * title, const char * artist, const char * album,
