@@ -3051,6 +3051,59 @@ void style_popup_action_row(lv_obj_t * row) {
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 }
 
+lv_obj_t * add_popup_action_row(lv_obj_t * popup, const char * text, lv_color_t color,
+                                lv_event_cb_t cb, void * user_data) {
+    lv_obj_t * row = lv_obj_create(popup);
+    style_popup_action_row(row);
+    lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, user_data);
+    lv_obj_t * label = lv_label_create(row);
+    lv_obj_set_width(label, lv_pct(100));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_color(label, color, 0);
+    lv_obj_set_style_text_font(label, gui_theme_font(GUI_FONT_ROLE_BODY), 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return row;
+}
+
+void build_titled_popup(gui_popup_t * popup, lv_event_cb_t backdrop_cb, lv_obj_t ** title_out,
+                        lv_obj_t ** body_out) {
+    popup->popup = build_popup_surface(backdrop_cb, &popup->backdrop);
+
+    lv_obj_t * title = lv_label_create(popup->popup);
+    lv_label_set_text(title, "");
+    lv_obj_set_width(title, lv_pct(100));
+    lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(title, &style_theme_text_primary, 0);
+    lv_obj_set_style_text_font(title, gui_theme_font(GUI_FONT_ROLE_ROW), 0);
+    if (title_out) *title_out = title;
+
+    if (body_out) {
+        /* A long description scrolls inside the popup instead of pushing the
+         * buttons off a small screen. */
+        lv_obj_t * scroll = lv_obj_create(popup->popup);
+        lv_obj_remove_style_all(scroll);
+        lv_obj_set_width(scroll, lv_pct(100));
+        lv_obj_set_height(scroll, LV_SIZE_CONTENT);
+        lv_obj_set_style_max_height(scroll, BOARD_SCALE_PX(180), 0);
+        lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
+        lv_obj_add_flag(scroll, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_AUTO);
+        lv_obj_t * body = lv_label_create(scroll);
+        lv_label_set_text(body, "");
+        lv_obj_set_width(body, lv_pct(100));
+        lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_add_style(body, &style_theme_text_muted, 0);
+        lv_obj_set_style_text_font(body, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
+        *body_out = body;
+        lv_obj_remove_flag(popup->popup, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scroll_dir(popup->popup, LV_DIR_NONE);
+    }
+}
+
 lv_obj_t * build_confirm_popup_with_labels(const char * title_text, lv_label_long_mode_t title_long_mode,
                                            lv_obj_t ** out_title, const char * body_text, lv_obj_t ** out_body,
                                            const char * confirm_text, lv_obj_t ** out_confirm_label,

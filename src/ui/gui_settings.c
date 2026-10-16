@@ -55,6 +55,7 @@
 #include <unistd.h>
 #include "backlight.h"
 #include "gui_file_manager.h"
+#include "gui_emulators.h"
 #ifdef HOST_BUILD
   #define MUSIC_ROOT_DIR "./music"
 #else
@@ -5165,6 +5166,7 @@ lv_obj_t * build_dac_home_screen(void) {
         { "submenu/layouts.png", NULL, TR("Now Playing layouts"), player_layout_choice_settings_row_cb, NULL },
         { "submenu/usb.png", NULL, TR("USB DAC"), dac_home_usb_row_cb, NULL },
         { "submenu/bluetooth.png", NULL, TR("Bluetooth DAC"), bt_dac_settings_row_cb, NULL },
+        { "submenu/emulators.png", NULL, TR("Emulators"), gui_emulators_row_cb, NULL },
     };
     lv_obj_t * scr = build_category_menu_screen(TR("More"), generic_back_cb, items,
                                                 (int) (sizeof(items) / sizeof(items[0])), NULL);

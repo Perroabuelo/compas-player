@@ -670,6 +670,13 @@ void gui_popup_hide(gui_popup_t * p);
 void gui_popup_teardown(gui_popup_t * p);
 bool gui_popup_is_visible(const gui_popup_t * p);
 unsigned gui_popup_visible_count(void);
+/* Full-width tappable action (Install, Remove, Cancel) at the end of a popup. */
+lv_obj_t * add_popup_action_row(lv_obj_t * popup, const char * text, lv_color_t color,
+                                lv_event_cb_t cb, void * user_data);
+/* A popup surface with a centered title and, when body_out is given, a
+ * scrolling description under it. Action rows are added by the caller. */
+void build_titled_popup(gui_popup_t * popup, lv_event_cb_t backdrop_cb, lv_obj_t ** title_out,
+                        lv_obj_t ** body_out);
 
 lv_obj_t * add_pill_row_base(lv_obj_t * parent, const char * label_text);
 lv_obj_t * add_pill_toggle_row(lv_obj_t * parent, const char * label_text, bool checked, lv_event_cb_t on_click);

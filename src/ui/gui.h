@@ -50,6 +50,13 @@ void gui_show_boot_splash(void);
 void gui_reset_interactive_timeout_baseline(void);
 #endif
 
+/* Tells the main loop (main.c) to drop the real time elapsed while the UI
+ * thread was blocked on purpose, so LVGL's clock does not jump. */
+void main_loop_discard_elapsed_time(void);
+
+/* UI-thread cleanup after an emulator process returns; see gui.c. */
+void gui_resume_after_external_session(void);
+
 /* ---- Bridge for src/plugins/plugin_manager.c ----
  * plugin_manager.c owns Lua state/script lifecycle and has no LVGL code of
  * its own; these let a plugin's C API calls (plugin.show_list/play_file/
