@@ -974,6 +974,13 @@ static void layout_radio_topbar_image(lv_obj_t * image) {
     layout_lucide_topbar_image(image, 1, 1, 22, 22);
 }
 
+/* Connected strengths share the full-signal arcs' bounds, which leave the
+ * top of the canvas empty; sizing them by the off glyph's square made the
+ * arcs visibly smaller than the neighboring icons. */
+static void layout_wifi_connected_topbar_image(lv_obj_t * image) {
+    layout_lucide_topbar_image(image, 1, 4, 22, 17);
+}
+
 /* Theme2 codec sprites share a 30 px canvas, but their visible alpha bounds
  * vary substantially. Measure the solid glyph (alpha >= 128), not faint
  * antialiasing fringes, and keep it on the common status-band centerline. */
@@ -1910,10 +1917,11 @@ static void render_wifi_icon(void) {
         if (level < 0) level = 0;
         if (level > 3) level = 3;
         lv_image_set_src(wifi_icon, asset_path(assets[level]));
+        layout_wifi_connected_topbar_image(wifi_icon);
     } else {
         lv_image_set_src(wifi_icon, asset_path("topbar/lucide_wifi_off.png"));
+        layout_radio_topbar_image(wifi_icon);
     }
-    layout_radio_topbar_image(wifi_icon);
 }
 
 static void poll_wifi_status(void) {
