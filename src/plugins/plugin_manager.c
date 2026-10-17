@@ -101,6 +101,9 @@ extern player_settings_t current_settings;
 
 // How many album cover requests to queue, before rejecting
 #define PLUGIN_ALBUM_COVER_QUEUE 32
+/* Lookups answered per player tick. Each one is a database query plus a
+ * cache-file check on the UI thread, so a full queue is spread over ticks. */
+#define PLUGIN_ALBUM_COVER_PER_TICK 4
 
 typedef struct {
     lua_State * L;
@@ -4866,9 +4869,15 @@ static void plugin_album_cover_cancel_all(void) {
 }
 
 static void plugin_album_cover_poll(void) {
-    for (int i = 0; i < PLUGIN_ALBUM_COVER_QUEUE; i++) {
+    /* Rotates the starting slot so later requests are not starved. */
+    static int next_slot;
+    int answered = 0;
+    for (int n = 0; n < PLUGIN_ALBUM_COVER_QUEUE && answered < PLUGIN_ALBUM_COVER_PER_TICK; n++) {
+        int i = (next_slot + n) % PLUGIN_ALBUM_COVER_QUEUE;
         plugin_album_cover_req_t * req = &plugin_album_cover_queue[i];
         if (!req->L) continue;
+        answered++;
+        next_slot = (i + 1) % PLUGIN_ALBUM_COVER_QUEUE;
         lua_State * L = req->L;
         int ref = req->callback_ref;
         int64_t song_id = req->song_id;
@@ -4890,6 +4899,7 @@ static void plugin_album_cover_poll(void) {
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
         if (plugin_call(L, 2, 0, 0) != LUA_OK) {
             const char * err = lua_tostring(L, -1);
+            fprintf(stderr, "[plugins] library_album_cover_async callback error: %s\n", err ? err : "unknown error");
             lua_pop(L, 1);
         }
     }

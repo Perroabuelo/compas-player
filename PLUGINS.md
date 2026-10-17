@@ -1027,7 +1027,7 @@ and is capped at, 200; use `offset` to page. Check `library.paged`.
   `show_list` accepts as an `icon`. If the library has not generated that cover
   yet, `callback(nil, "not_generated")` is called instead. This call never
   creates a cover: covers come from Settings > Update Music Database. Returns
-  `true`, or `nil, "busy"` while 16 requests are pending. Unloading the plugin
+  `true`, or `nil, "busy"` while 32 requests are pending. Unloading the plugin
   drops its pending callbacks.
 
 A **song** is `{ id, path, title, artist, album, album_artist }`. Its `id`
