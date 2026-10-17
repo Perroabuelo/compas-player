@@ -8,7 +8,8 @@
  * the vfat SD card, so file modes are not stored: every file reads as
  * executable and only access(X_OK) is checked. Each lives in
  * EMULATOR_ROOT/<id>/ with an emulator.json manifest and a static executable;
- * its games live in <SD>/Games/<games_dir>/. */
+ * its games live in <SD>/Games/<games_dir>/, plus any it bundles in
+ * EMULATOR_ROOT/<id>/games/<games_dir>/. */
 
 #ifdef HOST_BUILD
 #define EMULATOR_GAMES_SD_ROOT "./music"
@@ -74,10 +75,12 @@ emulator_manifest_t * emulator_registry_scan(const char * root, int * count);
 /* "<sd_root>/Games/<games_dir>" for a system. */
 bool emulator_games_dir(char * out, size_t size, const char * sd_root, const emulator_system_t * system);
 
-/* Regular files in the system's games folder whose extension matches
- * (case-insensitive), sorted by label. A missing folder is the same as an
- * empty one. Dot files are skipped. Caller frees the array. */
-emulator_game_t * emulator_registry_list_games(const char * sd_root, const emulator_system_t * system,
-                                               int * count);
+/* Regular files whose extension matches (case-insensitive) in the system's
+ * games folder on the SD card and in the games the emulator bundles,
+ * <emulator_dir>/games/<games_dir> (emulator_dir may be NULL), sorted by
+ * label. A missing folder is the same as an empty one. Dot files are
+ * skipped. Caller frees the array. */
+emulator_game_t * emulator_registry_list_games(const char * sd_root, const char * emulator_dir,
+                                               const emulator_system_t * system, int * count);
 
 #endif

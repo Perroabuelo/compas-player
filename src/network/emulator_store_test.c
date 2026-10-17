@@ -128,11 +128,21 @@ static void test_games(void) {
     emulator_system_t system = { .id = "nes", .name = "NES", .games_dir = "NES", .extension_count = 1 };
     snprintf(system.extensions[0], sizeof(system.extensions[0]), "nes");
     int count;
-    emulator_game_t * games = emulator_registry_list_games(sd, &system, &count);
+    emulator_game_t * games = emulator_registry_list_games(sd, NULL, &system, &count);
     assert(count == 2 && strcmp(games[0].label, "Mario") == 0 && strcmp(games[1].label, "zelda") == 0);
     free(games);
+    /* Games the emulator bundles are listed with the SD card's. */
+    make_dir("bundling");
+    make_dir("bundling/games");
+    make_dir("bundling/games/NES");
+    path_in(path, sizeof(path), "bundling/games/NES/bundled.nes");
+    write_file(path, "rom", 0644);
+    path_in(path, sizeof(path), "bundling");
+    games = emulator_registry_list_games(sd, path, &system, &count);
+    assert(count == 3 && strcmp(games[0].label, "bundled") == 0);
+    free(games);
     snprintf(system.games_dir, sizeof(system.games_dir), "Missing");
-    assert(emulator_registry_list_games(sd, &system, &count) == NULL && count == 0);
+    assert(emulator_registry_list_games(sd, path, &system, &count) == NULL && count == 0);
 }
 
 #define FILE_ENTRY(asset, dest, sha, size, extra) \

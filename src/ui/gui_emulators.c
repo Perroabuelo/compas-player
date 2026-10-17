@@ -187,7 +187,9 @@ static void game_row_click_cb(int index) {
 static void refresh_games(void) {
     int count;
     const emulator_system_t * system = &selected_emulator.systems[selected_system];
-    emulator_game_t * entries = emulator_registry_list_games(EMULATOR_GAMES_SD_ROOT, system, &count);
+    char emulator_dir[160];
+    snprintf(emulator_dir, sizeof(emulator_dir), "%s/%s", EMULATOR_ROOT, selected_emulator.id);
+    emulator_game_t * entries = emulator_registry_list_games(EMULATOR_GAMES_SD_ROOT, emulator_dir, system, &count);
     compact_list_item_t * items = count ? calloc((size_t) count, sizeof(*items)) : NULL;
     if (count && !items) {
         free(entries);

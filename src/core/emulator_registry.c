@@ -225,15 +225,13 @@ static bool extension_matches(const emulator_system_t * system, const char * ext
     return false;
 }
 
-emulator_game_t * emulator_registry_list_games(const char * sd_root, const emulator_system_t * system,
-                                               int * count) {
-    *count = 0;
-    char folder[512];
-    if (!emulator_games_dir(folder, sizeof(folder), sd_root, system)) return NULL;
+/* Appends the matching games of one folder; a missing folder adds nothing. */
+static void append_games(const char * folder, const emulator_system_t * system, emulator_game_t ** list, int * count,
+                         int * capacity) {
     DIR * dir = opendir(folder);
-    if (!dir) return NULL;
-    emulator_game_t * games = NULL;
-    int n = 0, capacity = 0;
+    if (!dir) return;
+    emulator_game_t * games = *list;
+    int n = *count;
     struct dirent * de;
     while ((de = readdir(dir)) != NULL) {
         const char * dot = strrchr(de->d_name, '.');
@@ -243,17 +241,29 @@ emulator_game_t * emulator_registry_list_games(const char * sd_root, const emula
         struct stat st;
         if (len < 0 || (size_t) len >= sizeof(game.path) || stat(game.path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
         snprintf(game.label, sizeof(game.label), "%.*s", (int) (dot - de->d_name), de->d_name);
-        if (n == capacity) {
-            int grown_capacity = capacity ? capacity * 2 : 16;
+        if (n == *capacity) {
+            int grown_capacity = *capacity ? *capacity * 2 : 16;
             emulator_game_t * grown = realloc(games, sizeof(*games) * (size_t) grown_capacity);
             if (!grown) break;
             games = grown;
-            capacity = grown_capacity;
+            *capacity = grown_capacity;
         }
         games[n++] = game;
     }
     closedir(dir);
-    if (n > 1) qsort(games, (size_t) n, sizeof(*games), game_compare);
+    *list = games;
     *count = n;
+}
+
+emulator_game_t * emulator_registry_list_games(const char * sd_root, const char * emulator_dir,
+                                               const emulator_system_t * system, int * count) {
+    *count = 0;
+    emulator_game_t * games = NULL;
+    int capacity = 0;
+    char folder[512];
+    if (emulator_games_dir(folder, sizeof(folder), sd_root, system)) append_games(folder, system, &games, count, &capacity);
+    int n = emulator_dir ? snprintf(folder, sizeof(folder), "%s/games/%s", emulator_dir, system->games_dir) : -1;
+    if (n > 0 && (size_t) n < sizeof(folder)) append_games(folder, system, &games, count, &capacity);
+    if (*count > 1) qsort(games, (size_t) *count, sizeof(*games), game_compare);
     return games;
 }

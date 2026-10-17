@@ -25,7 +25,7 @@
 #define EMULATOR_STORE_INDEX_URL "https://github.com/Starnished66/compas-emulators/releases/latest/download/index.json"
 #endif
 #define STORE_INDEX_LIMIT (64u << 10)
-#define STORE_FILE_LIMIT (16u << 20)
+#define STORE_FILE_LIMIT (64u << 20) /* bundled game data such as Freedoom's WADs */
 #define STORE_MARGIN (4u << 20)
 #define STAGE_PREFIX ".stage-"
 #define ASIDE_PREFIX ".old-"
