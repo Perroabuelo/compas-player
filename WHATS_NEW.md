@@ -18,6 +18,7 @@ A personal note: I like to keep my music player free of distractions, so everyth
 - **Crossfeed:** its own Sound screen, with five angle settings from No delay to 90°.
 - **PEQ:** refined controls and layout.
 - **MSEB plugin:** matches stock HiBy MSEB with native 13-filter processing and all ten controls on one scrolling page, directly under Settings > Sound.
+- **LastFM Scrobbler V2:** now available. No API key required—sign in with just your username and password.
 - **Metronome plugin:** now available to download.
 - **Album sorting:** remembered separately for Albums, Artists and Album Artist.
 - **Repeat mode:** kept when starting another album.
