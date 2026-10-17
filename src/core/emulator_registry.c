@@ -104,6 +104,7 @@ bool emulator_manifest_parse(const char * json, size_t length, emulator_manifest
         snprintf(m.name, sizeof(m.name), "%s", name);
         snprintf(m.version, sizeof(m.version), "%s", version);
         snprintf(m.exec, sizeof(m.exec), "%s", exec);
+        m.free_player_memory = cJSON_IsTrue(store_json_field(root, "free_player_memory"));
         snprintf(m.author, sizeof(m.author), "%s", author ? author : "");
         snprintf(m.license, sizeof(m.license), "%s", license ? license : "");
         snprintf(m.description, sizeof(m.description), "%s", description ? description : "");
