@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Portuguese (Portugal)\n"
@@ -327,6 +327,9 @@ msgstr "Não foi possível ler a lista de emuladores do GitHub."
 msgid "This emulator needs a newer player version."
 msgstr "Este emulador requer uma versão mais recente do leitor."
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr "Desligue o armazenamento USB do computador antes de alterar os emuladores."
+
 msgid "Could not install the emulator."
 msgstr "Não foi possível instalar o emulador."
 
@@ -605,8 +608,20 @@ msgstr "Streaming"
 msgid "Games run on the player only."
 msgstr "Os jogos só funcionam no leitor."
 
+msgid "Emulator store is busy."
+msgstr "A loja de emuladores está ocupada."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Verifique o cartão SD e desligue o armazenamento USB antes de jogar."
+
 msgid "Turn off DAC mode to play games."
 msgstr "Desative o modo DAC para jogar."
+
+msgid "USB storage is busy."
+msgstr "O armazenamento USB está ocupado."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "O áudio ainda está ativo; não é possível iniciar o jogo."
 
 msgid "Could not start the game."
 msgstr "Não foi possível iniciar o jogo."
@@ -654,8 +669,8 @@ msgstr "Instalar"
 msgid "Remove"
 msgstr "Remover"
 
-msgid "Saved games stay on the SD card."
-msgstr "Os jogos guardados permanecem no cartão SD."
+msgid "Bundled games and their saves will be removed. Games in SD/Games are kept."
+msgstr ""
 
 msgid "No description"
 msgstr "Sem descrição"
@@ -671,6 +686,9 @@ msgstr "Licença: %s"
 #, c-format
 msgid "Size: %s"
 msgstr "Tamanho: %s"
+
+msgid "Updating replaces bundled games and their saves. Games in SD/Games are kept."
+msgstr ""
 
 msgid "Update"
 msgstr "Atualizar"
@@ -3565,6 +3583,9 @@ msgstr "Controlos de energia"
 
 msgid "Playback and device actions"
 msgstr "Ações de reprodução e do dispositivo"
+
+#~ msgid "Saved games stay on the SD card."
+#~ msgstr "Os jogos guardados permanecem no cartão SD."
 
 #~ msgid "Parametric EQ"
 #~ msgstr "Equalizador paramétrico"

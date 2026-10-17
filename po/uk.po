@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: 2026-10-13 00:00+0000\n"
 "Last-Translator: Codex machine draft\n"
 "Language-Team: Ukrainian\n"
@@ -324,6 +324,9 @@ msgstr "Не вдалося прочитати список емуляторів
 msgid "This emulator needs a newer player version."
 msgstr "Для цього емулятора потрібна новіша версія плеєра."
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr "Від’єднайте USB-накопичувач від комп’ютера, перш ніж змінювати емулятори."
+
 msgid "Could not install the emulator."
 msgstr "Не вдалося встановити емулятор."
 
@@ -602,8 +605,20 @@ msgstr "Потокове медіа"
 msgid "Games run on the player only."
 msgstr "Ігри працюють лише на програвачі."
 
+msgid "Emulator store is busy."
+msgstr "Магазин емуляторів зайнятий."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Перевірте SD-картку та від’єднайте USB-накопичувач перед грою."
+
 msgid "Turn off DAC mode to play games."
 msgstr "Вимкніть режим DAC, щоб грати."
+
+msgid "USB storage is busy."
+msgstr "USB-накопичувач зайнятий."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Звук досі відтворюється; не вдається запустити гру."
 
 msgid "Could not start the game."
 msgstr "Не вдалося запустити гру."
@@ -651,8 +666,8 @@ msgstr "Установити"
 msgid "Remove"
 msgstr "Видалити"
 
-msgid "Saved games stay on the SD card."
-msgstr "Збереження залишаються на SD-картці."
+msgid "Bundled games and their saves will be removed. Games in SD/Games are kept."
+msgstr ""
 
 msgid "No description"
 msgstr "Немає опису"
@@ -668,6 +683,9 @@ msgstr "Ліцензія: %s"
 #, c-format
 msgid "Size: %s"
 msgstr "Розмір: %s"
+
+msgid "Updating replaces bundled games and their saves. Games in SD/Games are kept."
+msgstr ""
 
 msgid "Update"
 msgstr "Оновити"
@@ -3571,6 +3589,9 @@ msgstr "Керування живленням"
 
 msgid "Playback and device actions"
 msgstr "Відтворення та дії пристрою"
+
+#~ msgid "Saved games stay on the SD card."
+#~ msgstr "Збереження залишаються на SD-картці."
 
 #~ msgid "Parametric EQ"
 #~ msgstr "Параметричний еквалайзер"

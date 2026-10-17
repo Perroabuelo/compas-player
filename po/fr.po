@@ -29,7 +29,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: French\n"
@@ -358,6 +358,9 @@ msgstr "Impossible de lire la liste des émulateurs sur GitHub."
 msgid "This emulator needs a newer player version."
 msgstr "Cet émulateur nécessite une version plus récente du lecteur."
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr "Déconnectez le stockage USB de l’ordinateur avant de modifier les émulateurs."
+
 msgid "Could not install the emulator."
 msgstr "Impossible d’installer l’émulateur."
 
@@ -640,8 +643,20 @@ msgstr "Streaming"
 msgid "Games run on the player only."
 msgstr "Les jeux ne fonctionnent que sur le lecteur."
 
+msgid "Emulator store is busy."
+msgstr "La boutique d’émulateurs est occupée."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Vérifiez la carte SD et déconnectez le stockage USB avant de jouer."
+
 msgid "Turn off DAC mode to play games."
 msgstr "Désactivez le mode DAC pour jouer."
+
+msgid "USB storage is busy."
+msgstr "Le stockage USB est occupé."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "L’audio est encore actif ; impossible de lancer le jeu."
 
 msgid "Could not start the game."
 msgstr "Impossible de lancer le jeu."
@@ -689,8 +704,8 @@ msgstr "Installer"
 msgid "Remove"
 msgstr "Supprimer"
 
-msgid "Saved games stay on the SD card."
-msgstr "Les sauvegardes restent sur la carte SD."
+msgid "Bundled games and their saves will be removed. Games in SD/Games are kept."
+msgstr ""
 
 #, fuzzy
 msgid "No description"
@@ -707,6 +722,9 @@ msgstr "Licence : %s"
 #, c-format
 msgid "Size: %s"
 msgstr "Taille : %s"
+
+msgid "Updating replaces bundled games and their saves. Games in SD/Games are kept."
+msgstr ""
 
 msgid "Update"
 msgstr "Mettre à jour"
@@ -3645,6 +3663,9 @@ msgstr "Commandes d'alimentation"
 
 msgid "Playback and device actions"
 msgstr "Actions de lecture et de l'appareil"
+
+#~ msgid "Saved games stay on the SD card."
+#~ msgstr "Les sauvegardes restent sur la carte SD."
 
 #~ msgid "Parametric EQ"
 #~ msgstr "EQ paramétrique"

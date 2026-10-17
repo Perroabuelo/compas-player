@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -326,6 +326,9 @@ msgstr "Kan de emulatorlijst van GitHub niet lezen."
 msgid "This emulator needs a newer player version."
 msgstr "Deze emulator vereist een nieuwere versie van de speler."
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr "Koppel de USB-opslag los van de computer voordat je emulators wijzigt."
+
 msgid "Could not install the emulator."
 msgstr "Kan de emulator niet installeren."
 
@@ -604,8 +607,20 @@ msgstr "Streaming"
 msgid "Games run on the player only."
 msgstr "Games werken alleen op de speler."
 
+msgid "Emulator store is busy."
+msgstr "De emulatorwinkel is bezig."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Controleer de SD-kaart en koppel de USB-opslag los voordat je speelt."
+
 msgid "Turn off DAC mode to play games."
 msgstr "Schakel de DAC-modus uit om games te spelen."
+
+msgid "USB storage is busy."
+msgstr "De USB-opslag is bezig."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Audio is nog actief; het spel kan niet starten."
 
 msgid "Could not start the game."
 msgstr "De game kon niet worden gestart."
@@ -653,8 +668,8 @@ msgstr "Installeren"
 msgid "Remove"
 msgstr "Verwijderen"
 
-msgid "Saved games stay on the SD card."
-msgstr "Opgeslagen games blijven op de SD-kaart staan."
+msgid "Bundled games and their saves will be removed. Games in SD/Games are kept."
+msgstr ""
 
 msgid "No description"
 msgstr "Geen beschrijving"
@@ -670,6 +685,9 @@ msgstr "Licentie: %s"
 #, c-format
 msgid "Size: %s"
 msgstr "Grootte: %s"
+
+msgid "Updating replaces bundled games and their saves. Games in SD/Games are kept."
+msgstr ""
 
 msgid "Update"
 msgstr "Bijwerken"
@@ -3562,6 +3580,9 @@ msgstr "Voedingsbediening"
 
 msgid "Playback and device actions"
 msgstr "Afspelen en apparaatacties"
+
+#~ msgid "Saved games stay on the SD card."
+#~ msgstr "Opgeslagen games blijven op de SD-kaart staan."
 
 #~ msgid "Parametric EQ"
 #~ msgstr "Parametrische equalizer"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -319,6 +319,9 @@ msgstr ""
 msgid "This emulator needs a newer player version."
 msgstr ""
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr ""
+
 msgid "Could not install the emulator."
 msgstr ""
 
@@ -603,7 +606,19 @@ msgstr ""
 msgid "Games run on the player only."
 msgstr ""
 
+msgid "Emulator store is busy."
+msgstr ""
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr ""
+
 msgid "Turn off DAC mode to play games."
+msgstr ""
+
+msgid "USB storage is busy."
+msgstr ""
+
+msgid "Audio is still active; cannot start the game."
 msgstr ""
 
 msgid "Could not start the game."
@@ -652,7 +667,8 @@ msgstr ""
 msgid "Remove"
 msgstr ""
 
-msgid "Saved games stay on the SD card."
+msgid ""
+"Bundled games and their saves will be removed. Games in SD/Games are kept."
 msgstr ""
 
 msgid "No description"
@@ -668,6 +684,10 @@ msgstr ""
 
 #, c-format
 msgid "Size: %s"
+msgstr ""
+
+msgid ""
+"Updating replaces bundled games and their saves. Games in SD/Games are kept."
 msgstr ""
 
 msgid "Update"

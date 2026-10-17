@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-16 14:53-0600\n"
+"POT-Creation-Date: 2026-10-17 07:56-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Finnish\n"
@@ -326,6 +326,9 @@ msgstr "GitHubin emulaattoriluettelon lukeminen epäonnistui."
 msgid "This emulator needs a newer player version."
 msgstr "Tämä emulaattori vaatii soittimen uudemman version."
 
+msgid "Disconnect USB storage from the host before changing emulators."
+msgstr "Irrota USB-tallennustila tietokoneesta ennen emulaattorien muuttamista."
+
 msgid "Could not install the emulator."
 msgstr "Emulaattorin asennus epäonnistui."
 
@@ -604,8 +607,20 @@ msgstr "Suoratoisto"
 msgid "Games run on the player only."
 msgstr "Pelit toimivat vain soittimessa."
 
+msgid "Emulator store is busy."
+msgstr "Emulaattorikauppa on varattu."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Tarkista SD-kortti ja irrota USB-tallennustila ennen pelaamista."
+
 msgid "Turn off DAC mode to play games."
 msgstr "Poista DAC-tila käytöstä pelataksesi pelejä."
+
+msgid "USB storage is busy."
+msgstr "USB-tallennustila on varattu."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Ääni on yhä käytössä; peliä ei voi käynnistää."
 
 msgid "Could not start the game."
 msgstr "Peliä ei voitu käynnistää."
@@ -653,8 +668,8 @@ msgstr "Asenna"
 msgid "Remove"
 msgstr "Poista"
 
-msgid "Saved games stay on the SD card."
-msgstr "Tallennetut pelit säilyvät SD-kortilla."
+msgid "Bundled games and their saves will be removed. Games in SD/Games are kept."
+msgstr ""
 
 msgid "No description"
 msgstr "Ei kuvausta"
@@ -670,6 +685,9 @@ msgstr "Lisenssi: %s"
 #, c-format
 msgid "Size: %s"
 msgstr "Koko: %s"
+
+msgid "Updating replaces bundled games and their saves. Games in SD/Games are kept."
+msgstr ""
 
 msgid "Update"
 msgstr "Päivitä"
@@ -3564,6 +3582,9 @@ msgstr "Virtatoiminnot"
 
 msgid "Playback and device actions"
 msgstr "Toisto- ja laitetoiminnot"
+
+#~ msgid "Saved games stay on the SD card."
+#~ msgstr "Tallennetut pelit säilyvät SD-kortilla."
 
 #~ msgid "Parametric EQ"
 #~ msgstr "Parametrinen taajuuskorjain"
