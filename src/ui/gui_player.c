@@ -5846,6 +5846,21 @@ void gui_player_stop_for_external_session(void) {
     audio_stop();
 }
 
+/* Frees the player's rebuildable image caches for an external session: the
+ * lyrics-animation cover snapshot (rebuilt on the next lyrics transition),
+ * the scaled-cover intermediates (rebuilt by the idle service once a lyrics
+ * transition publishes a source again), the generated-cover raster cache
+ * (refilled by the next cover decode) and the lyrics backdrop frames. The
+ * visible cover and its reflection stay. */
+void gui_player_release_memory_for_external_session(void) {
+    cover_raster_cache_clear();
+    if (player_lyrics_animating) return;
+    lv_draw_sw_image_cache_set_transition_active(false);
+    lv_draw_sw_image_cache_set_intermediate_source(NULL);
+    player_timeline_cover_cache_invalidate();
+    player_lyrics_backdrop_release_frames();
+}
+
 /* resolve_replaygain moved to gui_player.c */
 
 /* Tells audio.c what comes after `index` (per the current play mode -- see

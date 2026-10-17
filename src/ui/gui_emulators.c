@@ -223,6 +223,7 @@ static void launch_game(const emulator_manifest_t * emulator, const char * path)
         show_info_toast(TR("Audio is still active; cannot start the game."));
         return;
     }
+    if (emulator->free_player_memory) gui_release_memory_for_external_session();
     int rc = run_emulator_process(emulator, path);
     gui_resume_after_external_session();
     usb_mode_control_storage_write_end();

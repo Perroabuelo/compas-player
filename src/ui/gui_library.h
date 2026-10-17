@@ -134,4 +134,6 @@ bool gui_library_navigation_blocked(void);
  * Layout-only reloads may retain decoded artwork; full reloads invalidate it. */
 void gui_library_prepare_for_ui_reload(bool preserve_artwork);
 void gui_library_cancel_background_work(void);
+/* Frees the decoded thumbnail cache before an external session; rows refill it on demand. */
+void gui_library_release_memory_for_external_session(void);
 void gui_library_cancel_scan(void);

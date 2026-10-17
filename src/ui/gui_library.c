@@ -11724,6 +11724,13 @@ void gui_library_prepare_for_ui_reload(bool preserve_artwork) {
     search_job_pending_binding = NULL;
 }
 
+/* Frees the decoded thumbnail cache (up to about 2.5 MiB) before an external
+ * session. Rows decode their thumbnails again from the sized files on disk as
+ * lists are shown, exactly as after any library refresh. */
+void gui_library_release_memory_for_external_session(void) {
+    album_thumbnail_cache_clear();
+}
+
 void gui_library_cancel_background_work(void) {
     cancel_album_load();
     cancel_group_song_probes();

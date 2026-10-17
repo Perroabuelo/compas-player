@@ -2855,6 +2855,25 @@ void quick_drawer_mark_snapshot_dirty(void) {
     quick_drawer_mark_geometry_dirty();
 }
 
+/* Frees the drawer's full-screen motion snapshot and expansion frames for an
+ * external session. Skipped while the drawer is open or moving, when they are
+ * in use. quick_drawer_mark_snapshot_dirty() rebuilds them afterwards, the
+ * same way any drawer change does; until then drags follow the live panel. */
+void gui_shell_release_memory_for_external_session(void) {
+    if (!quick_drawer || quick_drawer_open || quick_drawer_bitmap_motion || quick_drawer_expansion_motion) return;
+    if (quick_drawer_motion_image) {
+        lv_image_set_src(quick_drawer_motion_image, NULL);
+        lv_obj_add_flag(quick_drawer_motion_image, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (quick_drawer_motion_buf) {
+        lv_image_cache_drop(quick_drawer_motion_buf);
+        lv_draw_buf_destroy(quick_drawer_motion_buf);
+        quick_drawer_motion_buf = NULL;
+    }
+    quick_drawer_discard_expansion_art();
+    quick_drawer_snapshot_dirty = true;
+}
+
 void gui_shell_refresh_quick_drawer_volume_visibility(void) {
     lv_obj_t * row[] = { quick_drawer_volume_container, quick_drawer_volume_icon, quick_drawer_volume_track,
                          quick_drawer_volume_label };

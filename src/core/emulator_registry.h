@@ -42,6 +42,9 @@ typedef struct {
     char description[401];
     emulator_system_t systems[EMULATOR_MAX_SYSTEMS];
     int system_count;
+    /* "free_player_memory": true; the player drops its rebuildable caches
+     * before launching this emulator (for memory-hungry ones such as Doom). */
+    bool free_player_memory;
 } emulator_manifest_t;
 
 typedef struct {

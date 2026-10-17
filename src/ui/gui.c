@@ -333,6 +333,56 @@ static bool screen_off_playback_active = false;
  * is checked to prevent idle suspend or radio disconnect while receiving USB audio. */
 static bool idle_shutdown_attempted = false;
 
+/* Set when gui_release_memory_for_external_session() dropped the snapshots,
+ * so the resume rebuilds them only after a session that freed them. */
+static bool external_session_released_memory;
+
+/* Memory counters of this process for the emulator launch log; a field the
+ * kernel does not report stays -1. */
+static void process_memory_kb(long * rss, long * data, long * swap) {
+    *rss = *data = *swap = -1;
+    FILE * f = fopen("/proc/self/status", "r");
+    if (!f) return;
+    char line[160];
+    while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "VmRSS: %ld kB", rss) == 1) continue;
+        if (sscanf(line, "VmData: %ld kB", data) == 1) continue;
+        (void) sscanf(line, "VmSwap: %ld kB", swap);
+    }
+    fclose(f);
+}
+
+/* Called on the UI thread right before an emulator is spawned. The emulator
+ * can need as much memory as the player holds (only emulators whose manifest
+ * sets free_player_memory ask for this), and on a 64 MB device the
+ * kernel would otherwise swap the player out. Frees every cache that is
+ * rebuilt on use: transition and drawer snapshots, decoded images, thumbnails
+ * and lock screen art. The library, plugins and audio stay. The screen is
+ * repainted afterwards, and gui_resume_after_external_session() restarts the
+ * snapshot rebuilds. Large buffers are mmap-sized in musl's allocator and go
+ * back to the kernel on free; there is no malloc_trim in this musl. */
+void gui_release_memory_for_external_session(void) {
+    long rss_before = -1, data_before = -1, swap_before = -1;
+    if (db_log_enabled()) process_memory_kb(&rss_before, &data_before, &swap_before);
+    external_session_released_memory = true;
+    gui_navigation_release_snapshots();
+    transition_compositor_discard_vertical_base();
+    gui_shell_release_memory_for_external_session();
+    gui_player_release_memory_for_external_session();
+    gui_library_release_memory_for_external_session();
+    gui_lock_screen_release_memory_for_external_session();
+    gui_lyrics_release_memory_for_external_session();
+    /* Last, once no widget points at a descriptor that may be cached. */
+    lv_image_cache_drop(NULL);
+    if (db_log_enabled()) {
+        long rss_after, data_after, swap_after;
+        process_memory_kb(&rss_after, &data_after, &swap_after);
+        db_log("EMULATOR", "release_memory rss_kb=%ld->%ld data_kb=%ld->%ld swap_kb=%ld->%ld",
+               rss_before, rss_after, data_before, data_after, swap_before, swap_after);
+        db_log_flush();
+    }
+}
+
 /* Called on the UI thread after an external full-screen session (an
  * emulator) that blocked it and owned the framebuffer and input devices. The
  * session consumed the user's attention without any input reaching LVGL, so
@@ -348,6 +398,14 @@ void gui_resume_after_external_session(void) {
     hw_button_event_t event;
     while (hw_buttons_consume_event(&event)) {}
     (void) hw_buttons_consume_screenshot();
+    /* Rebuilds the snapshots gui_release_memory_for_external_session() freed
+     * (static screens in sliced timer passes, the rest asynchronously), and
+     * the drawer's. */
+    if (external_session_released_memory) {
+        external_session_released_memory = false;
+        gui_navigation_invalidate_theme_snapshots();
+        quick_drawer_mark_snapshot_dirty();
+    }
     full_redraw_async_cb(NULL);
 }
 

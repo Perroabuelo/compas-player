@@ -56,6 +56,8 @@ void main_loop_discard_elapsed_time(void);
 
 /* UI-thread cleanup after an emulator process returns; see gui.c. */
 void gui_resume_after_external_session(void);
+/* UI-thread release of rebuildable caches before an emulator runs; see gui.c. */
+void gui_release_memory_for_external_session(void);
 
 /* ---- Bridge for src/plugins/plugin_manager.c ----
  * plugin_manager.c owns Lua state/script lifecycle and has no LVGL code of
