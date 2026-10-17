@@ -429,6 +429,10 @@ lv_obj_t * build_launcher_menu_screen(const char * title, lv_event_cb_t back_btn
  * paths share one retained decoded buffer across rows/screens; it is released
  * when the last referencing image is deleted. */
 void decorate_category_row(lv_obj_t * row, const char * icon_asset, const char * bg_asset);
+/* Same native category look for a plugin-supplied icon: absolute path or
+ * relative to <SD>/.plugins/ (pill_row_apply_icon()). NULL or a path that
+ * cannot be used leaves the row as a plain decorated row without icon. */
+void decorate_category_row_plugin_icon(lv_obj_t * row, const char * plugin_icon);
 /* Adds a passive accent-colored Play All marker to an existing row and
  * returns its circle so pooled label rows can realign it after padding changes. */
 lv_obj_t * decorate_play_all_row(lv_obj_t * row);

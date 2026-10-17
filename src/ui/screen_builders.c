@@ -1394,6 +1394,7 @@ typedef struct {
     lv_obj_t * icon;
     lv_obj_t * background;
     lv_color_t background_default_color;
+    bool plugin_icon; /* icon drawn by pill_row_apply_icon(), not retained here */
 } category_row_context_t;
 
 static void category_image_delete_cb(lv_event_t * e) {
@@ -1486,7 +1487,7 @@ static void category_row_fit(lv_obj_t * row, category_row_context_t * context) {
             lv_obj_set_size(context->background, width, height);
         lv_obj_align(context->background, LV_ALIGN_CENTER, 0, 0);
     }
-    if (context->icon && context->label) {
+    if ((context->icon || context->plugin_icon) && context->label) {
         int32_t left = BOARD_SCALE_PX(96);
         int32_t available = width - left - 60;
         if (available < 1) available = 1;
@@ -1524,7 +1525,8 @@ static void category_row_event_cb(lv_event_t * e) {
     }
 }
 
-void decorate_category_row(lv_obj_t * row, const char * icon_asset, const char * bg_asset) {
+static void decorate_category_row_impl(lv_obj_t * row, const char * icon_asset, const char * bg_asset,
+                                       const char * plugin_icon) {
     if (!row) return;
     category_row_context_t * context = calloc(1, sizeof(*context));
     if (!context) return;
@@ -1543,9 +1545,23 @@ void decorate_category_row(lv_obj_t * row, const char * icon_asset, const char *
         lv_obj_set_size(context->icon, BOARD_SCALE_PX(44), BOARD_SCALE_PX(44));
         lv_obj_align(context->icon, LV_ALIGN_LEFT_MID, BOARD_SCALE_PX(28), 0);
     }
+    if (plugin_icon && context->label) {
+        uint32_t children = lv_obj_get_child_count(row);
+        pill_row_apply_icon(row, context->label, plugin_icon, BOARD_SCALE_PX(44), LV_ALIGN_LEFT_MID,
+                            BOARD_SCALE_PX(28), 0);
+        context->plugin_icon = lv_obj_get_child_count(row) > children;
+    }
     lv_obj_add_event_cb(row, category_row_event_cb, LV_EVENT_ALL, context);
     category_row_sync_background_style(row, context);
     category_row_fit(row, context);
+}
+
+void decorate_category_row(lv_obj_t * row, const char * icon_asset, const char * bg_asset) {
+    decorate_category_row_impl(row, icon_asset, bg_asset, NULL);
+}
+
+void decorate_category_row_plugin_icon(lv_obj_t * row, const char * plugin_icon) {
+    decorate_category_row_impl(row, NULL, NULL, plugin_icon);
 }
 
 /* Play All rows can be pooled labels or ordinary container rows. Align to

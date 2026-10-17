@@ -5158,18 +5158,58 @@ static void dac_home_usb_row_cb(lv_event_t * e) {
     start_usb_mode_switch(USB_MODE_DAC);
 }
 
+static void plugin_more_list_item_click_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    int index = (int) (intptr_t) lv_event_get_user_data(e);
+    plugin_manager_more_list_item_clicked(index);
+}
+
+/* Native entries use the shared category look (decorate_category_row());
+ * plugin rows registered for "more" follow them with the same look, their
+ * icon resolved like every other plugin row icon. The screen is rebuilt on
+ * every plugin reload (gui_shell_build_screens()), so rows track the
+ * currently loaded plugins. */
 lv_obj_t * build_dac_home_screen(void) {
-    const icon_grid_item_t items[] = {
-        { "submenu/plugins.png", NULL, TR("Plugins"), gui_plugin_manage_row_cb, NULL },
-        { "submenu/files.png", NULL, TR("File Manager"), gui_file_manager_tile_cb, NULL },
-        { "submenu/themes.png", NULL, TR("Themes"), themes_row_cb, NULL },
-        { "submenu/layouts.png", NULL, TR("Now Playing layouts"), player_layout_choice_settings_row_cb, NULL },
-        { "submenu/usb.png", NULL, TR("USB DAC"), dac_home_usb_row_cb, NULL },
-        { "submenu/bluetooth.png", NULL, TR("Bluetooth DAC"), bt_dac_settings_row_cb, NULL },
-        { "submenu/emulators.png", NULL, TR("Emulators"), gui_emulators_row_cb, NULL },
+    static const struct { const char * icon; const char * label; lv_event_cb_t cb; } native[] = {
+        { "submenu/plugins.png", N_("Plugins"), gui_plugin_manage_row_cb },
+        { "submenu/files.png", N_("File Manager"), gui_file_manager_tile_cb },
+        { "submenu/themes.png", N_("Themes"), themes_row_cb },
+        { "submenu/layouts.png", N_("Now Playing layouts"), player_layout_choice_settings_row_cb },
+        { "submenu/usb.png", N_("USB DAC"), dac_home_usb_row_cb },
+        { "submenu/bluetooth.png", N_("Bluetooth DAC"), bt_dac_settings_row_cb },
+        { "submenu/emulators.png", N_("Emulators"), gui_emulators_row_cb },
     };
-    lv_obj_t * scr = build_category_menu_screen(TR("More"), generic_back_cb, items,
-                                                (int) (sizeof(items) / sizeof(items[0])), NULL);
+    enum { NATIVE_COUNT = (int) (sizeof(native) / sizeof(native[0])) };
+    static pill_list_item_t items[NATIVE_COUNT + PLUGIN_MAX_MORE_LIST_ITEMS];
+    lv_obj_t * rows[NATIVE_COUNT + PLUGIN_MAX_MORE_LIST_ITEMS] = { NULL };
+    const char * plugin_icons[PLUGIN_MAX_MORE_LIST_ITEMS] = { NULL };
+
+    for (int i = 0; i < NATIVE_COUNT; ++i) {
+        items[i] = (pill_list_item_t){ TR(native[i].label), PILL_ACCESSORY_CHEVRON, false, native[i].cb, NULL, NULL };
+    }
+    int count = append_plugin_list_rows(items, NATIVE_COUNT, PLUGIN_MAX_MORE_LIST_ITEMS,
+                                        plugin_manager_get_more_list_item_count,
+                                        plugin_manager_get_more_list_item_label,
+                                        plugin_manager_get_more_list_item_options,
+                                        plugin_more_list_item_click_cb);
+    for (int i = 0; i < count; ++i) {
+        if (i >= NATIVE_COUNT) {
+            /* Drawn below at the native 44 px size, not by the pill row. */
+            plugin_icons[i - NATIVE_COUNT] = items[i].icon_asset;
+            items[i].icon_asset = NULL;
+        }
+        items[i].out_row = &rows[i];
+    }
+
+    lv_obj_t * scr = build_pill_list_screen(TR("More"), generic_back_cb, items, count,
+                                            gui_theme_accent_style(), GUI_ROW_GAP, 100);
+    for (int i = 0; i < count; ++i) {
+        if (rows[i]) {
+            if (i < NATIVE_COUNT) decorate_category_row(rows[i], native[i].icon, NULL);
+            else decorate_category_row_plugin_icon(rows[i], plugin_icons[i - NATIVE_COUNT]);
+        }
+        items[i].out_row = NULL;
+    }
     finalize_screen_navigation(scr);
     return scr;
 }

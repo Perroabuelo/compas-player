@@ -17,6 +17,9 @@
 static char ** playlist = NULL;
 static int playlist_count = 0;
 static int playlist_index = -1;
+/* Set by on_file_selected_stay(): the next explicit start plays without
+ * opening the player screen (a plugin starting audio from its own screen). */
+static bool stay_on_screen_once;
 static char transport_skip_directory[PATH_MAX];
 static int transport_skip_seconds;
 static bool transport_skip_manual(int direction);
@@ -6238,7 +6241,8 @@ static void play_track_at_from_internal(int index, double start_seconds, bool pu
     /* Manual next/previous and a deferred startup resume can already be on
      * the player screen.  Do not stack a duplicate copy of the same screen
      * just because playback is being (re)started there. */
-    if (push_nav && lv_screen_active() != player_screen) nav_push(player_screen);
+    if (push_nav && !stay_on_screen_once && lv_screen_active() != player_screen) nav_push(player_screen);
+    stay_on_screen_once = false;
 
     /* A remote track's stream_url can expire or be single-use -- resuming
      * into it blind on next launch can't work the way resuming a local
@@ -6308,6 +6312,13 @@ void on_file_selected(char ** new_playlist, int count, int selected_index) {
     queued_pending_count = 0;
     queue_next_insert_index = -1;
     play_track_at(selected_index);
+}
+
+/* on_file_selected() without opening the player screen. */
+void on_file_selected_stay(char ** new_playlist, int count, int selected_index) {
+    stay_on_screen_once = true;
+    on_file_selected(new_playlist, count, selected_index);
+    stay_on_screen_once = false;
 }
 
 /* Same as on_file_selected() above, but for a tap that needs to start

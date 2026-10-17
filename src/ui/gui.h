@@ -116,8 +116,9 @@ int gui_plugin_show_order_editor(const char * title, const char * const * keys,
 /* Starts playback of a brand-new playlist built from `paths[0..count)`,
  * starting at paths[start_index] -- same "starting something new clears
  * Up Next" semantics as every other play-launch path (on_file_selected()).
- * Copies paths/strings itself; caller retains ownership of its own array. */
-void gui_plugin_play_paths(const char * const * paths, int count, int start_index);
+ * Copies paths/strings itself; caller retains ownership of its own array.
+ * open_player false keeps the current screen instead of opening Now Playing. */
+void gui_plugin_play_paths(const char * const * paths, int count, int start_index, bool open_player);
 
 /* Same as gui_plugin_play_paths() above, for a remote-provider queue (see
  * remote_track.h) -- each track's synthetic "remote://" key becomes the

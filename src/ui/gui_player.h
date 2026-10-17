@@ -143,6 +143,7 @@ bool gui_player_volume_control_hit_test(lv_point_t point);
 const char * playlist_path_at(int index);
 void free_playlist(void);
 void on_file_selected(char ** new_playlist, int count, int selected_index);
+void on_file_selected_stay(char ** new_playlist, int count, int selected_index);
 void on_file_selected_at(char ** new_playlist, int count, int selected_index, double start_seconds);
 void on_file_selected_lazy_all_songs(int selected_index);
 void on_file_selected_lazy_recently_added(int selected_index);

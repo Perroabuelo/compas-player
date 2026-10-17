@@ -576,7 +576,7 @@ bool gui_plugin_list_is_top(int slot) {
            gui_navigation_is_top(plugin_list_screens[slot]);
 }
 
-void gui_plugin_play_paths(const char * const * paths, int count, int start_index) {
+void gui_plugin_play_paths(const char * const * paths, int count, int start_index, bool open_player) {
     if (count <= 0) return;
     if (start_index < 0) start_index = 0;
     if (start_index >= count) start_index = count - 1;
@@ -586,7 +586,8 @@ void gui_plugin_play_paths(const char * const * paths, int count, int start_inde
     for (int i = 0; i < count; i++) {
         new_playlist[i] = paths[i] ? strdup(paths[i]) : strdup("");
     }
-    on_file_selected(new_playlist, count, start_index);
+    if (open_player) on_file_selected(new_playlist, count, start_index);
+    else on_file_selected_stay(new_playlist, count, start_index);
 }
 
 /* Same shape as gui_plugin_play_paths() above, for a remote-provider queue
