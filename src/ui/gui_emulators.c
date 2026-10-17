@@ -310,7 +310,13 @@ static void refresh_emulators(void) {
 
 static void emulators_screen_loaded_cb(lv_event_t * e) {
     (void) e;
+    /* The rescan resets the list to the top; coming back from an emulator
+     * should land where the user left it. */
+    int32_t scroll_y = emulators_list ? lv_obj_get_scroll_y(emulators_list) : 0;
     refresh_emulators();
+    if (!emulators_list) return;
+    lv_obj_update_layout(emulators_screen);
+    lv_obj_scroll_to_y(emulators_list, scroll_y > 0 ? scroll_y : 0, LV_ANIM_OFF);
 }
 
 static void emulators_screen_delete_cb(lv_event_t * e) {
