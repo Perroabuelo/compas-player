@@ -23,7 +23,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 07:56-0600\n"
+"POT-Creation-Date: 2026-10-17 10:56-0600\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Spanish\n"
@@ -566,6 +566,34 @@ msgstr "Activado"
 msgid "Off"
 msgstr "Desactivado"
 
+msgid "Screenshot saved"
+msgstr "Captura guardada"
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Falló la captura (%s)"
+
+msgid "unknown"
+msgstr "desconocido"
+
+msgid "Cannot play folder"
+msgstr "No se puede reproducir la carpeta"
+
+msgid "Paused: headphones disconnected"
+msgstr "En pausa: audífonos desconectados"
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Falló el punto de control de la cola; el almacenamiento puede ser de solo lectura"
+
+msgid "Playback history could not be saved"
+msgstr "No se pudo guardar el historial de reproducción"
+
+msgid "Subsonic"
+msgstr "Subsonic"
+
+msgid "Stream Media"
+msgstr "Streaming"
+
 msgid "Could not open this file."
 msgstr "No se pudo abrir este archivo."
 
@@ -605,77 +633,6 @@ msgstr "Abre un libro y toca el ícono de marcador para guardarlo aquí."
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Agrega archivos .txt a la carpeta Libros y actualiza la biblioteca."
-
-msgid "Screenshot saved"
-msgstr "Captura guardada"
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Falló la captura (%s)"
-
-msgid "unknown"
-msgstr "desconocido"
-
-msgid "Cannot play folder"
-msgstr "No se puede reproducir la carpeta"
-
-msgid "Paused: headphones disconnected"
-msgstr "En pausa: audífonos desconectados"
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Falló el punto de control de la cola; el almacenamiento puede ser de solo lectura"
-
-msgid "Playback history could not be saved"
-msgstr "No se pudo guardar el historial de reproducción"
-
-msgid "Subsonic"
-msgstr "Subsonic"
-
-msgid "Stream Media"
-msgstr "Streaming"
-
-msgid "Games run on the player only."
-msgstr "Los juegos solo funcionan en el reproductor."
-
-msgid "Emulator store is busy."
-msgstr "La tienda de emuladores está ocupada."
-
-msgid "Check the SD card and disconnect USB storage before playing."
-msgstr "Revisa la tarjeta SD y desconecta el almacenamiento USB antes de jugar."
-
-msgid "Turn off DAC mode to play games."
-msgstr "Desactiva el modo DAC para jugar."
-
-msgid "USB storage is busy."
-msgstr "El almacenamiento USB está ocupado."
-
-msgid "Audio is still active; cannot start the game."
-msgstr "El audio sigue activo; no se puede iniciar el juego."
-
-msgid "Could not start the game."
-msgstr "No se pudo iniciar el juego."
-
-msgid "The game closed unexpectedly."
-msgstr "El juego se cerró inesperadamente."
-
-#, c-format
-msgid "Copy games to the %s folder on the SD card."
-msgstr "Copia los juegos en la carpeta %s de la tarjeta SD."
-
-msgid "No games found"
-msgstr "No se encontraron juegos"
-
-msgid "Emulators"
-msgstr "Emuladores"
-
-msgid "Download emulators"
-msgstr "Descargar emuladores"
-
-msgid "No emulators installed"
-msgstr "No hay emuladores instalados"
-
-msgid "Download an emulator to play games."
-msgstr "Descarga un emulador para jugar."
 
 msgid "Needs newer firmware"
 msgstr "Requiere firmware más reciente"
@@ -768,6 +725,49 @@ msgstr "Ya hay una operación de emulador en curso"
 
 msgid "Loading emulators"
 msgstr "Cargando emuladores"
+
+msgid "Download emulators"
+msgstr "Descargar emuladores"
+
+msgid "Games run on the player only."
+msgstr "Los juegos solo funcionan en el reproductor."
+
+msgid "Emulator store is busy."
+msgstr "La tienda de emuladores está ocupada."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Revisa la tarjeta SD y desconecta el almacenamiento USB antes de jugar."
+
+msgid "Turn off DAC mode to play games."
+msgstr "Desactiva el modo DAC para jugar."
+
+msgid "USB storage is busy."
+msgstr "El almacenamiento USB está ocupado."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "El audio sigue activo; no se puede iniciar el juego."
+
+msgid "Could not start the game."
+msgstr "No se pudo iniciar el juego."
+
+msgid "The game closed unexpectedly."
+msgstr "El juego se cerró inesperadamente."
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr "Copia los juegos en la carpeta %s de la tarjeta SD."
+
+msgid "No games found"
+msgstr "No se encontraron juegos"
+
+msgid "Emulators"
+msgstr "Emuladores"
+
+msgid "No emulators installed"
+msgstr "No hay emuladores instalados"
+
+msgid "Download an emulator to play games."
+msgstr "Descarga un emulador para jugar."
 
 #
 msgid "Disconnect USB storage from the computer before changing files."
@@ -2079,22 +2079,6 @@ msgstr "Actualizar plugins"
 msgid "Plugin Manager"
 msgstr "Administrador de plugins"
 
-msgid "No entries to display"
-msgstr "No hay entradas para mostrar"
-
-msgid "No plugin settings available"
-msgstr "No hay ajustes de plugin disponibles"
-
-msgid "Plugin"
-msgstr "Plugin"
-
-msgid "Plugin Settings"
-msgstr "Ajustes del plugin"
-
-#, fuzzy
-msgid "Select a file"
-msgstr "Seleccionar todo"
-
 #, fuzzy
 msgid "Download layouts"
 msgstr "Cargando diseños"
@@ -2209,6 +2193,22 @@ msgstr "Algunos archivos del plugin cambiaron en la tarjeta. ¿Reemplazarlos?"
 
 msgid "Plugin operation failed"
 msgstr "Falló la operación del plugin"
+
+msgid "No entries to display"
+msgstr "No hay entradas para mostrar"
+
+msgid "No plugin settings available"
+msgstr "No hay ajustes de plugin disponibles"
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Plugin Settings"
+msgstr "Ajustes del plugin"
+
+#, fuzzy
+msgid "Select a file"
+msgstr "Seleccionar todo"
 
 msgid "Played"
 msgstr "Reprod."
@@ -2373,6 +2373,9 @@ msgstr "Buscar actualización en línea"
 msgid "Install from SD card"
 msgstr "Instalar desde tarjeta SD"
 
+msgid "Update the Player only, retaining current drivers, kernel and bootloader."
+msgstr "Actualiza solo el reproductor, conservando los controladores, el kernel y el bootloader actuales."
+
 #, fuzzy
 msgid "Download & Install"
 msgstr "Falló la descarga"
@@ -2440,6 +2443,9 @@ msgstr "Descargando actualización"
 #, fuzzy
 msgid "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install from SD card."
 msgstr "Actualización guardada. Instálala cuando quieras desde Actualizar firmware > Instalar desde tarjeta SD."
+
+msgid "Update the entire CompásOS. Flashing firmware contains Bootloader, Player, Kernel and Drivers."
+msgstr "Actualiza todo CompásOS. El firmware incluye bootloader, reproductor, kernel y controladores."
 
 msgid "Download"
 msgstr "Descargar"

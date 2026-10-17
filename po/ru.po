@@ -22,7 +22,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 07:56-0600\n"
+"POT-Creation-Date: 2026-10-17 10:56-0600\n"
 "PO-Revision-Date: 2026-10-13 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Russian\n"
@@ -551,6 +551,34 @@ msgstr "Вкл."
 msgid "Off"
 msgstr "Выкл."
 
+msgid "Screenshot saved"
+msgstr "Скриншот сохранен."
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Не удалось сделать снимок экрана (%s)"
+
+msgid "unknown"
+msgstr "неизвестно"
+
+msgid "Cannot play folder"
+msgstr "Не могу воспроизвести папку"
+
+msgid "Paused: headphones disconnected"
+msgstr "Приостановлено: наушники отключены."
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Контрольная точка очереди не удалась; хранилище может быть доступно только для чтения"
+
+msgid "Playback history could not be saved"
+msgstr "Не удалось сохранить историю воспроизведения."
+
+msgid "Subsonic"
+msgstr "Дозвуковой"
+
+msgid "Stream Media"
+msgstr "Стрим Медиа"
+
 msgid "Could not open this file."
 msgstr "Не удалось открыть этот файл."
 
@@ -590,77 +618,6 @@ msgstr "Откройте книгу и коснитесь значка закл�
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Добавьте файлы .txt в папку «Книги», затем обновите библиотеку."
-
-msgid "Screenshot saved"
-msgstr "Скриншот сохранен."
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Не удалось сделать снимок экрана (%s)"
-
-msgid "unknown"
-msgstr "неизвестно"
-
-msgid "Cannot play folder"
-msgstr "Не могу воспроизвести папку"
-
-msgid "Paused: headphones disconnected"
-msgstr "Приостановлено: наушники отключены."
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Контрольная точка очереди не удалась; хранилище может быть доступно только для чтения"
-
-msgid "Playback history could not be saved"
-msgstr "Не удалось сохранить историю воспроизведения."
-
-msgid "Subsonic"
-msgstr "Дозвуковой"
-
-msgid "Stream Media"
-msgstr "Стрим Медиа"
-
-msgid "Games run on the player only."
-msgstr "Игры работают только на плеере."
-
-msgid "Emulator store is busy."
-msgstr "Магазин эмуляторов занят."
-
-msgid "Check the SD card and disconnect USB storage before playing."
-msgstr "Проверьте SD-карту и отключите USB-накопитель перед игрой."
-
-msgid "Turn off DAC mode to play games."
-msgstr "Отключите режим DAC, чтобы играть."
-
-msgid "USB storage is busy."
-msgstr "USB-накопитель занят."
-
-msgid "Audio is still active; cannot start the game."
-msgstr "Звук всё ещё воспроизводится; не удаётся запустить игру."
-
-msgid "Could not start the game."
-msgstr "Не удалось запустить игру."
-
-msgid "The game closed unexpectedly."
-msgstr "Игра неожиданно закрылась."
-
-#, c-format
-msgid "Copy games to the %s folder on the SD card."
-msgstr "Скопируйте игры в папку %s на SD-карте."
-
-msgid "No games found"
-msgstr "Игры не найдены"
-
-msgid "Emulators"
-msgstr "Эмуляторы"
-
-msgid "Download emulators"
-msgstr "Скачать эмуляторы"
-
-msgid "No emulators installed"
-msgstr "Эмуляторы не установлены"
-
-msgid "Download an emulator to play games."
-msgstr "Скачайте эмулятор, чтобы играть."
 
 msgid "Needs newer firmware"
 msgstr "Нужна более новая прошивка"
@@ -752,6 +709,49 @@ msgstr "Операция с эмулятором уже выполняется"
 
 msgid "Loading emulators"
 msgstr "Загрузка эмуляторов"
+
+msgid "Download emulators"
+msgstr "Скачать эмуляторы"
+
+msgid "Games run on the player only."
+msgstr "Игры работают только на плеере."
+
+msgid "Emulator store is busy."
+msgstr "Магазин эмуляторов занят."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Проверьте SD-карту и отключите USB-накопитель перед игрой."
+
+msgid "Turn off DAC mode to play games."
+msgstr "Отключите режим DAC, чтобы играть."
+
+msgid "USB storage is busy."
+msgstr "USB-накопитель занят."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Звук всё ещё воспроизводится; не удаётся запустить игру."
+
+msgid "Could not start the game."
+msgstr "Не удалось запустить игру."
+
+msgid "The game closed unexpectedly."
+msgstr "Игра неожиданно закрылась."
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr "Скопируйте игры в папку %s на SD-карте."
+
+msgid "No games found"
+msgstr "Игры не найдены"
+
+msgid "Emulators"
+msgstr "Эмуляторы"
+
+msgid "No emulators installed"
+msgstr "Эмуляторы не установлены"
+
+msgid "Download an emulator to play games."
+msgstr "Скачайте эмулятор, чтобы играть."
 
 msgid "Disconnect USB storage from the computer before changing files."
 msgstr "Перед изменением файлов отключите USB-накопитель от компьютера."
@@ -2039,21 +2039,6 @@ msgstr "Обновить плагины"
 msgid "Plugin Manager"
 msgstr "Менеджер плагинов"
 
-msgid "No entries to display"
-msgstr "Нет записей для отображения"
-
-msgid "No plugin settings available"
-msgstr "Нет доступных настроек плагина"
-
-msgid "Plugin"
-msgstr "Плагин"
-
-msgid "Plugin Settings"
-msgstr "Настройки плагина"
-
-msgid "Select a file"
-msgstr "Выберите файл"
-
 msgid "Download layouts"
 msgstr "Скачать макеты"
 
@@ -2165,6 +2150,21 @@ msgstr "На карте были изменены некоторые файлы 
 
 msgid "Plugin operation failed"
 msgstr "Операция плагина не удалась"
+
+msgid "No entries to display"
+msgstr "Нет записей для отображения"
+
+msgid "No plugin settings available"
+msgstr "Нет доступных настроек плагина"
+
+msgid "Plugin"
+msgstr "Плагин"
+
+msgid "Plugin Settings"
+msgstr "Настройки плагина"
+
+msgid "Select a file"
+msgstr "Выберите файл"
 
 msgid "Played"
 msgstr "Играл"
@@ -2328,6 +2328,9 @@ msgstr "Проверьте наличие онлайн-обновлений"
 msgid "Install from SD card"
 msgstr "Установить с SD-карты"
 
+msgid "Update the Player only, retaining current drivers, kernel and bootloader."
+msgstr "Обновляет только плеер, сохраняя текущие драйверы, ядро и загрузчик."
+
 #, fuzzy
 msgid "Download & Install"
 msgstr "Загрузка не удалась"
@@ -2393,6 +2396,9 @@ msgstr "Загрузка обновления"
 
 msgid "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install from SD card."
 msgstr "Обновление сохранено. Подключитесь к Wi-Fi, затем установите его через «Обновление прошивки» > «Установить с SD-карты»."
+
+msgid "Update the entire CompásOS. Flashing firmware contains Bootloader, Player, Kernel and Drivers."
+msgstr "Обновляет всю CompásOS. Прошивка содержит загрузчик, плеер, ядро и драйверы."
 
 msgid "Download"
 msgstr "Скачать"

@@ -903,6 +903,18 @@ static void player_update_sd_cb(lv_event_t * e) {
     player_update_show_sd_confirm();
 }
 
+/* Explains what an update source menu replaces, above its action rows. */
+static void add_update_menu_description(lv_obj_t * menu, const char * text) {
+    lv_obj_t * label = lv_label_create(menu);
+    lv_obj_set_width(label, lv_pct(100));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(label, text);
+    lv_obj_add_style(label, &style_theme_text_muted, 0);
+    lv_obj_set_style_text_font(label, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
+    lv_obj_set_style_pad_all(label, BOARD_SCALE_PX(6), 0);
+    lv_obj_move_to_index(label, 0);
+}
+
 static void build_player_update_popups(void) {
     const menu_popup_row_t rows[] = {
         { TR("Check for online update"), player_update_online_cb, false },
@@ -911,6 +923,8 @@ static void build_player_update_popups(void) {
     };
     player_update_menu = build_menu_popup(rows, (int)(sizeof(rows) / sizeof(rows[0])),
                                           player_update_backdrop_cb, &player_update_backdrop);
+    add_update_menu_description(player_update_menu,
+                                TR("Update the Player only, retaining current drivers, kernel and bootloader."));
     player_update_offer_popup.popup = build_confirm_popup(
         "", LV_LABEL_LONG_WRAP, &player_update_offer_title, NULL, TR("Download & Install"), accent_lv_color(),
         player_update_online_offer_cb, NULL, TR("Cancel"), accent_lv_color(), player_update_cancel_cb, NULL,
@@ -1087,6 +1101,8 @@ static void build_firmware_ota_popups(void) {
     };
     firmware_source_menu = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])),
                                             firmware_source_backdrop_cb, &firmware_source_backdrop);
+    add_update_menu_description(firmware_source_menu,
+                                TR("Update the entire CompásOS. Flashing firmware contains Bootloader, Player, Kernel and Drivers."));
     ota_offer_popup.popup = build_confirm_popup(
         "", LV_LABEL_LONG_WRAP, &ota_offer_title, NULL, TR("Download"), accent_lv_color(), ota_offer_download_cb, NULL,
         TR("Cancel"), accent_lv_color(), ota_offer_cancel_cb, NULL, ota_offer_cancel_cb, &ota_offer_popup.backdrop);

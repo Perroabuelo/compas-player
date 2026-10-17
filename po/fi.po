@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 07:56-0600\n"
+"POT-Creation-Date: 2026-10-17 10:56-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Finnish\n"
@@ -536,6 +536,34 @@ msgstr "Käytössä"
 msgid "Off"
 msgstr "Pois käytöstä"
 
+msgid "Screenshot saved"
+msgstr "Kuvakaappaus tallennettu"
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Kuvakaappaus epäonnistui (%s)"
+
+msgid "unknown"
+msgstr "tuntematon"
+
+msgid "Cannot play folder"
+msgstr "Kansiota ei voi toistaa"
+
+msgid "Paused: headphones disconnected"
+msgstr "Keskeytetty: kuulokkeet irrotettiin"
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Jonon tarkistuspisteen tallennus epäonnistui; tallennustila voi olla vain luku -tilassa"
+
+msgid "Playback history could not be saved"
+msgstr "Toistohistorian tallennus epäonnistui"
+
+msgid "Subsonic"
+msgstr "Subsonic"
+
+msgid "Stream Media"
+msgstr "Suoratoisto"
+
 msgid "Could not open this file."
 msgstr "Tätä tiedostoa ei voi avata."
 
@@ -575,77 +603,6 @@ msgstr "Avaa kirja ja tallenna se tähän napauttamalla kirjanmerkkikuvaketta."
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Lisää .txt-tiedostot Kirjat-kansioon ja päivitä sitten kirjasto."
-
-msgid "Screenshot saved"
-msgstr "Kuvakaappaus tallennettu"
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Kuvakaappaus epäonnistui (%s)"
-
-msgid "unknown"
-msgstr "tuntematon"
-
-msgid "Cannot play folder"
-msgstr "Kansiota ei voi toistaa"
-
-msgid "Paused: headphones disconnected"
-msgstr "Keskeytetty: kuulokkeet irrotettiin"
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Jonon tarkistuspisteen tallennus epäonnistui; tallennustila voi olla vain luku -tilassa"
-
-msgid "Playback history could not be saved"
-msgstr "Toistohistorian tallennus epäonnistui"
-
-msgid "Subsonic"
-msgstr "Subsonic"
-
-msgid "Stream Media"
-msgstr "Suoratoisto"
-
-msgid "Games run on the player only."
-msgstr "Pelit toimivat vain soittimessa."
-
-msgid "Emulator store is busy."
-msgstr "Emulaattorikauppa on varattu."
-
-msgid "Check the SD card and disconnect USB storage before playing."
-msgstr "Tarkista SD-kortti ja irrota USB-tallennustila ennen pelaamista."
-
-msgid "Turn off DAC mode to play games."
-msgstr "Poista DAC-tila käytöstä pelataksesi pelejä."
-
-msgid "USB storage is busy."
-msgstr "USB-tallennustila on varattu."
-
-msgid "Audio is still active; cannot start the game."
-msgstr "Ääni on yhä käytössä; peliä ei voi käynnistää."
-
-msgid "Could not start the game."
-msgstr "Peliä ei voitu käynnistää."
-
-msgid "The game closed unexpectedly."
-msgstr "Peli sulkeutui odottamattomasti."
-
-#, c-format
-msgid "Copy games to the %s folder on the SD card."
-msgstr "Kopioi pelit SD-kortin kansioon %s."
-
-msgid "No games found"
-msgstr "Pelejä ei löytynyt"
-
-msgid "Emulators"
-msgstr "Emulaattorit"
-
-msgid "Download emulators"
-msgstr "Lataa emulaattoreita"
-
-msgid "No emulators installed"
-msgstr "Emulaattoreita ei ole asennettu"
-
-msgid "Download an emulator to play games."
-msgstr "Lataa emulaattori pelataksesi pelejä."
 
 msgid "Needs newer firmware"
 msgstr "Vaatii uudemman laiteohjelmiston"
@@ -737,6 +694,49 @@ msgstr "Emulaattoritoiminto on jo käynnissä"
 
 msgid "Loading emulators"
 msgstr "Ladataan emulaattoreita"
+
+msgid "Download emulators"
+msgstr "Lataa emulaattoreita"
+
+msgid "Games run on the player only."
+msgstr "Pelit toimivat vain soittimessa."
+
+msgid "Emulator store is busy."
+msgstr "Emulaattorikauppa on varattu."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Tarkista SD-kortti ja irrota USB-tallennustila ennen pelaamista."
+
+msgid "Turn off DAC mode to play games."
+msgstr "Poista DAC-tila käytöstä pelataksesi pelejä."
+
+msgid "USB storage is busy."
+msgstr "USB-tallennustila on varattu."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Ääni on yhä käytössä; peliä ei voi käynnistää."
+
+msgid "Could not start the game."
+msgstr "Peliä ei voitu käynnistää."
+
+msgid "The game closed unexpectedly."
+msgstr "Peli sulkeutui odottamattomasti."
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr "Kopioi pelit SD-kortin kansioon %s."
+
+msgid "No games found"
+msgstr "Pelejä ei löytynyt"
+
+msgid "Emulators"
+msgstr "Emulaattorit"
+
+msgid "No emulators installed"
+msgstr "Emulaattoreita ei ole asennettu"
+
+msgid "Download an emulator to play games."
+msgstr "Lataa emulaattori pelataksesi pelejä."
 
 msgid "Disconnect USB storage from the computer before changing files."
 msgstr "Irrota USB-tallennus tietokoneesta ennen tiedostojen muuttamista."
@@ -2015,21 +2015,6 @@ msgstr "Päivitä liitännäiset"
 msgid "Plugin Manager"
 msgstr "Liitännäisten hallinta"
 
-msgid "No entries to display"
-msgstr "Ei näytettäviä kohteita"
-
-msgid "No plugin settings available"
-msgstr "Liitännäisasetuksia ei ole saatavilla"
-
-msgid "Plugin"
-msgstr "Liitännäinen"
-
-msgid "Plugin Settings"
-msgstr "Liitännäisasetukset"
-
-msgid "Select a file"
-msgstr "Valitse tiedosto"
-
 msgid "Download layouts"
 msgstr "Lataa asetteluja"
 
@@ -2141,6 +2126,21 @@ msgstr "Joitakin kortin liitännäistiedostoja on muutettu. Korvataanko ne?"
 
 msgid "Plugin operation failed"
 msgstr "Liitännäistoiminto epäonnistui"
+
+msgid "No entries to display"
+msgstr "Ei näytettäviä kohteita"
+
+msgid "No plugin settings available"
+msgstr "Liitännäisasetuksia ei ole saatavilla"
+
+msgid "Plugin"
+msgstr "Liitännäinen"
+
+msgid "Plugin Settings"
+msgstr "Liitännäisasetukset"
+
+msgid "Select a file"
+msgstr "Valitse tiedosto"
 
 msgid "Played"
 msgstr "Toistettu"
@@ -2304,6 +2304,9 @@ msgstr "Tarkista verkkopäivitys"
 msgid "Install from SD card"
 msgstr "Asenna SD-kortilta"
 
+msgid "Update the Player only, retaining current drivers, kernel and bootloader."
+msgstr "Päivittää vain soittimen. Nykyiset ajurit, ydin ja käynnistyslatain säilyvät."
+
 #, fuzzy
 msgid "Download & Install"
 msgstr "Lataus epäonnistui"
@@ -2369,6 +2372,9 @@ msgstr "Ladataan päivitystä"
 
 msgid "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install from SD card."
 msgstr "Päivitys tallennettu. Yhdistä Wi-Fi-verkkoon ja asenna valitsemalla Laiteohjelmistopäivitys > Asenna SD-kortilta."
+
+msgid "Update the entire CompásOS. Flashing firmware contains Bootloader, Player, Kernel and Drivers."
+msgstr "Päivittää koko CompásOS:n. Laiteohjelmisto sisältää käynnistyslataimen, soittimen, ytimen ja ajurit."
 
 msgid "Download"
 msgstr "Lataa"

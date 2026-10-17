@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 07:56-0600\n"
+"POT-Creation-Date: 2026-10-17 10:56-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -538,6 +538,34 @@ msgstr ""
 msgid "Off"
 msgstr ""
 
+msgid "Screenshot saved"
+msgstr ""
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr ""
+
+msgid "unknown"
+msgstr ""
+
+msgid "Cannot play folder"
+msgstr ""
+
+msgid "Paused: headphones disconnected"
+msgstr ""
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr ""
+
+msgid "Playback history could not be saved"
+msgstr ""
+
+msgid "Subsonic"
+msgstr ""
+
+msgid "Stream Media"
+msgstr ""
+
 msgid "Could not open this file."
 msgstr ""
 
@@ -573,77 +601,6 @@ msgid "Open a book and tap the bookmark icon to save it here."
 msgstr ""
 
 msgid "Add .txt files to the Books folder, then refresh the library."
-msgstr ""
-
-msgid "Screenshot saved"
-msgstr ""
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr ""
-
-msgid "unknown"
-msgstr ""
-
-msgid "Cannot play folder"
-msgstr ""
-
-msgid "Paused: headphones disconnected"
-msgstr ""
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr ""
-
-msgid "Playback history could not be saved"
-msgstr ""
-
-msgid "Subsonic"
-msgstr ""
-
-msgid "Stream Media"
-msgstr ""
-
-msgid "Games run on the player only."
-msgstr ""
-
-msgid "Emulator store is busy."
-msgstr ""
-
-msgid "Check the SD card and disconnect USB storage before playing."
-msgstr ""
-
-msgid "Turn off DAC mode to play games."
-msgstr ""
-
-msgid "USB storage is busy."
-msgstr ""
-
-msgid "Audio is still active; cannot start the game."
-msgstr ""
-
-msgid "Could not start the game."
-msgstr ""
-
-msgid "The game closed unexpectedly."
-msgstr ""
-
-#, c-format
-msgid "Copy games to the %s folder on the SD card."
-msgstr ""
-
-msgid "No games found"
-msgstr ""
-
-msgid "Emulators"
-msgstr ""
-
-msgid "Download emulators"
-msgstr ""
-
-msgid "No emulators installed"
-msgstr ""
-
-msgid "Download an emulator to play games."
 msgstr ""
 
 msgid "Needs newer firmware"
@@ -737,6 +694,49 @@ msgid "An emulator operation is already in progress"
 msgstr ""
 
 msgid "Loading emulators"
+msgstr ""
+
+msgid "Download emulators"
+msgstr ""
+
+msgid "Games run on the player only."
+msgstr ""
+
+msgid "Emulator store is busy."
+msgstr ""
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr ""
+
+msgid "Turn off DAC mode to play games."
+msgstr ""
+
+msgid "USB storage is busy."
+msgstr ""
+
+msgid "Audio is still active; cannot start the game."
+msgstr ""
+
+msgid "Could not start the game."
+msgstr ""
+
+msgid "The game closed unexpectedly."
+msgstr ""
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr ""
+
+msgid "No games found"
+msgstr ""
+
+msgid "Emulators"
+msgstr ""
+
+msgid "No emulators installed"
+msgstr ""
+
+msgid "Download an emulator to play games."
 msgstr ""
 
 msgid "Disconnect USB storage from the computer before changing files."
@@ -2004,21 +2004,6 @@ msgstr ""
 msgid "Plugin Manager"
 msgstr ""
 
-msgid "No entries to display"
-msgstr ""
-
-msgid "No plugin settings available"
-msgstr ""
-
-msgid "Plugin"
-msgstr ""
-
-msgid "Plugin Settings"
-msgstr ""
-
-msgid "Select a file"
-msgstr ""
-
 msgid "Download layouts"
 msgstr ""
 
@@ -2129,6 +2114,21 @@ msgid "Some plugin files were changed on the card. Replace them?"
 msgstr ""
 
 msgid "Plugin operation failed"
+msgstr ""
+
+msgid "No entries to display"
+msgstr ""
+
+msgid "No plugin settings available"
+msgstr ""
+
+msgid "Plugin"
+msgstr ""
+
+msgid "Plugin Settings"
+msgstr ""
+
+msgid "Select a file"
 msgstr ""
 
 msgid "Played"
@@ -2289,6 +2289,10 @@ msgstr ""
 msgid "Install from SD card"
 msgstr ""
 
+msgid ""
+"Update the Player only, retaining current drivers, kernel and bootloader."
+msgstr ""
+
 msgid "Download & Install"
 msgstr ""
 
@@ -2349,6 +2353,11 @@ msgstr ""
 msgid ""
 "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install "
 "from SD card."
+msgstr ""
+
+msgid ""
+"Update the entire CompásOS. Flashing firmware contains Bootloader, Player, "
+"Kernel and Drivers."
 msgstr ""
 
 msgid "Download"

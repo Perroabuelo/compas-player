@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 07:56-0600\n"
+"POT-Creation-Date: 2026-10-17 10:56-0600\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -536,46 +536,6 @@ msgstr "Aan"
 msgid "Off"
 msgstr "Uit"
 
-msgid "Could not open this file."
-msgstr "Kan dit bestand niet openen."
-
-#, c-format
-msgid ""
-"[File truncated at %d KB -- showing the first part only]\n"
-"\n"
-"%s"
-msgstr ""
-"[Bestand afgebroken bij %d KB — alleen het eerste deel wordt getoond]\n"
-"\n"
-"%s"
-
-msgid "Books refreshed"
-msgstr "Boeken bijgewerkt"
-
-msgid "Could not read the Books folder"
-msgstr "Kan de map Boeken niet lezen"
-
-msgid "Could not refresh books"
-msgstr "Kan boeken niet bijwerken"
-
-msgid "Favorites"
-msgstr "Favorieten"
-
-msgid "Books"
-msgstr "Boeken"
-
-msgid "No favorites yet"
-msgstr "Nog geen favorieten"
-
-msgid "No books found"
-msgstr "Geen boeken gevonden"
-
-msgid "Open a book and tap the bookmark icon to save it here."
-msgstr "Open een boek en tik op het bladwijzerpictogram om het hier op te slaan."
-
-msgid "Add .txt files to the Books folder, then refresh the library."
-msgstr "Voeg .txt-bestanden toe aan de map Boeken en werk daarna de bibliotheek bij."
-
 msgid "Screenshot saved"
 msgstr "Schermafbeelding opgeslagen"
 
@@ -604,48 +564,45 @@ msgstr "Subsonic"
 msgid "Stream Media"
 msgstr "Streaming"
 
-msgid "Games run on the player only."
-msgstr "Games werken alleen op de speler."
-
-msgid "Emulator store is busy."
-msgstr "De emulatorwinkel is bezig."
-
-msgid "Check the SD card and disconnect USB storage before playing."
-msgstr "Controleer de SD-kaart en koppel de USB-opslag los voordat je speelt."
-
-msgid "Turn off DAC mode to play games."
-msgstr "Schakel de DAC-modus uit om games te spelen."
-
-msgid "USB storage is busy."
-msgstr "De USB-opslag is bezig."
-
-msgid "Audio is still active; cannot start the game."
-msgstr "Audio is nog actief; het spel kan niet starten."
-
-msgid "Could not start the game."
-msgstr "De game kon niet worden gestart."
-
-msgid "The game closed unexpectedly."
-msgstr "De game is onverwacht gesloten."
+msgid "Could not open this file."
+msgstr "Kan dit bestand niet openen."
 
 #, c-format
-msgid "Copy games to the %s folder on the SD card."
-msgstr "Kopieer games naar de map %s op de SD-kaart."
+msgid ""
+"[File truncated at %d KB -- showing the first part only]\n"
+"\n"
+"%s"
+msgstr ""
+"[Bestand afgebroken bij %d KB — alleen het eerste deel wordt getoond]\n"
+"\n"
+"%s"
 
-msgid "No games found"
-msgstr "Geen games gevonden"
+msgid "Books refreshed"
+msgstr "Boeken bijgewerkt"
 
-msgid "Emulators"
-msgstr "Emulators"
+msgid "Could not read the Books folder"
+msgstr "Kan de map Books niet lezen"
 
-msgid "Download emulators"
-msgstr "Emulators downloaden"
+msgid "Could not refresh books"
+msgstr "Kan boeken niet bijwerken"
 
-msgid "No emulators installed"
-msgstr "Geen emulators geïnstalleerd"
+msgid "Favorites"
+msgstr "Favorieten"
 
-msgid "Download an emulator to play games."
-msgstr "Download een emulator om games te spelen."
+msgid "Books"
+msgstr "Boeken"
+
+msgid "No favorites yet"
+msgstr "Nog geen favorieten"
+
+msgid "No books found"
+msgstr "Geen boeken gevonden"
+
+msgid "Open a book and tap the bookmark icon to save it here."
+msgstr "Open een boek en tik op het bladwijzerpictogram om het hier op te slaan."
+
+msgid "Add .txt files to the Books folder, then refresh the library."
+msgstr "Voeg .txt-bestanden toe aan de map Books en werk daarna de bibliotheek bij."
 
 msgid "Needs newer firmware"
 msgstr "Vereist nieuwere firmware"
@@ -737,6 +694,49 @@ msgstr "Er wordt al een emulatorbewerking uitgevoerd"
 
 msgid "Loading emulators"
 msgstr "Emulators laden"
+
+msgid "Download emulators"
+msgstr "Emulators downloaden"
+
+msgid "Games run on the player only."
+msgstr "Games werken alleen op de speler."
+
+msgid "Emulator store is busy."
+msgstr "De emulatorwinkel is bezig."
+
+msgid "Check the SD card and disconnect USB storage before playing."
+msgstr "Controleer de SD-kaart en koppel de USB-opslag los voordat je speelt."
+
+msgid "Turn off DAC mode to play games."
+msgstr "Schakel de DAC-modus uit om games te spelen."
+
+msgid "USB storage is busy."
+msgstr "De USB-opslag is bezig."
+
+msgid "Audio is still active; cannot start the game."
+msgstr "Audio is nog actief; het spel kan niet starten."
+
+msgid "Could not start the game."
+msgstr "De game kon niet worden gestart."
+
+msgid "The game closed unexpectedly."
+msgstr "De game is onverwacht gesloten."
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr "Kopieer games naar de map %s op de SD-kaart."
+
+msgid "No games found"
+msgstr "Geen games gevonden"
+
+msgid "Emulators"
+msgstr "Emulators"
+
+msgid "No emulators installed"
+msgstr "Geen emulators geïnstalleerd"
+
+msgid "Download an emulator to play games."
+msgstr "Download een emulator om games te spelen."
 
 msgid "Disconnect USB storage from the computer before changing files."
 msgstr "Koppel de USB-opslag los van de computer voordat je bestanden wijzigt."
@@ -2013,21 +2013,6 @@ msgstr "Plugins vernieuwen"
 msgid "Plugin Manager"
 msgstr "Pluginbeheer"
 
-msgid "No entries to display"
-msgstr "Geen items om weer te geven"
-
-msgid "No plugin settings available"
-msgstr "Geen plugininstellingen beschikbaar"
-
-msgid "Plugin"
-msgstr "Plugin"
-
-msgid "Plugin Settings"
-msgstr "Plugininstellingen"
-
-msgid "Select a file"
-msgstr "Selecteer een bestand"
-
 msgid "Download layouts"
 msgstr "Indelingen downloaden"
 
@@ -2139,6 +2124,21 @@ msgstr "Sommige pluginbestanden op de kaart zijn gewijzigd. Vervangen?"
 
 msgid "Plugin operation failed"
 msgstr "Pluginbewerking mislukt"
+
+msgid "No entries to display"
+msgstr "Geen items om weer te geven"
+
+msgid "No plugin settings available"
+msgstr "Geen plugininstellingen beschikbaar"
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Plugin Settings"
+msgstr "Plugininstellingen"
+
+msgid "Select a file"
+msgstr "Selecteer een bestand"
 
 msgid "Played"
 msgstr "Afgespeeld"
@@ -2302,6 +2302,9 @@ msgstr "Online-update controleren"
 msgid "Install from SD card"
 msgstr "Installeren vanaf SD-kaart"
 
+msgid "Update the Player only, retaining current drivers, kernel and bootloader."
+msgstr "Werkt alleen de speler bij. Huidige stuurprogramma's, kernel en bootloader blijven behouden."
+
 #, fuzzy
 msgid "Download & Install"
 msgstr "Download mislukt"
@@ -2367,6 +2370,9 @@ msgstr "Update downloaden"
 
 msgid "Update saved. Connect to Wi-Fi, then install from Firmware Update > Install from SD card."
 msgstr "Update opgeslagen. Maak verbinding met wifi en installeer deze via Firmware-update > Installeren vanaf SD-kaart."
+
+msgid "Update the entire CompásOS. Flashing firmware contains Bootloader, Player, Kernel and Drivers."
+msgstr "Werkt heel CompásOS bij. De firmware bevat bootloader, speler, kernel en stuurprogramma's."
 
 msgid "Download"
 msgstr "Downloaden"
