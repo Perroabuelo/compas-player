@@ -41,7 +41,7 @@ void fb_fill_rect(int x, int y, int w, int h, fb_color_t color);
  * fb_flush(). */
 bool fb_draw_blit_rgb565(const uint16_t * pixels, int width, int height, size_t stride_pixels);
 
-/* Uppercase letters, digits, space, ':', '-', and '_' only -- see fb_draw.c's own
+/* Uppercase letters, digits, space, ':', '-', and '_' only -- see glyph5x7.c's own
  * font table doc comment for exactly why the character set is this
  * narrow. Any other byte is drawn as a blank cell rather than skipped, so
  * a typo in a caller's string is visible (a gap) instead of silently
@@ -73,8 +73,15 @@ void fb_flush(void);
  * decoding the JPEG again. */
 bool fb_draw_background_jpeg(const char * path);
 
+/* Draws a valid configured Compás RGB565 startup image, falling back to the
+ * bundled JPEG (optionally tinted from saved settings) on any load failure. */
+bool fb_draw_startup_background(void);
+
 /* Restores the cached boot splash, or fills with fallback_color if decoding
  * the splash failed. The installer uses this before drawing update status. */
 void fb_restore_background(fb_color_t fallback_color);
+
+/* Draws installer status over the cached splash with a dark backing panel. */
+void fb_draw_installer_warning(void);
 
 #endif /* BOOTLOADER_FB_DRAW_H */

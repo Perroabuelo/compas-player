@@ -50,6 +50,13 @@ void gui_show_boot_splash(void);
 void gui_reset_interactive_timeout_baseline(void);
 #endif
 
+/* Tells the main loop (main.c) to drop the real time elapsed while the UI
+ * thread was blocked on purpose, so LVGL's clock does not jump. */
+void main_loop_discard_elapsed_time(void);
+
+/* UI-thread cleanup after an emulator process returns; see gui.c. */
+void gui_resume_after_external_session(void);
+
 /* ---- Bridge for src/plugins/plugin_manager.c ----
  * plugin_manager.c owns Lua state/script lifecycle and has no LVGL code of
  * its own; these let a plugin's C API calls (plugin.show_list/play_file/
@@ -99,6 +106,12 @@ int gui_plugin_show_settings_list(const char * title, const int * row_types, con
                                    const int32_t * widths, const char * const * text_sizes,
                                    const bool * wrap_labels, int count, bool update_existing,
                                    const gui_lock_screen_options_t * preview);
+
+/* Opens the single plugin order editor screen. The editor copies all input
+ * strings and state. The change callback is owned by plugin_manager.c and is
+ * invoked with the slot returned here after a toggle or committed drag. */
+int gui_plugin_show_order_editor(const char * title, const char * const * keys,
+                                 const char * const * labels, const bool * visible, int count);
 
 /* Starts playback of a brand-new playlist built from `paths[0..count)`,
  * starting at paths[start_index] -- same "starting something new clears

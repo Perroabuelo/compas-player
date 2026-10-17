@@ -102,6 +102,8 @@
 #include "gui_settings.h"
 #include "gui_books.h"
 #include "gui_file_manager.h"
+#include "gui_emulator_store.h"
+#include "gui_emulators.h"
 #include "gui_queue.h"
 #include "gui_plugins.h"
 #include "plugin_manager.h"
@@ -147,7 +149,8 @@ static int32_t reload_display_height(void) {
     return height > 0 ? height : BOARD_SCREEN_HEIGHT;
 }
 
-static void gui_soft_reload_with_artwork(bool preserve_artwork) {
+static void gui_soft_reload_with_artwork(bool preserve_artwork,
+                                         const gui_nav_reload_state_t * restore_state) {
     reload_diag("gui_soft_reload: begin");
     int32_t screen_width = reload_display_width();
     int32_t screen_height = reload_display_height();
@@ -189,6 +192,10 @@ static void gui_soft_reload_with_artwork(bool preserve_artwork) {
     gui_file_manager_teardown();
     reload_diag("gui_books_teardown: before");
     gui_books_teardown();
+    reload_diag("gui_emulators_teardown: before");
+    gui_emulators_teardown();
+    reload_diag("gui_emulator_store_teardown: before");
+    gui_emulator_store_teardown();
     reload_diag("gui_queue_teardown: before");
     gui_queue_teardown();
     reload_diag("gui_plugins_teardown: before");
@@ -241,6 +248,8 @@ static void gui_soft_reload_with_artwork(bool preserve_artwork) {
     gui_plugin_manage_init();
     reload_diag("gui_plugin_store_init: before");
     gui_plugin_store_init();
+    reload_diag("gui_emulator_store_init: before");
+    gui_emulator_store_init();
     reload_diag("gui_lock_screen_init: before");
     gui_lock_screen_init();
     reload_diag("gui_books_init: before");
@@ -256,19 +265,21 @@ static void gui_soft_reload_with_artwork(bool preserve_artwork) {
 
     reload_diag("gui_navigation_init: before");
     gui_navigation_init();
+    if (restore_state) (void)gui_navigation_restore_path(restore_state);
     gui_setup_show_if_needed();
     gui_setup_after_reload();
     reload_diag("gui_soft_reload: end");
 }
 
 void gui_soft_reload(void) {
-    gui_soft_reload_with_artwork(false);
+    gui_soft_reload_with_artwork(false, NULL);
 }
 
 /* gui_reload_request()'s scheduling state -- see its own comment. */
 static bool reload_scheduled = false;
 static bool reload_in_progress = false;
 static bool reload_preserve_artwork = false;
+static bool reload_restore_plugin_manager = false;
 static uint32_t last_reload_tick = 0;
 
 /* How often the pending-reload timer rechecks gui_navigation_transition_in_
@@ -321,36 +332,51 @@ static void reload_trigger_cb(lv_timer_t * timer) {
     reload_in_progress = true;
     bool preserve_artwork = reload_preserve_artwork;
     reload_preserve_artwork = false;
-    gui_soft_reload_with_artwork(preserve_artwork);
+    bool restore_plugin_manager = reload_restore_plugin_manager;
+    reload_restore_plugin_manager = false;
+    gui_nav_reload_state_t restore_state;
+    if (restore_plugin_manager &&
+        !gui_navigation_capture_plugin_manager_path(&restore_state)) {
+        restore_plugin_manager = false;
+    }
+    gui_soft_reload_with_artwork(preserve_artwork,
+                                 restore_plugin_manager ? &restore_state : NULL);
     reload_in_progress = false;
     last_reload_tick = lv_tick_get();
 }
 
-static void gui_reload_schedule(bool preserve_artwork) {
-    if (reload_in_progress) return;
+static bool gui_reload_schedule(bool preserve_artwork) {
+    if (reload_in_progress) return false;
     if (reload_scheduled) {
         /* A full asset/theme reload takes precedence over layout-only reuse. */
         reload_preserve_artwork = reload_preserve_artwork && preserve_artwork;
-        return;
+        return true;
     } /* coalesce -- one pending/running reload covers any others requested meanwhile */
     if (last_reload_tick != 0 && lv_tick_elaps(last_reload_tick) < RELOAD_COOLDOWN_MS) {
         LV_LOG_WARN("gui_reload_request: ignored -- another reload finished under %dms ago "
                      "(a plugin calling plugin.reload_ui() unconditionally from its own top-level "
                      "code would look exactly like this, since that code re-runs on every reload)",
                      RELOAD_COOLDOWN_MS);
-        return;
+        return false;
     }
+    if (!lv_timer_create(reload_trigger_cb, RELOAD_RETRY_PERIOD_MS, NULL)) return false;
     reload_preserve_artwork = preserve_artwork;
     reload_scheduled = true;
-    lv_timer_create(reload_trigger_cb, RELOAD_RETRY_PERIOD_MS, NULL);
+    return true;
 }
 
 void gui_reload_request(void) {
-    gui_reload_schedule(false);
+    (void)gui_reload_schedule(false);
+}
+
+bool gui_reload_request_preserving_plugin_manager_page(void) {
+    if (!gui_reload_schedule(false)) return false;
+    reload_restore_plugin_manager = true;
+    return true;
 }
 
 void gui_player_layout_reload_request(void) {
-    gui_reload_schedule(true);
+    (void)gui_reload_schedule(true);
 }
 
 static bool theme_refresh_scheduled = false;

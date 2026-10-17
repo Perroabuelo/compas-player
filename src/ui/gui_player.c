@@ -5828,6 +5828,21 @@ void set_play_button_state(bool is_playing) {
     gui_shell_update_quick_drawer_play_state(is_playing);
 }
 
+void gui_player_stop_for_external_session(void) {
+    if (gui_player_has_active_track()) {
+        /* A deferred resume has the authoritative checkpoint when no audio
+         * is currently loaded; do not replace it with audio's idle position. */
+        if (!(deferred_resume_pending && audio_is_idle())) {
+            double pos = audio_get_resume_position_seconds();
+            deferred_resume_position = (pos > 0.0) ? pos : 0.0;
+        }
+        deferred_resume_pending = true;
+    }
+    set_play_button_state(false);
+    plugin_manager_notify_stopped();
+    audio_stop();
+}
+
 /* resolve_replaygain moved to gui_player.c */
 
 /* Tells audio.c what comes after `index` (per the current play mode -- see

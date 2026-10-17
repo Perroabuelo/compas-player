@@ -69,11 +69,7 @@ void installer_run(const scan_result_t *scan, bool fb_ready) {
         return;
     }
     if (ok && fb_ready) {
-        fb_restore_background(fb_rgb(0x12, 0x12, 0x12));
-        fb_color_t white = fb_rgb(0xFF, 0xFF, 0xFF);
-        int height = fb_text_height();
-        fb_draw_text_centered(FB_HEIGHT / 2 - height, "UPDATING PLAYER", white);
-        fb_draw_text_centered(FB_HEIGHT / 2 + height / 2, "DO NOT REMOVE SD CARD", white);
+        fb_draw_installer_warning();
         fb_flush();
     }
     if (ok) ok = player_install_fd(fd, (uint64_t)snapshot.st_size, NULL, false, true,

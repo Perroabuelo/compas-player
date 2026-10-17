@@ -22,7 +22,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-15 23:58-0600\n"
+"POT-Creation-Date: 2026-10-16 14:53-0600\n"
 "PO-Revision-Date: 2026-10-13 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Russian\n"
@@ -250,9 +250,8 @@ msgstr "Плейлисты"
 msgid "Sound"
 msgstr "Звук"
 
-#, fuzzy
 msgid "Playback"
-msgstr "Ошибка воспроизведения"
+msgstr "Воспроизведение"
 
 msgid "Library"
 msgstr "Библиотека"
@@ -320,6 +319,39 @@ msgstr "Воспроизводимые аудиофайлы не найдены"
 
 msgid "Open a folder containing supported audio files."
 msgstr "Откройте папку, содержащую поддерживаемые аудиофайлы."
+
+msgid "Unexpected reply from GitHub."
+msgstr "Неожиданный ответ от GitHub."
+
+msgid "Insert an SD card to change emulators."
+msgstr "Вставьте SD-карту, чтобы изменить эмуляторы."
+
+msgid "Cannot create the emulator folder."
+msgstr "Не удалось создать папку эмуляторов."
+
+msgid "The emulator folder is not writable."
+msgstr "Папка эмуляторов недоступна для записи."
+
+msgid "Not enough free space on the player."
+msgstr "Недостаточно свободного места на плеере."
+
+msgid "Could not read the emulator list from GitHub."
+msgstr "Не удалось прочитать список эмуляторов с GitHub."
+
+msgid "This emulator needs a newer player version."
+msgstr "Для этого эмулятора требуется более новая версия плеера."
+
+msgid "Could not install the emulator."
+msgstr "Не удалось установить эмулятор."
+
+msgid "The emulator download failed verification. Try again."
+msgstr "Загрузка эмулятора не прошла проверку. Попробуйте ещё раз."
+
+msgid "Could not start the emulator operation"
+msgstr "Не удалось запустить операцию с эмулятором"
+
+msgid "Could not remove the emulator."
+msgstr "Не удалось удалить эмулятор."
 
 msgid "Unexpected reply from GitHub"
 msgstr "Неожиданный ответ от GitHub"
@@ -420,9 +452,6 @@ msgstr "Обновление прошивки уже выполняется."
 msgid "Could not start the installation."
 msgstr "Не удалось начать установку."
 
-msgid "Unexpected reply from GitHub."
-msgstr "Неожиданный ответ от GitHub."
-
 msgid "Disconnect USB storage from the host before changing plugins."
 msgstr "Прежде чем менять плагины, отключите USB-накопитель от хоста."
 
@@ -435,11 +464,11 @@ msgstr "SD-карта доступна только для чтения. Про�
 msgid "Plugin storage is unavailable."
 msgstr "Хранилище плагинов недоступно."
 
-msgid "Could not read the plugin list from GitHub."
-msgstr "Не удалось прочитать список плагинов с GitHub."
-
 msgid "The SD card changed during the operation."
 msgstr "SD-карта менялась в ходе операции."
+
+msgid "Could not read the plugin list from GitHub."
+msgstr "Не удалось прочитать список плагинов с GitHub."
 
 msgid "Insert an SD card to install plugins."
 msgstr "Вставьте SD-карту для установки плагинов."
@@ -519,34 +548,6 @@ msgstr "Вкл."
 msgid "Off"
 msgstr "Выкл."
 
-msgid "Screenshot saved"
-msgstr "Скриншот сохранен."
-
-#, c-format
-msgid "Screenshot failed (%s)"
-msgstr "Не удалось сделать снимок экрана (%s)"
-
-msgid "unknown"
-msgstr "неизвестно"
-
-msgid "Cannot play folder"
-msgstr "Не могу воспроизвести папку"
-
-msgid "Paused: headphones disconnected"
-msgstr "Приостановлено: наушники отключены."
-
-msgid "Queue checkpoint failed; storage may be read-only"
-msgstr "Контрольная точка очереди не удалась; хранилище может быть доступно только для чтения"
-
-msgid "Playback history could not be saved"
-msgstr "Не удалось сохранить историю воспроизведения."
-
-msgid "Subsonic"
-msgstr "Дозвуковой"
-
-msgid "Stream Media"
-msgstr "Стрим Медиа"
-
 msgid "Could not open this file."
 msgstr "Не удалось открыть этот файл."
 
@@ -586,6 +587,153 @@ msgstr "Откройте книгу и коснитесь значка закл�
 
 msgid "Add .txt files to the Books folder, then refresh the library."
 msgstr "Добавьте файлы .txt в папку «Книги», затем обновите библиотеку."
+
+msgid "Screenshot saved"
+msgstr "Скриншот сохранен."
+
+#, c-format
+msgid "Screenshot failed (%s)"
+msgstr "Не удалось сделать снимок экрана (%s)"
+
+msgid "unknown"
+msgstr "неизвестно"
+
+msgid "Cannot play folder"
+msgstr "Не могу воспроизвести папку"
+
+msgid "Paused: headphones disconnected"
+msgstr "Приостановлено: наушники отключены."
+
+msgid "Queue checkpoint failed; storage may be read-only"
+msgstr "Контрольная точка очереди не удалась; хранилище может быть доступно только для чтения"
+
+msgid "Playback history could not be saved"
+msgstr "Не удалось сохранить историю воспроизведения."
+
+msgid "Subsonic"
+msgstr "Дозвуковой"
+
+msgid "Stream Media"
+msgstr "Стрим Медиа"
+
+msgid "Games run on the player only."
+msgstr "Игры работают только на плеере."
+
+msgid "Turn off DAC mode to play games."
+msgstr "Отключите режим DAC, чтобы играть."
+
+msgid "Could not start the game."
+msgstr "Не удалось запустить игру."
+
+msgid "The game closed unexpectedly."
+msgstr "Игра неожиданно закрылась."
+
+#, c-format
+msgid "Copy games to the %s folder on the SD card."
+msgstr "Скопируйте игры в папку %s на SD-карте."
+
+msgid "No games found"
+msgstr "Игры не найдены"
+
+msgid "Emulators"
+msgstr "Эмуляторы"
+
+msgid "Download emulators"
+msgstr "Скачать эмуляторы"
+
+msgid "No emulators installed"
+msgstr "Эмуляторы не установлены"
+
+msgid "Download an emulator to play games."
+msgstr "Скачайте эмулятор, чтобы играть."
+
+msgid "Needs newer firmware"
+msgstr "Нужна более новая прошивка"
+
+#, c-format
+msgid "Update available · %s"
+msgstr "Доступно обновление · %s"
+
+#, c-format
+msgid "Installed · %s"
+msgstr "Установлено · %s"
+
+#, c-format
+msgid "Available · %s"
+msgstr "Доступно · %s"
+
+msgid "Install"
+msgstr "Установить"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Saved games stay on the SD card."
+msgstr "Сохранения остаются на SD-карте."
+
+msgid "No description"
+msgstr "Нет описания"
+
+#, c-format
+msgid "By %s"
+msgstr "%s"
+
+#, c-format
+msgid "License: %s"
+msgstr "Лицензия: %s"
+
+#, c-format
+msgid "Size: %s"
+msgstr "Размер: %s"
+
+msgid "Update"
+msgstr "Обновить"
+
+msgid "No emulators are available in the catalog."
+msgstr "В каталоге нет доступных эмуляторов."
+
+msgid "Refresh emulator catalog"
+msgstr "Обновить каталог эмуляторов"
+
+msgid "Updates"
+msgstr "Обновления"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "Available"
+msgstr "Доступно"
+
+msgid "Installing emulator"
+msgstr "Установка эмулятора"
+
+msgid "Updating emulator"
+msgstr "Обновление эмулятора"
+
+msgid "Removing emulator"
+msgstr "Удаление эмулятора"
+
+msgid "This may take a while"
+msgstr "Это может занять некоторое время"
+
+#, c-format
+msgid "Remove %s?"
+msgstr "Удалить %s?"
+
+msgid "No network detected. Connect to a network to download emulators."
+msgstr "Сеть не обнаружена. Подключитесь к сети, чтобы скачать эмуляторы."
+
+msgid "Turn on Wi-Fi and connect first"
+msgstr "Включите Wi-Fi и сначала подключитесь"
+
+msgid "Emulator operation failed"
+msgstr "Операция с эмулятором не удалась"
+
+msgid "An emulator operation is already in progress"
+msgstr "Операция с эмулятором уже выполняется"
+
+msgid "Loading emulators"
+msgstr "Загрузка эмуляторов"
 
 msgid "Disconnect USB storage from the computer before changing files."
 msgstr "Перед изменением файлов отключите USB-накопитель от компьютера."
@@ -978,9 +1126,6 @@ msgstr "Обновить музыкальную базу данных?"
 
 msgid "Files on the card may have changed."
 msgstr "Возможно, файлы на карте изменились."
-
-msgid "Update"
-msgstr "Обновить"
 
 msgid "Use Settings > Update Music Database"
 msgstr "Используйте «Настройки» > «Обновить музыкальную базу данных»."
@@ -1509,9 +1654,6 @@ msgstr "Соединение не удалось"
 msgid "Paired"
 msgstr "Парный"
 
-msgid "Available"
-msgstr "Доступно"
-
 msgid "When on, this device stays visible and pairable to other Bluetooth devices, so a phone or computer can stream audio TO it and play through this device's own output -- using it as an external DAC."
 msgstr "Когда это устройство включено, оно остается видимым и может быть сопряжено с другими устройствами Bluetooth, поэтому телефон или компьютер могут передавать на него звук и воспроизводить его через собственный выход этого устройства, используя его в качестве внешнего ЦАП."
 
@@ -1879,6 +2021,21 @@ msgstr "Обновить плагины"
 msgid "Plugin Manager"
 msgstr "Менеджер плагинов"
 
+msgid "No entries to display"
+msgstr "Нет записей для отображения"
+
+msgid "No plugin settings available"
+msgstr "Нет доступных настроек плагина"
+
+msgid "Plugin"
+msgstr "Плагин"
+
+msgid "Plugin Settings"
+msgstr "Настройки плагина"
+
+msgid "Select a file"
+msgstr "Выберите файл"
+
 msgid "Download layouts"
 msgstr "Скачать макеты"
 
@@ -1888,14 +2045,8 @@ msgstr "Скачать темы"
 msgid "Extension updates"
 msgstr "Обновления расширений"
 
-msgid "Install"
-msgstr "Установить"
-
 msgid "Replace"
 msgstr "Заменить"
-
-msgid "Remove"
-msgstr "Удалить"
 
 msgid "Its settings stay on the card."
 msgstr "Его настройки остаются на карте."
@@ -1906,14 +2057,8 @@ msgstr "Обновить индивидуально"
 msgid "Choose plugins"
 msgstr "Выберите плагины"
 
-msgid "Needs newer firmware"
-msgstr "Нужна более новая прошивка"
-
 msgid "Update available"
 msgstr "Доступно обновление"
-
-msgid "Installed"
-msgstr "Установлено"
 
 msgid "Removed"
 msgstr "Удален"
@@ -1922,27 +2067,8 @@ msgid "Installed manually"
 msgstr "Устанавливается вручную"
 
 #, c-format
-msgid "Update available · %s"
-msgstr "Доступно обновление · %s"
-
-#, c-format
-msgid "Installed · %s"
-msgstr "Установлено · %s"
-
-#, c-format
-msgid "Available · %s"
-msgstr "Доступно · %s"
-
-#, c-format
 msgid "Version %s · %s"
 msgstr "Версия %s · %s"
-
-#, c-format
-msgid "By %s"
-msgstr "%s"
-
-msgid "No description"
-msgstr "Нет описания"
 
 msgid "Close"
 msgstr "Закрыть"
@@ -1962,9 +2088,6 @@ msgstr "Операция плагина уже выполняется"
 msgid "Updating plugins"
 msgstr "Обновление плагинов"
 
-msgid "This may take a while"
-msgstr "Это может занять некоторое время"
-
 msgid "No network detected. Connect to a network to download plugins."
 msgstr "Сеть не обнаружена. Подключитесь к сети, чтобы загрузить плагины."
 
@@ -1973,9 +2096,6 @@ msgstr "Нет доступных обновлений."
 
 msgid "Refresh plugin catalog"
 msgstr "Обновить каталог плагинов"
-
-msgid "Updates"
-msgstr "Обновления"
 
 msgid "Update All"
 msgstr "Обновить все"
@@ -1998,18 +2118,11 @@ msgstr "Установка плагина"
 msgid "Removing plugin"
 msgstr "Удаление плагина"
 
-#, c-format
-msgid "Remove %s?"
-msgstr "Удалить %s?"
-
 msgid "Update these plugins individually"
 msgstr "Обновите эти плагины по отдельности"
 
 msgid "Not enough memory to load the plugin store"
 msgstr "Недостаточно памяти для загрузки магазина плагинов"
-
-msgid "Turn on Wi-Fi and connect first"
-msgstr "Включите Wi-Fi и сначала подключитесь"
 
 msgid "Could not start the plugin refresh"
 msgstr "Не удалось запустить обновление плагина"
@@ -2034,21 +2147,6 @@ msgstr "На карте были изменены некоторые файлы 
 
 msgid "Plugin operation failed"
 msgstr "Операция плагина не удалась"
-
-msgid "No entries to display"
-msgstr "Нет записей для отображения"
-
-msgid "No plugin settings available"
-msgstr "Нет доступных настроек плагина"
-
-msgid "Plugin"
-msgstr "Плагин"
-
-msgid "Plugin Settings"
-msgstr "Настройки плагина"
-
-msgid "Select a file"
-msgstr "Выберите файл"
 
 msgid "Played"
 msgstr "Играл"
@@ -2395,6 +2493,12 @@ msgstr "Сопоставить обложку альбома"
 msgid "Takes its color from the cover of the playing track"
 msgstr "Берет цвет обложки воспроизводимого трека"
 
+msgid "Tint startup image"
+msgstr "Окрасить заставку"
+
+msgid "Uses the accent color for the default splash."
+msgstr "Использует цвет акцента для стандартной заставки."
+
 msgid "Presets"
 msgstr "Пресеты"
 
@@ -2710,22 +2814,22 @@ msgid "Keyboard"
 msgstr "Клавиатура"
 
 msgid "Plugins can override these saved preferences."
-msgstr ""
+msgstr "Плагины могут переопределить сохранённые настройки."
 
-#, fuzzy
 msgid "Quick Drawer"
-msgstr "Быстрая настройка"
+msgstr "Быстрая панель"
 
-#, fuzzy
+msgid "Plugin Order"
+msgstr "Порядок плагинов"
+
 msgid "Enabled"
-msgstr "Включить группу"
+msgstr "Включено"
 
-#, fuzzy
 msgid "Volume Slider"
-msgstr "Ползунок объема ящика"
+msgstr "Ползунок громкости"
 
 msgid "Reorder Items"
-msgstr ""
+msgstr "Изменить порядок"
 
 #, fuzzy
 msgid "Volume"
@@ -2747,7 +2851,7 @@ msgstr "Аудио"
 
 #, fuzzy
 msgid "Playback Status"
-msgstr "Воспроизведение и управление"
+msgstr "Воспроизведение"
 
 #, fuzzy
 msgid "Bluetooth Codec"
@@ -3485,6 +3589,9 @@ msgstr "Управление питанием"
 msgid "Playback and device actions"
 msgstr "Воспроизведение и действия устройства"
 
+#~ msgid "Parametric EQ"
+#~ msgstr "Параметрический эквалайзер"
+
 #~ msgid "Library migration pending. Favourites and play history will be kept"
 #~ msgstr "Ожидается перенос библиотеки. Избранное и история игр будут сохранены."
 
@@ -3513,8 +3620,14 @@ msgstr "Воспроизведение и действия устройства"
 #~ msgid "Albums (main list)"
 #~ msgstr "Альбомы (основной список)"
 
-#~ msgid "Parametric EQ"
-#~ msgstr "Параметрический эквалайзер"
+#~ msgid "Visible"
+#~ msgstr "Показывать"
+
+#~ msgid "Move Up"
+#~ msgstr "Переместить вверх"
+
+#~ msgid "Move Down"
+#~ msgstr "Переместить вниз"
 
 #~ msgid "Back"
 #~ msgstr "Назад"

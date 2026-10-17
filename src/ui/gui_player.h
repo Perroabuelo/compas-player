@@ -57,6 +57,9 @@ void favorite_icon_event_cb(lv_event_t * e);
 int gui_player_get_playlist_count(void);
 int gui_player_get_playlist_index(void);
 bool gui_player_has_active_track(void);
+/* Stop playback before an external process takes the audio device, retaining
+ * the current queue position for an explicit Play action afterward. */
+void gui_player_stop_for_external_session(void);
 /* Defer visual refresh work while the lyrics pane is moving. */
 bool gui_player_lyrics_animation_in_progress(void);
 const char * gui_player_get_current_track_path(void);

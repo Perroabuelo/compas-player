@@ -66,6 +66,8 @@
 #include "plugin_manager.h"
 #include "gui_plugin_manage.h"
 #include "gui_plugin_store.h"
+#include "gui_emulator_store.h"
+#include "emulator_store.h"
 #include "led_control.h"
 #include "charge_limiter.h"
 #include "idle_shutdown.h"
@@ -331,13 +333,31 @@ static bool screen_off_playback_active = false;
  * is checked to prevent idle suspend or radio disconnect while receiving USB audio. */
 static bool idle_shutdown_attempted = false;
 
+/* Called on the UI thread after an external full-screen session (an
+ * emulator) that blocked it and owned the framebuffer and input devices. The
+ * session consumed the user's attention without any input reaching LVGL, so
+ * inactivity, dimming and idle-shutdown state restart from now; button and
+ * screenshot events queued by the evdev threads are stale; and the whole
+ * screen is repainted over whatever the session left in the framebuffer. */
+void gui_resume_after_external_session(void) {
+    main_loop_discard_elapsed_time();
+    gui_reset_interactive_timeout_baseline();
+    backlight_set_dimmed(false);
+    inactivity_dimmed = false;
+    idle_shutdown_attempted = false;
+    hw_button_event_t event;
+    while (hw_buttons_consume_event(&event)) {}
+    (void) hw_buttons_consume_screenshot();
+    full_redraw_async_cb(NULL);
+}
+
 
 static bool shutdown_background_work_active(void) {
     return gui_lock_screen_has_background_work(true) || gui_library_has_background_work() || gui_subsonic_has_background_work() ||
            gui_network_has_background_work() || gui_lyrics_has_background_work() ||
            gui_player_has_background_work() || gui_shell_has_background_work() ||
            plugin_manager_has_background_work() || playlist_files_has_active_write() ||
-           gui_player_queue_write_busy() || screenshot_is_busy() || firmware_ota_busy() || plugin_store_busy();
+           gui_player_queue_write_busy() || screenshot_is_busy() || firmware_ota_busy() || plugin_store_busy() || emulator_store_busy();
 }
 
 /* Grace window after resuming from suspend. hw_buttons queues a tap event
@@ -1345,6 +1365,7 @@ static void update_timer_cb(lv_timer_t * timer) {
     poll_subsonic_download();
     poll_firmware_ota();
     poll_plugin_store();
+    poll_emulator_store();
     gui_plugin_manage_poll();
     poll_subsonic_library_download();
     poll_dlna_control();
@@ -2006,6 +2027,7 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
 #ifndef HOST_BUILD
     boot_checkpoint("gui_plugin_store_init done");
 #endif
+    gui_emulator_store_init();
     gui_books_init();
     build_power_off_countdown_popup();
     gui_queue_init();
