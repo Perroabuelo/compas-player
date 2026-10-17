@@ -3302,10 +3302,10 @@ bool active_press_is_over_drag_adjust_widget(void) {
  * starting on non-clickable card containers near sliders from triggering
  * swipe transitions. Capacity accommodates native sliders and dynamic
  * plugin settings list sliders. */
-/* 11 native slider cards, up to 8 plugin settings sliders
+/* 13 native slider cards, up to 20 plugin settings sliders
  * (PLUGIN_SETTINGS_LIST_SCREEN_POOL_SIZE x PLUGIN_SETTINGS_LIST_MAX_SLIDERS),
  * the accent color picker, ten Quick Drawer reorder handles and up to 24
- * plugin item editor handles, with headroom. */
+ * plugin item editor handles: 68 entries total, with four slots of headroom. */
 #define SWIPE_DEAD_ZONE_MAX 72
 static lv_obj_t * swipe_dead_zones[SWIPE_DEAD_ZONE_MAX];
 static int swipe_dead_zone_count = 0;

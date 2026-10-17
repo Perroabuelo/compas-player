@@ -186,7 +186,7 @@ plugin.define({
 
   | Area | Tokens |
   | --- | --- |
-  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.order_editor`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker`, `ui.startup_image` |
+  | UI | `ui.list`, `ui.settings`, `ui.row_width`, `ui.text_input`, `ui.toast`, `ui.progress`, `ui.screenshot`, `ui.theme`, `ui.theme_refresh`, `ui.reload`, `ui.home_layout`, `ui.home_tiles`, `ui.launcher_layout`, `ui.home_background`, `ui.lock_screen`, `ui.quick_toggle`, `ui.text_view`, `ui.text_view_images`, `ui.list_grid`, `ui.list_showing`, `ui.list_update`, `ui.list_wrap`, `ui.settings_list_wrap`, `ui.settings_list_10_sliders`, `ui.order_editor`, `ui.player_layout_xml`, `ui.file_manager`, `ui.file_picker`, `ui.startup_image` |
   | Playback and audio | `playback.control`, `playback.state`, `playback.events`, `playback.progress`, `playback.remote`, `playback.transport_skip`, `playback.speed`, `playback.format`, `playback.output_info`, `playback.silent_volume`, `playback.transient_volume`, `playback.output_events`, `playback.settings`, `playback.ab_loop`, `playback.ab_switch`, `playback.http_seek`, `audio.peq`, `audio.peq.transient`, `audio.peq.state`, `audio.stereo_width`, `audio.crossfeed`, `audio.crossfeed.angle`, `audio.hw_volume_curve` |
   | Files | `filesystem.sd`, `filesystem.mkdir`, `filesystem.playlists`, `filesystem.file_ops` |
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
@@ -370,7 +370,11 @@ plugin.show_settings_list("My Plugin", {
   `text_size`; `height` works on rows and toggles but not sliders. Rows and
   toggles also accept `wrap = true` for labels up to 511 bytes (95 without
   it). Check `ui.settings_list_wrap`.
-- Up to 24 items and 4 sliders per screen; extras are dropped. A missing
+- Up to 24 items and 10 sliders per screen on builds with
+  `ui.settings_list_10_sliders`; older builds allow 4 sliders. Extra rows or sliders
+  beyond these limits are dropped. This additive capability does not raise
+  the plugin API version; check it before showing a flat list that needs more
+  than 4 sliders. A missing
   `type`, an unknown `text_size`, or a missing callback is an error.
 - Up to 2 settings screens can be stacked.
 - Optional third argument `options` supports `update = true`, which refreshes
