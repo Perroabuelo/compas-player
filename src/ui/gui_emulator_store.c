@@ -77,7 +77,7 @@ static void build_popups(void) {
 
     build_titled_popup(&remove_popup, popup_backdrop_cb, &remove_title, NULL);
     lv_obj_t * body = lv_label_create(remove_popup.popup);
-    lv_label_set_text(body, TR("Saved games stay on the SD card."));
+    lv_label_set_text(body, TR("Bundled games and their saves will be removed. Games in SD/Games are kept."));
     lv_obj_set_width(body, lv_pct(100));
     lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
@@ -115,10 +115,14 @@ static void show_details(void) {
         snprintf(body + used, sizeof(body) - used, "\n%s", extra);
     }
     lv_label_set_text(detail_title, row->name[0] ? row->name : row->id);
-    lv_label_set_text(detail_body, body);
-
     bool incompatible = row->state == EMULATOR_STORE_INCOMPATIBLE;
     bool update = row->state == EMULATOR_STORE_UPDATE;
+    if (update)
+        lv_label_set_text_fmt(detail_body, "%s\n\n%s",
+                             TR("Updating replaces bundled games and their saves. Games in SD/Games are kept."), body);
+    else
+        lv_label_set_text(detail_body, body);
+
     bool installed = result_is_installed(row);
     lv_obj_t * primary = lv_obj_get_child(detail_popup.popup, 2);
     lv_obj_t * remove_row = lv_obj_get_child(detail_popup.popup, 3);

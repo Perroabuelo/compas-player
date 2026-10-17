@@ -5,7 +5,9 @@
 #include "emulator_store.h"
 #include "gui_emulator_store.h"
 #include "gui_navigation.h"
+#include "gui_network.h"
 #include "gui_notifications.h"
+#include "gui_player.h"
 #include "gui.h"
 #include "i18n.h"
 #include "screen_builders.h"
@@ -20,10 +22,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifndef HOST_BUILD
-#define EMULATOR_LOG "/tmp/compas_emulator.log"
+#define EMULATOR_LOG EMULATOR_ROOT "/.last-session.log"
 #if defined(BOARD_R3PROII)
 #define EMULATOR_BOARD "r3proii"
 #elif defined(BOARD_R3II_2025)
@@ -124,23 +127,46 @@ static int run_emulator_process(const emulator_manifest_t * emulator, const char
     char ** envp = emulator_environment();
     posix_spawn_file_actions_t fa;
     pid_t pid = -1;
-    int spawn_rc = envp ? posix_spawn_file_actions_init(&fa) : ENOMEM;
+    int log_fd = open(EMULATOR_LOG, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (log_fd < 0) log_fd = open("/dev/null", O_WRONLY | O_CLOEXEC);
+    int spawn_rc = !envp ? ENOMEM : log_fd < 0 ? errno : posix_spawn_file_actions_init(&fa);
     if (spawn_rc == 0) {
-        /* The player's stderr is /dev/console, which adb cannot read; keep
-         * the last session's output where it can be pulled. */
+        /* Keep logs on the SD card. If it went away after the launch guard,
+         * fall back to /dev/null instead of writing to RAM-backed /tmp. */
         spawn_rc = posix_spawn_file_actions_addopen(&fa, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
         if (spawn_rc == 0)
-            spawn_rc = posix_spawn_file_actions_addopen(&fa, STDOUT_FILENO, EMULATOR_LOG,
-                                                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            spawn_rc = posix_spawn_file_actions_adddup2(&fa, log_fd, STDOUT_FILENO);
         if (spawn_rc == 0) spawn_rc = posix_spawn_file_actions_adddup2(&fa, STDOUT_FILENO, STDERR_FILENO);
         /* After the dup2: it must not close a descriptor the child still needs. */
         if (spawn_rc == 0) spawn_rc = subprocess_close_inherited_fds_action(&fa);
         if (spawn_rc == 0) spawn_rc = posix_spawn_file_actions_addchdir_np(&fa, dir);
-        if (spawn_rc == 0) spawn_rc = posix_spawn(&pid, exec, &fa, NULL, argv, envp);
+        posix_spawnattr_t attrs;
+        bool attrs_ready = false;
+        if (spawn_rc == 0) {
+            spawn_rc = posix_spawnattr_init(&attrs);
+            attrs_ready = spawn_rc == 0;
+        }
+        if (spawn_rc == 0) spawn_rc = posix_spawnattr_setpgroup(&attrs, 0);
+        if (spawn_rc == 0) spawn_rc = posix_spawnattr_setflags(&attrs, POSIX_SPAWN_SETPGROUP);
+        if (spawn_rc == 0) spawn_rc = posix_spawn(&pid, exec, &fa, &attrs, argv, envp);
+        if (attrs_ready) posix_spawnattr_destroy(&attrs);
         posix_spawn_file_actions_destroy(&fa);
     }
+    if (log_fd >= 0) close(log_fd);
     free(envp);
     if (spawn_rc != 0) return -1;
+
+    /* Games are disposable and can use more memory than the player. Match
+     * the metadata helper's OOM preference after the child has been created. */
+    char oom_path[64];
+    snprintf(oom_path, sizeof(oom_path), "/proc/%ld/oom_score_adj", (long) pid);
+    int oom_fd = open(oom_path, O_WRONLY | O_CLOEXEC);
+    if (oom_fd >= 0) {
+        static const char score[] = "500";
+        ssize_t ignored = write(oom_fd, score, sizeof(score) - 1);
+        (void) ignored;
+        close(oom_fd);
+    }
 
     /* Blocking the UI thread here is intended. LVGL timers stop, so nothing
      * draws over the game, the screen timeout and idle suspend or shutdown
@@ -163,14 +189,43 @@ static void launch_game(const emulator_manifest_t * emulator, const char * path)
     (void) path;
     show_info_toast(TR("Games run on the player only."));
 #else
+    if (emulator_store_busy()) {
+        show_info_toast(TR("Emulator store is busy."));
+        return;
+    }
+    if (!emulator_store_sd_usable() || gui_network_usb_storage_session_active()) {
+        show_info_toast(TR("Check the SD card and disconnect USB storage before playing."));
+        return;
+    }
     if (dac_mode_active()) {
         show_info_toast(TR("Turn off DAC mode to play games."));
         return;
     }
-    /* The emulator takes over the audio device; do not resume afterwards. */
-    if (audio_is_playing()) audio_toggle_pause();
+    if (!usb_mode_control_storage_write_begin()) {
+        show_info_toast(TR("USB storage is busy."));
+        return;
+    }
+    /* The emulator owns the audio device. Pausing only schedules a fade, so
+     * wait until the audio worker confirms that it released the device. */
+    gui_player_stop_for_external_session();
+    const struct timespec audio_wait = { .tv_sec = 0, .tv_nsec = 20000000 };
+    bool audio_idle = false;
+    for (int waited_ms = 0; waited_ms < 2000; waited_ms += 20) {
+        if (audio_is_idle()) {
+            audio_idle = true;
+            break;
+        }
+        (void) nanosleep(&audio_wait, NULL);
+    }
+    if (!audio_idle && audio_is_idle()) audio_idle = true;
+    if (!audio_idle) {
+        usb_mode_control_storage_write_end();
+        show_info_toast(TR("Audio is still active; cannot start the game."));
+        return;
+    }
     int rc = run_emulator_process(emulator, path);
     gui_resume_after_external_session();
+    usb_mode_control_storage_write_end();
     if (rc < 0) show_error_toast(TR("Could not start the game."));
     else if (rc > 0) show_error_toast(TR("The game closed unexpectedly."));
 #endif

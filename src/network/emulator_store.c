@@ -436,29 +436,41 @@ static void * install_worker(void * arg) {
     snprintf(store_status.current_plugin, sizeof(store_status.current_plugin), "%.64s", entry->name);
     pthread_mutex_unlock(&store_mutex);
 
+    plugin_store_state_t final_state = PLUGIN_STORE_FAILED;
+    const char * final_error = NULL;
+    bool changed = false;
+    bool leased = false;
     if (entry->protocol != EMULATOR_PROTOCOL) {
-        finish(PLUGIN_STORE_FAILED, TR("This emulator needs a newer player version."), false);
+        final_error = TR("This emulator needs a newer player version.");
+    } else if (!(leased = usb_mode_control_storage_write_begin())) {
+        final_error = TR("Disconnect USB storage from the host before changing emulators.");
     } else if (!root_ready(EMULATOR_ROOT, entry->size, error, sizeof(error))) {
-        finish(PLUGIN_STORE_FAILED, error, false);
+        final_error = error;
     } else {
+        /* Keep the SD write lease through staging, downloads, replacement,
+         * cleanup and the final scan so USB mass storage cannot expose the
+         * card while this worker is changing it. */
         remove_leftovers(EMULATOR_ROOT);
         static unsigned stage_counter;
         char stage[PATH_MAX];
         snprintf(stage, sizeof(stage), "%s/" STAGE_PREFIX "%.32s.%lu.%u", EMULATOR_ROOT, entry->id,
                  (unsigned long) time(NULL), ++stage_counter);
         if (mkdir(stage, 0755) != 0) {
-            finish(PLUGIN_STORE_FAILED, TR("Could not install the emulator."), false);
+            final_error = TR("Could not install the emulator.");
         } else if (!download_entry(entry, job->tag, stage)) {
             (void) remove_tree(stage, 0);
-            finish(PLUGIN_STORE_FAILED, TR("The emulator download failed verification. Try again."), false);
+            final_error = TR("The emulator download failed verification. Try again.");
         } else if (!emulator_store_commit_staged(EMULATOR_ROOT, stage, entry->id)) {
             (void) remove_tree(stage, 0);
-            finish(PLUGIN_STORE_FAILED, TR("Could not install the emulator."), false);
+            final_error = TR("Could not install the emulator.");
         } else {
             compute_results();
-            finish(PLUGIN_STORE_READY, NULL, true);
+            final_state = PLUGIN_STORE_READY;
+            changed = true;
         }
     }
+    if (leased) usb_mode_control_storage_write_end();
+    finish(final_state, final_error, changed);
     free(job);
     return NULL;
 }
@@ -501,15 +513,25 @@ static void * uninstall_worker(void * arg) {
     snprintf(id, sizeof(id), "%s", (char *) arg);
     free(arg);
     char error[160];
-    if (!root_ready(EMULATOR_ROOT, 0, error, sizeof(error))) {
-        finish(PLUGIN_STORE_FAILED, error, false);
+    plugin_store_state_t final_state = PLUGIN_STORE_FAILED;
+    const char * final_error = NULL;
+    bool changed = false;
+    bool leased = usb_mode_control_storage_write_begin();
+    if (!leased) {
+        final_error = TR("Disconnect USB storage from the host before changing emulators.");
+    } else if (!root_ready(EMULATOR_ROOT, 0, error, sizeof(error))) {
+        final_error = error;
     } else if (!emulator_store_remove(EMULATOR_ROOT, id)) {
-        finish(PLUGIN_STORE_FAILED, TR("Could not remove the emulator."), false);
+        final_error = TR("Could not remove the emulator.");
     } else {
+        /* The lease also covers cleanup and the result scan after removal. */
         remove_leftovers(EMULATOR_ROOT);
         compute_results();
-        finish(PLUGIN_STORE_READY, NULL, true);
+        final_state = PLUGIN_STORE_READY;
+        changed = true;
     }
+    if (leased) usb_mode_control_storage_write_end();
+    finish(final_state, final_error, changed);
     return NULL;
 }
 
