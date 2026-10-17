@@ -1304,6 +1304,10 @@ bool gui_plugin_library_get_song(int64_t id, song_row_t * out_row) {
     return metadata_db_get_song_by_id(id, out_row);
 }
 
+bool gui_plugin_library_album_cover(int64_t song_id, int size_px, char * out, size_t out_size) {
+    return gui_library_album_cover_cached(song_id, size_px, out, out_size);
+}
+
 /* Fetches a page of artists with offset and clamped limit directly from the database. */
 int gui_plugin_library_get_artists(int offset, int limit, group_row_t * out_rows) {
     if (offset < 0) offset = 0;

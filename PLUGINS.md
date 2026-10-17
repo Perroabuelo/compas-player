@@ -184,7 +184,7 @@ plugin.define({
   | Storage | `storage.namespaced`, `storage.secrets`, `storage.secrets_get` |
   | Network | `network.http.sync`, `network.http.async`, `network.http.download`, `network.http.download_progress` |
   | Data | `data.json`, `crypto.md5`, `data.zip`, `data.zip_image`, `data.image_thumbnail`, `data.wallpaper`, `data.html` |
-  | Library | `library.artist_albums`, `library.paged`, `library.refresh`, `library.track_metadata` |
+  | Library | `library.album_cover`, `library.artist_albums`, `library.paged`, `library.refresh`, `library.track_metadata` |
 
 - LEDs depend on the model: check `plugin.led_available()` instead.
 - `plugin.get_app_info()` returns `{ version, build, platform, plugin_api }`.
@@ -1020,6 +1020,15 @@ and is capped at, 200; use `offset` to page. Check `library.paged`.
 - `plugin.library_get_artists([offset], [limit])`: artist groups.
 - `plugin.library_get_albums([offset], [limit], [artist])`: album groups,
   optionally only those whose artist or album artist is `artist`.
+- `plugin.library_album_cover_async(song_id, size, callback)` (check
+  `library.album_cover`): the album cover of a song, at `size` 72 or 480 (any
+  other size is an error currently). Use a group's `first_song_id`. `callback(path)` is
+  called on a later player tick with the absolute path of a BMP, which
+  `show_list` accepts as an `icon`. If the library has not generated that cover
+  yet, `callback(nil, "not_generated")` is called instead. This call never
+  creates a cover: covers come from Settings > Update Music Database. Returns
+  `true`, or `nil, "busy"` while 16 requests are pending. Unloading the plugin
+  drops its pending callbacks.
 
 A **song** is `{ id, path, title, artist, album, album_artist }`. Its `id`
 survives rescans: keep it to look the song up later with

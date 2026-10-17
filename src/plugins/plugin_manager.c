@@ -99,6 +99,9 @@ extern player_settings_t current_settings;
 #define PLUGIN_ASYNC_HTTP_MAX_RESPONSE (2U * 1024U * 1024U)
 #define PLUGIN_ASYNC_HTTP_MAX_REQUEST (1024U * 1024U)
 
+// How many album cover requests to queue, before rejecting
+#define PLUGIN_ALBUM_COVER_QUEUE 32
+
 typedef struct {
     lua_State * L;
     int open_ref; /* LUA_REGISTRYINDEX ref to the on_open function */
@@ -4831,6 +4834,89 @@ static int l_plugin_library_get_albums(lua_State * L) {
     return 1;
 }
 
+typedef struct {
+    lua_State * L;
+    int callback_ref;
+    int64_t song_id;
+    int size_px;
+} plugin_album_cover_req_t;
+
+static plugin_album_cover_req_t plugin_album_cover_queue[PLUGIN_ALBUM_COVER_QUEUE];
+
+static void plugin_album_cover_drop(plugin_album_cover_req_t * req, bool unref) {
+    if (unref) luaL_unref(req->L, LUA_REGISTRYINDEX, req->callback_ref);
+    req->L = NULL;
+    req->callback_ref = LUA_NOREF;
+}
+
+static void plugin_album_cover_drop_owner(lua_State * owner, bool aborted) {
+    for (int i = 0; i < PLUGIN_ALBUM_COVER_QUEUE; i++) {
+        plugin_album_cover_req_t * req = &plugin_album_cover_queue[i];
+        if (req->L && req->L == owner) plugin_album_cover_drop(req, !aborted);
+    }
+}
+
+static void plugin_album_cover_cancel_all(void) {
+    for (int i = 0; i < PLUGIN_ALBUM_COVER_QUEUE; i++) {
+        plugin_album_cover_req_t * req = &plugin_album_cover_queue[i];
+        if (!req->L) continue;
+        plugin_instance_t * inst = plugin_instance_for_state(req->L);
+        plugin_album_cover_drop(req, !(inst && inst->aborted));
+    }
+}
+
+static void plugin_album_cover_poll(void) {
+    for (int i = 0; i < PLUGIN_ALBUM_COVER_QUEUE; i++) {
+        plugin_album_cover_req_t * req = &plugin_album_cover_queue[i];
+        if (!req->L) continue;
+        lua_State * L = req->L;
+        int ref = req->callback_ref;
+        int64_t song_id = req->song_id;
+        int size_px = req->size_px;
+        req->L = NULL;
+        req->callback_ref = LUA_NOREF;
+        plugin_instance_t * inst = plugin_instance_for_state(L);
+        if (inst && inst->aborted) continue;
+        char path[PATH_MAX];
+        bool found = gui_plugin_library_album_cover(song_id, size_px, path, sizeof(path));
+        lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+        if (found) {
+            lua_pushstring(L, path);
+            lua_pushnil(L);
+        } else {
+            lua_pushnil(L);
+            lua_pushstring(L, "not_generated");
+        }
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        if (plugin_call(L, 2, 0, 0) != LUA_OK) {
+            const char * err = lua_tostring(L, -1);
+            lua_pop(L, 1);
+        }
+    }
+}
+
+static int l_plugin_library_album_cover_async(lua_State * L) {
+    int64_t song_id = (int64_t) luaL_checkinteger(L, 1);
+    int size_px = (int) luaL_checkinteger(L, 2);
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+    if (size_px != ALBUMART_THUMBNAIL_SIZE && size_px != ALBUMART_PLAYER_CACHE_SIZE)
+        return luaL_error(L, "plugin.library_album_cover_async: size must be %d or %d",
+                          ALBUMART_THUMBNAIL_SIZE, ALBUMART_PLAYER_CACHE_SIZE);
+    plugin_album_cover_req_t * slot = NULL;
+    for (int i = 0; i < PLUGIN_ALBUM_COVER_QUEUE && !slot; i++)
+        if (!plugin_album_cover_queue[i].L) slot = &plugin_album_cover_queue[i];
+    if (!slot) {
+        return push_plugin_error(L, "busy");
+    }
+    lua_pushvalue(L, 3);
+    slot->callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    slot->L = plugin_main_state(L);
+    slot->song_id = song_id;
+    slot->size_px = size_px;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 /* plugin.refresh_library() -- triggers the same background rescan as
  * Settings > Update Music Database, so a plugin that wrote new files under
  * plugin.sd_root() can make them show up in library_*() without the user
@@ -5242,7 +5328,7 @@ static const char * const plugin_capabilities[] = {
     "ui.music_layout", "ui.quick_drawer_layout",
     "ui.progress", "network.http.download_progress", "ui.list", "ui.settings", "ui.row_width", "ui.text_input", "ui.toast", "ui.screenshot", "ui.theme",
     "filesystem.sd", "playback.control", "playback.state", "playback.events",
-    "library.artist_albums", "library.paged", "network.http.sync", "network.http.async",
+    "library.artist_albums", "library.paged", "library.album_cover", "network.http.sync", "network.http.async",
     "network.http.download", "filesystem.mkdir", "crypto.md5", "audio.peq", "data.json",
     "storage.namespaced", "storage.secrets", "playback.remote", "filesystem.playlists", "library.refresh",
     "ui.home_layout", "ui.theme_refresh", "ui.reload", "ui.home_tiles", "ui.launcher_layout",
@@ -6266,6 +6352,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "library_get_song",          l_plugin_library_get_song },
     { "library_get_artists",       l_plugin_library_get_artists },
     { "library_get_albums",        l_plugin_library_get_albums },
+    { "library_album_cover_async", l_plugin_library_album_cover_async },
     { "refresh_library",           l_plugin_refresh_library },
     { "on",                        l_plugin_on },
     { "set_interval",              l_plugin_set_interval },
@@ -6747,6 +6834,7 @@ static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
     }
     if (plugin_zip_image.active && failed_load_owner_matches(plugin_zip_image.L, L, aborted))
         plugin_zip_image_cancel();
+    plugin_album_cover_drop_owner(L, aborted);
     if (failed_load_owner_matches(plugin_file_op.L, L, aborted)) plugin_file_op_release();
     if (failed_load_owner_matches(plugin_file_picker.L, L, aborted)) plugin_file_picker_release(true);
 }
@@ -7213,6 +7301,7 @@ void plugin_manager_deinit(void) {
     deinit_diag("plugin_manager_deinit: cancel_all_async_http before");
     plugin_manager_cancel_all_async_http();
     plugin_zip_image_cancel();
+    plugin_album_cover_cancel_all();
     plugin_file_op_release();
     plugin_file_picker_release(true);
     deinit_diag("plugin_manager_deinit: cancel_all_async_http after");
@@ -7271,6 +7360,7 @@ void plugin_manager_deinit(void) {
 void plugin_manager_poll(void) {
     plugin_output_poll();
     plugin_zip_image_poll();
+    plugin_album_cover_poll();
     plugin_file_op_poll();
     for (int i = 0; i < PLUGIN_MAX_ASYNC_HTTP; i++) {
         plugin_async_http_t * req = &plugin_async_http[i];
