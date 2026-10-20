@@ -478,3 +478,12 @@ __pycache__/
 
 # Plugin payloads belong in the compas-plugins repository.
 /plugins_examples/
+
+# Local device testing checklist
+/TESTING_LOCAL.md
+
+# XML player action binding regressions.
+!/scripts/test_plugin_player_actions.py
+!/scripts/test_player_layout_interactions.sh
+!/src/ui/player_layouts_test.c
+!/src/ui/player_layout_bind_test.c
