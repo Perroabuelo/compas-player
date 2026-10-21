@@ -699,7 +699,7 @@ APP_SRCS += src/ui/gui_plugin_manage.c src/ui/gui_plugin_store.c src/ui/gui_emul
 APP_SRCS += src/core/theme_file.c src/ui/gui_themes.c
 APP_SRCS += src/library/remote_track.c
 # hiby-yt modules: new files only, compiled with -Werror.
-HIBY_YT_SRCS = src/core/stream_log.c
+HIBY_YT_SRCS = src/core/stream_log.c src/network/stream_resume.c
 APP_SRCS += $(HIBY_YT_SRCS)
 APP_SRCS += src/library/queue_resume.c
 APP_SRCS += src/audio/track_probe.c

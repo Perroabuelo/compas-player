@@ -17,6 +17,9 @@
 
 #define STREAM_RING_CAPACITY (256 * 1024)
 #define STREAM_MAX_REDIRECTS 5
+/* hiby-yt: bound connect and read so a dropped Wi-Fi ends a blocked recv()
+ * and the pump can resume the stream (0 would wait forever). */
+#define STREAM_IO_TIMEOUT_MS 15000
 
 typedef struct {
     http_conn_t * conn;
@@ -146,7 +149,8 @@ static bool open_response(const char * url, bool verify_tls, int redirects_left,
     r->conn = calloc(1, sizeof(*r->conn));
     if (!r->conn)
         return false;
-    if (!http_conn_open(r->conn, host, port, https, verify_tls)) {
+    if (!http_conn_open_ex(r->conn, host, port, https, verify_tls, STREAM_IO_TIMEOUT_MS,
+                           STREAM_IO_TIMEOUT_MS, NULL, NULL)) {
         http_conn_close(r->conn);
         free(r->conn);
         r->conn = NULL;
