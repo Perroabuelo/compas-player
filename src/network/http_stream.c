@@ -66,6 +66,7 @@ struct http_stream {
     unsigned log_sid;
     unsigned reconnects;
     bool failed;
+    uint64_t received; /* bytes from the network into the ring */
 };
 
 typedef struct {
@@ -314,6 +315,7 @@ static bool push_ring(http_stream_t * s, const uint8_t * data, size_t len) {
             s->ring_head = (s->ring_head + 1) % STREAM_RING_CAPACITY;
         }
         s->ring_fill += take;
+        s->received += take;
         if (s->ring_history > STREAM_RING_CAPACITY - s->ring_fill)
             s->ring_history = STREAM_RING_CAPACITY - s->ring_fill;
         off += take;
@@ -655,6 +657,17 @@ const char * http_stream_content_type(http_stream_t * s) {
 }
 bool http_stream_can_seek(http_stream_t * s) { return s && s->seekable; }
 unsigned http_stream_log_sid(http_stream_t * s) { return s ? s->log_sid : 0; }
+void http_stream_log_host(http_stream_t * s, char * out, size_t size) {
+    stream_log_url_host(s ? s->final_url : "", out, size);
+}
+uint64_t http_stream_bytes_received(http_stream_t * s) {
+    if (!s)
+        return 0;
+    pthread_mutex_lock(&s->mutex);
+    uint64_t n = s->received;
+    pthread_mutex_unlock(&s->mutex);
+    return n;
+}
 unsigned http_stream_reconnects(http_stream_t * s) {
     if (!s)
         return 0;

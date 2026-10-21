@@ -402,6 +402,8 @@ test_*.c
 !/scripts/test_gui_themes.sh
 !/scripts/test_theme_store.sh
 !/scripts/test_mp4_compact.sh
+!/scripts/test_mp4_frag.sh
+!/scripts/test_stream_log_playback.sh
 !/scripts/test_file_ops.sh
 !/scripts/test_image_thumb.sh
 /scripts/base_image/*smoke*

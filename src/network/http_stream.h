@@ -28,6 +28,10 @@ bool http_stream_seek(http_stream_t * s, int64_t offset, int origin);
 unsigned http_stream_log_sid(http_stream_t * s);
 unsigned http_stream_reconnects(http_stream_t * s);
 bool http_stream_failed(http_stream_t * s);
+/* Host of the final (post-redirect) URL, for stream_log; never the URL. */
+void http_stream_log_host(http_stream_t * s, char * out, size_t size);
+/* Bytes received from the network so far, across seeks and resumes. */
+uint64_t http_stream_bytes_received(http_stream_t * s);
 
 /* The caller owns and serializes read/seek/close operations. Close stops the
  * internal pump; it must not race a caller that is reading or seeking. */

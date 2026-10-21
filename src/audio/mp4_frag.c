@@ -34,6 +34,9 @@ static uint32_t rd32(const uint8_t * p) {
 
 static uint64_t rd64(const uint8_t * p) { return (uint64_t)rd32(p) << 32 | rd32(p + 4); }
 
+/* A box header whose 32-bit size is 1 carries a 64-bit size next. */
+static bool has_large_size(const uint8_t * p) { return rd32(p) == 1; }
+
 /* Payload of the first child of `type` among the boxes in [p, p + len). */
 static const uint8_t * find_child(const uint8_t * p, size_t len, uint32_t type, size_t * out_len) {
     while (len) {
@@ -97,37 +100,45 @@ static const char * stage_for(fmp4_status_t st) {
     return st == FMP4_ERR_LIMIT ? "limit" : "moof";
 }
 
+/* Reads len bytes at the current position, up to the end of the file;
+ * returns how many. */
+static size_t read_on(mp4_frag_t * m, uint8_t * buf, size_t len) {
+    return fread(buf, 1, len, m->f);
+}
+
 /* Loads the fragment at offset, whose first sample has global index first.
- * The new table replaces the old one only once it parsed. */
+ * The new table replaces the old one only once it parsed. Reads strictly
+ * forward and stop at the first byte of sample data: over HTTP a step back
+ * past what the stream keeps behind its position is a new range request. */
 static bool load_fragment(mp4_frag_t * m, uint64_t offset, uint32_t first) {
     uint8_t head[16];
     if (offset >= m->file_size)
         return fail(m, "moof", "past_end");
-    size_t avail = m->file_size - offset < sizeof(head) ? (size_t)(m->file_size - offset) : sizeof(head);
-    if (!read_at(m, offset, head, avail))
+    size_t got = m->file_size - offset < 8 ? (size_t)(m->file_size - offset) : 8;
+    if (!read_at(m, offset, head, got))
         return fail(m, "moof", "read");
+    if (got == 8 && has_large_size(head))
+        got += read_on(m, head + 8, 8);
     uint32_t type, hl;
     uint64_t size;
-    fmp4_status_t st = fmp4_box_header(head, avail, &type, &hl, &size);
+    fmp4_status_t st = fmp4_box_header(head, got, &type, &hl, &size);
     if (st == FMP4_OK && type != FMP4_FOURCC('m', 'o', 'o', 'f'))
         st = FMP4_ERR_INVALID;
     if (st == FMP4_OK && size > FMP4_MAX_MOOF_BYTES)
         st = FMP4_ERR_LIMIT;
     if (st != FMP4_OK)
         return fail(m, stage_for(st), fmp4_status_str(st));
-    /* The moof and the header of the mdat after it, as far as the file goes. */
-    uint64_t want = size + 16;
-    if (want > m->file_size - offset)
-        want = m->file_size - offset;
-    uint8_t * buf = malloc((size_t)want);
+    /* The moof, then exactly the mdat header (8 bytes, 16 with a 64-bit
+     * size), as far as the file goes. */
+    uint8_t * buf = malloc((size_t)size + 16);
     if (!buf)
         return fail(m, "moof", "nomem");
+    memcpy(buf, head, got);
+    size_t len = got + read_on(m, buf + got, (size_t)size + 8 - got);
+    if (len == size + 8 && has_large_size(buf + size))
+        len += read_on(m, buf + len, 8);
     fmp4_frag_t frag;
-    if (!read_at(m, offset, buf, (size_t)want)) {
-        free(buf);
-        return fail(m, "moof", "read");
-    }
-    st = fmp4_parse_moof(buf, (size_t)want, offset, &m->trex, &frag);
+    st = fmp4_parse_moof(buf, len, offset, &m->trex, &frag);
     free(buf);
     if (st != FMP4_OK)
         return fail(m, stage_for(st), fmp4_status_str(st));
@@ -185,7 +196,8 @@ mp4_frag_t * mp4_frag_open(FILE * f, uint64_t file_size, const uint8_t * moov, s
     /* A sidx right after moov; otherwise the first fragment is there. */
     uint64_t first = moov_offset + moov_size;
     uint8_t head[16];
-    size_t avail = file_size > first ? (file_size - first < 16 ? (size_t)(file_size - first) : 16) : 0;
+    /* Only a box header: reading past it would step back for the moof. */
+    size_t avail = file_size - first >= 8 ? 8 : 0;
     if (avail >= 8 && read_at(m, first, head, avail) &&
         fmp4_box_header(head, avail, &type, &hl, &moov_size) == FMP4_OK &&
         type == FMP4_FOURCC('s', 'i', 'd', 'x')) {

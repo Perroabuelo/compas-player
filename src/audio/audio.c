@@ -36,6 +36,7 @@
 #include "audio_tempo.h"
 #include "http_stream.h"
 #include "http_stream_file.h"
+#include "stream_log.h"
 #include "remote_track.h"
 #include "metadata.h"
 
@@ -155,7 +156,92 @@ typedef struct {
     /* Local FLAC callback stream. dr_flac has no relaxed file convenience
      * wrapper, so keep the FILE alive for the decoder lifetime. */
     FILE * flac_file;
+
+    /* hiby-yt: stream_log state of a network decoder (copied by value with
+     * the decoder, like everything above). */
+    unsigned log_sid;
+    struct timespec log_open_time;
+    bool log_mp4, log_first_audio, log_eof, log_error, log_closed;
 } decoder_t;
+
+/* hiby-yt: stream_log events of a network decoder (design D5): open,
+ * first_audio, seek, error and close, under the http_stream's sid. The
+ * decoder only remembers what happened; nothing stays open. */
+static double stream_log_ms_since(const struct timespec * t0) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (double)(now.tv_sec - t0->tv_sec) * 1000.0 + (double)(now.tv_nsec - t0->tv_nsec) / 1e6;
+}
+
+static mp4_frag_t * stream_log_frag(const decoder_t * dec) {
+    return dec->type == DECODER_AAC ? mp4_demux_get_frag(aac_get_mp4_demux(dec->as.aac)) : NULL;
+}
+
+static const char * stream_log_container(const decoder_t * dec) {
+    switch (dec->type) {
+        case DECODER_AAC:
+            if (stream_log_frag(dec)) return "fmp4";
+            return aac_get_mp4_demux(dec->as.aac) ? "mp4" : "adts";
+        case DECODER_FLAC: return "flac";
+        case DECODER_MP3: return "mp3";
+        default: return "other";
+    }
+}
+
+static void stream_log_open(decoder_t * dec) {
+    char host[256];
+    mp4_frag_t * frag = stream_log_frag(dec);
+    http_stream_log_host(dec->net_stream, host, sizeof(host));
+    stream_log_event(dec->log_sid, "open", "host=%s container=%s length=%lld sidx=%d refs=%u",
+                     host, stream_log_container(dec), (long long) http_stream_length(dec->net_stream),
+                     frag && mp4_frag_has_sidx(frag), frag ? mp4_frag_sidx_refs(frag) : 0);
+}
+
+static decoder_read_result_t stream_log_read(decoder_t * dec, decoder_read_result_t r) {
+    if (!dec->net_stream) return r;
+    if (r.frames && !dec->log_first_audio) {
+        dec->log_first_audio = true;
+        stream_log_event(dec->log_sid, "first_audio", "bytes_received=%llu ms_since_open=%.0f",
+                         (unsigned long long) http_stream_bytes_received(dec->net_stream),
+                         stream_log_ms_since(&dec->log_open_time));
+    }
+    if (r.status == DECODER_READ_EOF) dec->log_eof = true;
+    if (r.status == DECODER_READ_FATAL_ERROR) dec->log_error = true;
+    return r;
+}
+
+static void stream_log_seek(decoder_t * dec, uint64_t frame) {
+    mp4_frag_t * frag = stream_log_frag(dec);
+    uint32_t sample, index;
+    uint64_t discard, offset;
+    unsigned long long target_ms = dec->sample_rate ? frame * 1000ull / dec->sample_rate : 0;
+    if (frag && mp4_demux_map_pcm_frame(aac_get_mp4_demux(dec->as.aac), frame, &sample, &discard) &&
+        mp4_frag_locate(frag, sample, &index, &offset))
+        stream_log_event(dec->log_sid, "seek", "target_ms=%llu frag=%u offset=%llu",
+                         target_ms, index, (unsigned long long) offset);
+    else
+        stream_log_event(dec->log_sid, "seek", "target_ms=%llu frag=- offset=-", target_ms);
+}
+
+/* Before the decoder and its stream go away. A failed resume already logged
+ * error stage=reconnect in http_stream. */
+static void stream_log_close(decoder_t * dec) {
+    if (!dec->net_stream || dec->log_closed) return;
+    dec->log_closed = true;
+    mp4_frag_t * frag = stream_log_frag(dec);
+    bool reconnect_failed = http_stream_failed(dec->net_stream);
+    if (frag && mp4_frag_var_duration(frag))
+        stream_log_event(dec->log_sid, "warn", "reason=var_duration");
+    if (dec->log_error && !reconnect_failed) {
+        const char * stage = frag && mp4_frag_error_stage(frag) ? mp4_frag_error_stage(frag) : "decode";
+        const char * detail = frag && mp4_frag_error_detail(frag) ? mp4_frag_error_detail(frag) : "read";
+        stream_log_event(dec->log_sid, "error", "stage=%s detail=%s", stage, detail);
+    }
+    stream_log_event(dec->log_sid, "close", "reason=%s bytes=%llu reconnects=%u",
+                     dec->log_error || reconnect_failed ? "error" : dec->log_eof ? "eof" : "stop",
+                     (unsigned long long) http_stream_bytes_received(dec->net_stream),
+                     http_stream_reconnects(dec->net_stream));
+}
 
 /* Most internet-radio URLs have no usable extension (an opaque mount point,
  * or a query string). A recognized path extension or Content-Type still
@@ -404,8 +490,10 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
          * prescans. Other formats still require a finite file/container.
          * Absent a recognized hint, path extension, or audio Content-Type,
          * MP3 remains the default for ordinary internet-radio URLs. */
+        clock_gettime(CLOCK_MONOTONIC, &dec->log_open_time); /* hiby-yt: stream_log */
         dec->net_stream = http_stream_open(remote ? remote_meta.stream_url : path, remote ? remote_meta.verify_tls : true);
         if (!dec->net_stream) return false;
+        dec->log_sid = http_stream_log_sid(dec->net_stream);
 
         const char * content_type = http_stream_content_type(dec->net_stream);
         if (remote) {
@@ -449,6 +537,7 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
      * episodes expensive to open. aac_open_mp4_file_stream() rejects a
      * non-mp4a moov, so a separate peek would parse it twice. */
         if (is_mp4) {
+            dec->log_mp4 = true;
             if (!dec->seekable) {
                 http_stream_close(dec->net_stream);
                 dec->net_stream = NULL;
@@ -820,13 +909,13 @@ static decoder_read_result_t decoder_read_s16(decoder_t * dec, uint64_t frames, 
             uint64_t r = drflac_read_pcm_frames_s16(dec->as.flac, frames, buf);
             res.frames = r;
             res.status = (r > 0) ? DECODER_READ_OK : DECODER_READ_EOF;
-            return res;
+            return stream_log_read(dec, res);
         }
         case DECODER_MP3: {
             uint64_t r = drmp3_read_pcm_frames_s16(dec->as.mp3, frames, buf);
             res.frames = r;
             res.status = (r > 0) ? DECODER_READ_OK : DECODER_READ_EOF;
-            return res;
+            return stream_log_read(dec, res);
         }
         case DECODER_WAV: {
             uint64_t r = drwav_read_pcm_frames_s16(dec->as.wav, frames, buf);
@@ -849,7 +938,7 @@ static decoder_read_result_t decoder_read_s16(decoder_t * dec, uint64_t frames, 
             return r;
         }
         case DECODER_AAC:
-            return aac_read_pcm_frames_s16(dec->as.aac, frames, buf);
+            return stream_log_read(dec, aac_read_pcm_frames_s16(dec->as.aac, frames, buf));
         case DECODER_ALAC:
             return alac_read_pcm_frames_s16(dec->as.alac, frames, buf);
         case DECODER_APE:
@@ -885,7 +974,7 @@ static decoder_read_result_t decoder_read_s32(decoder_t * dec, uint64_t frames, 
             for (size_t i = 0; i < sample_count; i++) {
                 buf[i] >>= 8;
             }
-            return res;
+            return stream_log_read(dec, res);
         }
         case DECODER_WAV: {
             uint64_t r = drwav_read_pcm_frames_s32(dec->as.wav, frames, buf);
@@ -957,6 +1046,7 @@ static bool mp3_needs_seek_index(const decoder_t * dec) {
 static bool decoder_seek(decoder_t * dec, uint64_t frame) {
     if (!dec || !dec->seekable)
         return false;
+    if (dec->net_stream) stream_log_seek(dec, frame);
     switch (dec->type) {
         case DECODER_FLAC:   return drflac_seek_to_pcm_frame(dec->as.flac, frame) != 0;
         case DECODER_MP3:
@@ -1011,6 +1101,7 @@ static bool decoder_supports_sample_accurate_loop(const decoder_t * dec) {
  * is corrupt at the retry position (confirmed independently with ffmpeg on
  * a real-world file: "invalid sync code" / "invalid frame header"). */
 static void decoder_close(decoder_t * dec) {
+    stream_log_close(dec);
     switch (dec->type) {
         case DECODER_FLAC:
             if (dec->as.flac) { drflac_close(dec->as.flac); dec->as.flac = NULL; }
@@ -1109,6 +1200,11 @@ static bool decoder_open(decoder_t * dec, const char * path) {
             dec->open_error = AUDIO_ERROR_FILE_UNAVAILABLE;
         DBG_LOG("audio: open rejected (%s): %s\n",
                 safe_path_tail(path), audio_error_description(dec->open_error));
+        /* hiby-yt: the stream opened but its container did not. */
+        if (dec->log_sid) {
+            stream_log_event(dec->log_sid, "error", "stage=%s detail=open", dec->log_mp4 ? "moov" : "decode");
+            stream_log_event(dec->log_sid, "close", "reason=error bytes=- reconnects=0");
+        }
         return false;
     }
     if (!decoder_format_is_safe(dec)) {
@@ -1119,6 +1215,8 @@ static bool decoder_open(decoder_t * dec, const char * path) {
     }
     if (!dec->net_stream)
         dec->seekable = true;
+    else
+        stream_log_open(dec);
     dec->open_error = AUDIO_ERROR_NONE;
     return true;
 }
