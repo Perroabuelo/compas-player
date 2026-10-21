@@ -32,6 +32,7 @@ typedef struct {
     int fd;
     test_mode_t mode;
     int requests;
+    int max_requests; /* when set, overrides the per-mode limit */
 } server_t;
 #define TEST_ENTITY_SIZE 300000ULL
 /* Not a multiple of 10, so bytes of a response starting at 0 cannot pass
@@ -186,6 +187,8 @@ static void * server_main(void * arg) {
             static const int cut_requests[] = {2, 3, 3, 6};
             max_requests = cut_requests[s->mode - CUT_ONCE];
         }
+        if (s->max_requests)
+            max_requests = s->max_requests;
         if (s->requests >= max_requests)
             break;
         if ((s->mode == IGNORE_RANGE || s->mode == BAD_LENGTH) && which > 0)
@@ -216,7 +219,9 @@ static http_stream_t * open_test(server_t * s, pthread_t * thread, char url[80])
 }
 
 static void test_good(void) {
-    server_t s = {.mode = GOOD};
+    /* The SEEK_END below stays in the ring only if the pump already received
+     * those bytes; otherwise it opens a third request. Both are valid. */
+    server_t s = {.mode = GOOD, .max_requests = 3};
     pthread_t t;
     char url[80];
     http_stream_t * x = open_test(&s, &t, url);
@@ -234,6 +239,9 @@ static void test_good(void) {
     assert(http_stream_read(x, b, 10) == 2 && !memcmp(b, "89", 2));
     assert(http_stream_read(x, b, 1) == 0);
     http_stream_close(x);
+    /* Without the third request the server still waits for it. */
+    if (s.requests < 3)
+        shutdown(s.fd, SHUT_RDWR);
     pthread_join(t, NULL);
 }
 static void test_ignored_and_bad_range(void) {
