@@ -26,7 +26,7 @@ cc_demux() {
     local out="$1"
     shift
     cc -std=gnu11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/audio "$@" \
-        src/audio/mp4_compact_spec.c src/audio/mp4_demux.c -o "$out"
+        src/audio/mp4_compact_spec.c src/audio/mp4_demux.c src/audio/mp4_frag.c src/audio/fmp4_index.c -o "$out"
 }
 cc_demux "$build_dir/expanded" -DMP4_EXPAND_MAX_SAMPLES=0xFFFFFFFFu
 cc_demux "$build_dir/compact" -DMP4_EXPAND_MAX_SAMPLES=16 -DMP4_STSZ_WINDOW=100 -DMP4_STCO_WINDOW=7

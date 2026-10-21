@@ -487,6 +487,11 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
             dec->source_bit_depth = remote ? remote_meta.bit_depth : 0;
             dec->bitrate_kbps = remote ? remote_meta.bitrate_kbps : 0;
             dec->total_frames = aac_get_total_pcm_frame_count(dec->as.aac);
+            /* hiby-yt: a fragmented MP4 without sidx plays in order only,
+             * and one of unknown length reports no duration. */
+            mp4_frag_t * frag = mp4_demux_get_frag(aac_get_mp4_demux(dec->as.aac));
+            if (frag && !mp4_frag_can_seek(frag)) dec->seekable = false;
+            if (frag && !mp4_frag_length_known(frag)) dec->total_frames = 0;
             return true;
         }
 

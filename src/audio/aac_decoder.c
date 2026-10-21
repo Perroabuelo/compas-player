@@ -230,6 +230,9 @@ static bool decode_next_frame_ex(aac_decoder_t * dec, decoder_read_status_t * ou
     uint8_t frame_buf[ADTS_MAX_FRAME_BYTES];
     unsigned int frame_length = read_compressed_frame(dec, dec->current_frame_index, frame_buf, sizeof(frame_buf));
     if (frame_length == 0) {
+        /* hiby-yt: a fragmented MP4 of unknown length learns its sample
+         * count when the read reaches the end of the file. */
+        if (dec->source_type == AAC_SOURCE_MP4) total_count = mp4_demux_get_sample_count(dec->demux);
         if (dec->source_type != AAC_SOURCE_STREAM && dec->current_frame_index >= total_count) {
             if (out_status) *out_status = DECODER_READ_EOF;
             return false;
@@ -617,6 +620,10 @@ bool aac_seek_to_pcm_frame(aac_decoder_t * dec, uint64_t frame_index) {
     dec->carry_read_pos = (uint64_t)discard < dec->carry_frames ? discard : dec->carry_frames;
     dec->pcm_position = frame_index;
     return true;
+}
+
+mp4_demux_t * aac_get_mp4_demux(const aac_decoder_t * dec) {
+    return dec && dec->source_type == AAC_SOURCE_MP4 ? dec->demux : NULL;
 }
 
 void aac_close(aac_decoder_t * dec) {

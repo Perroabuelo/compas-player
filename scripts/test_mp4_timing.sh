@@ -267,11 +267,15 @@ cc -std=gnu11 -O2 -Wall -Wextra -Isrc/audio -Ifaad2/include \
     -c src/audio/mp4_timing_test.c -o "$build_dir/test.o"
 cc -std=gnu11 -O2 -Wall -Wextra -Isrc/audio -Ifaad2/include \
     -c src/audio/mp4_demux.c -o "$build_dir/mp4_demux.o"
+cc -std=gnu11 -O2 -Wall -Wextra -Isrc/audio \
+    -c src/audio/mp4_frag.c -o "$build_dir/mp4_frag.o"
+cc -std=gnu11 -O2 -Wall -Wextra -Isrc/audio \
+    -c src/audio/fmp4_index.c -o "$build_dir/fmp4_index.o"
 cc -std=gnu11 -O2 -Wall -Wextra -Isrc/audio -Ifaad2/include \
     -c src/audio/aac_decoder.c -o "$build_dir/aac_decoder.o"
 c++ -std=gnu++11 -O2 -Wall -Wextra -Isrc/audio -Ialac/codec -Ialac/util \
     -c src/audio/alac_decoder.cpp -o "$build_dir/alac_decoder.o"
-c++ "$build_dir/test.o" "$build_dir/mp4_demux.o" "$build_dir/aac_decoder.o" \
+c++ "$build_dir/test.o" "$build_dir/mp4_demux.o" "$build_dir/mp4_frag.o" "$build_dir/fmp4_index.o" "$build_dir/aac_decoder.o" \
     "$build_dir/alac_decoder.o" build_host/faad2/*.o build_host/alac/*.o \
     -o "$build_dir/mp4_timing_test"
 

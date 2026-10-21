@@ -26,6 +26,7 @@
  *    they're delimited by the container's sample table instead. */
 
 #include "decoder_result.h"
+#include "mp4_demux.h"
 
 typedef struct aac_decoder aac_decoder_t;
 typedef size_t (*aac_stream_read_cb_t)(void * user_data, void * buf, size_t bytes_to_read);
@@ -47,6 +48,9 @@ uint64_t aac_get_total_pcm_frame_count(const aac_decoder_t * dec);
 
 decoder_read_result_t aac_read_pcm_frames_s16(aac_decoder_t * dec, uint64_t frames_to_read, int16_t * buffer_out);
 bool aac_seek_to_pcm_frame(aac_decoder_t * dec, uint64_t frame_index);
+
+/* hiby-yt: the MP4 demuxer of an MP4 source, or NULL. */
+mp4_demux_t * aac_get_mp4_demux(const aac_decoder_t * dec);
 
 void aac_close(aac_decoder_t * dec);
 

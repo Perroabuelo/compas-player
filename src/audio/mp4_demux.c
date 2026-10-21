@@ -1,5 +1,6 @@
 #include "mp4_demux.h"
 #include "audio_helpers.h"
+#include "mp4_frag.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,6 +105,8 @@ struct mp4_demux {
     uint64_t itunsmpb_priming;
     uint64_t itunsmpb_padding;
     uint64_t itunsmpb_playable;
+    /* hiby-yt: fragmented MP4 reading (NULL for a plain sample table). */
+    mp4_frag_t * frag;
 };
 
 static uint64_t ticks_to_frames(uint64_t ticks, uint32_t rate, uint32_t scale) {
@@ -889,6 +892,17 @@ bool mp4_cache_moov(FILE * file, uint8_t ** out_bytes, mp4_span_t ** out_spans, 
         }
         at = next; /* a large box (mdat) is skipped; the next read seeks */
     }
+    /* hiby-yt: a fragmented MP4's sidx right after moov comes in this same
+     * first read (design D3); 128 KiB covers FMP4_MAX_SIDX_REFS entries. */
+    if (found && !c.failed && at + 8 <= c.file_size) {
+        uint8_t type[4];
+        uint64_t size;
+        unsigned header;
+        if (cache_box_header(&c, at, c.file_size, type, &size, &header) && !memcmp(type, "sidx", 4) &&
+            size <= 128u * 1024u)
+            cache_read(&c, at + header, size - header);
+        c.failed = false; /* what moov needs is cached either way */
+    }
     if (!found || c.failed || !c.count) {
         free(c.bytes);
         free(c.spans);
@@ -898,6 +912,43 @@ bool mp4_cache_moov(FILE * file, uint8_t ** out_bytes, mp4_span_t ** out_spans, 
     *out_spans = c.spans;
     *out_count = c.count;
     return true;
+}
+
+/* hiby-yt: a fragmented MP4 has mvex and an empty sample table (design D3).
+ * Its timeline becomes one stts run of the fragments' sample duration, so
+ * the duration, seek and gapless code above works unchanged. */
+#define MP4_FRAG_MOOV_MAX (1024u * 1024u)
+
+static bool is_fragmented(mp4_demux_t * d, box_header_t moov, box_header_t stsz) {
+    box_header_t mvex;
+    uint8_t hdr[12];
+    return find_child_box(d->f, moov.data_start, moov.size - (uint64_t) moov.header_size, "mvex", &mvex) &&
+           box_payload_has(stsz, 0, sizeof(hdr)) && fseek(d->f, stsz.data_start, SEEK_SET) == 0 &&
+           fread(hdr, 1, sizeof(hdr), d->f) == sizeof(hdr) && audio_read_u32be(hdr + 8) == 0;
+}
+
+static bool open_fragmented(mp4_demux_t * d, box_header_t moov) {
+    if (moov.size > MP4_FRAG_MOOV_MAX || !d->sample_rate) return false;
+    long start = moov.data_start - moov.header_size;
+    uint8_t * buf = malloc((size_t) moov.size);
+    if (!buf) return false;
+    if (fseek(d->f, start, SEEK_SET) == 0 && fread(buf, 1, (size_t) moov.size, d->f) == moov.size)
+        d->frag = mp4_frag_open(d->f, d->file_size, buf, (size_t) moov.size, (uint64_t) start, d->media_timescale, NULL);
+    free(buf);
+    if (!d->frag || !(d->stts = calloc(1, sizeof(*d->stts)))) return false;
+    uint32_t ticks = mp4_frag_sample_ticks(d->frag);
+    d->sample_count = mp4_frag_sample_count(d->frag);
+    d->stts[0] = (stts_entry_t) { d->sample_count, ticks, 0 };
+    d->stts_count = 1;
+    d->first_sample_delta = ticks;
+    d->frames_per_sample = (uint32_t) ticks_to_frames(ticks, d->sample_rate, d->media_timescale);
+    d->raw_total_pcm_frames = ticks_to_frames((uint64_t) d->sample_count * ticks, d->sample_rate, d->media_timescale);
+    d->total_pcm_frames = d->raw_total_pcm_frames;
+    return true;
+}
+
+mp4_frag_t * mp4_demux_get_frag(const mp4_demux_t * d) {
+    return d ? d->frag : NULL;
 }
 
 mp4_demux_t * mp4_demux_open(const char * path) {
@@ -956,6 +1007,17 @@ mp4_demux_t * mp4_demux_open_stream(FILE * f) {
     }
     d->f = f;
     d->file_size = (uint64_t) file_size;
+
+    if (is_fragmented(d, moov, stsz)) {
+        if (!parse_stsd(d, stsd) || !parse_media_timing(d, mdia) || !parse_movie_timescale(d, moov) ||
+            !parse_edit_list(d, trak) || !open_fragmented(d, moov)) {
+            mp4_demux_close(d);
+            return NULL;
+        }
+        parse_itunsmpb(d, moov);
+        apply_gapless_metadata(d);
+        return d;
+    }
 
     if (!parse_stsd(d, stsd) || !parse_media_timing(d, mdia) || !parse_movie_timescale(d, moov) ||
         !parse_edit_list(d, trak) || !parse_stsz(d, stsz) || !parse_sample_offsets(d, stbl) || !parse_stts(d, stbl)) {
@@ -1093,6 +1155,12 @@ bool mp4_demux_map_pcm_frame(const mp4_demux_t *d, uint64_t frame, uint32_t *sam
 }
 
 bool mp4_demux_read_sample(mp4_demux_t * d, uint32_t sample_index, uint8_t * buf, uint32_t buf_size, uint32_t * out_size) {
+    if (d->frag) {
+        bool ok = mp4_frag_read_sample(d->frag, sample_index, buf, buf_size, out_size);
+        /* An unknown length becomes exact at the end of the file. */
+        d->sample_count = d->stts[0].count = mp4_frag_sample_count(d->frag);
+        return ok;
+    }
     uint32_t size;
     uint64_t offset;
     if (!sample_size_at(d, sample_index, &size) || !sample_offset_at(d, sample_index, &offset)) return false;
@@ -1107,6 +1175,7 @@ bool mp4_demux_read_sample(mp4_demux_t * d, uint32_t sample_index, uint8_t * buf
 
 void mp4_demux_close(mp4_demux_t * d) {
     if (!d) return;
+    mp4_frag_close(d->frag);
     if (d->f) fclose(d->f);
     free(d->codec_config);
     free(d->sample_sizes);

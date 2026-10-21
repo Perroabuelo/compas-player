@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "mp4_frag.h"
+
 /* Minimal MP4/ISO-BMFF demuxer: locates one audio track's codec config,
  * compact sample offsets/sizes and stts timeline, with validated single-edit
  * and iTunSMPB gapless metadata. No video, multi-track selection beyond the
- * first audio track, or fragmented MP4 support. */
+ * first audio track. Fragmented MP4 (one AAC track) goes through mp4_frag.h. */
 
 typedef struct mp4_demux mp4_demux_t;
 
@@ -76,5 +78,9 @@ bool mp4_demux_get_sample_pcm_duration(const mp4_demux_t * d, uint32_t sample_in
 bool mp4_demux_read_sample(mp4_demux_t * d, uint32_t sample_index, uint8_t * buf, uint32_t buf_size, uint32_t * out_size);
 
 void mp4_demux_close(mp4_demux_t * d);
+
+/* hiby-yt: the fragmented-MP4 reader behind d, or NULL for a plain sample
+ * table (see mp4_frag.h for seekability, length and errors). */
+mp4_frag_t * mp4_demux_get_frag(const mp4_demux_t * d);
 
 #endif /* MP4_DEMUX_H */
