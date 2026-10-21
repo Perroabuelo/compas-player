@@ -698,6 +698,9 @@ APP_SRCS += src/plugins/plugin_json.c src/plugins/plugin_storage.c src/plugins/p
 APP_SRCS += src/ui/gui_plugin_manage.c src/ui/gui_plugin_store.c src/ui/gui_emulators.c src/ui/gui_emulator_store.c src/ui/gui_lock_screen.c
 APP_SRCS += src/core/theme_file.c src/ui/gui_themes.c
 APP_SRCS += src/library/remote_track.c
+# hiby-yt modules: new files only, compiled with -Werror.
+HIBY_YT_SRCS = src/core/stream_log.c
+APP_SRCS += $(HIBY_YT_SRCS)
 APP_SRCS += src/library/queue_resume.c
 APP_SRCS += src/audio/track_probe.c
 APP_SRCS += src/library/albumart.c src/library/tagcache.c src/library/path_cache.c src/library/remote_state.c src/library/subsonic_saved_servers.c src/library/artwork_coordinator.c
@@ -845,6 +848,9 @@ TARGET_OBJS = $(BUILD_TARGET_DIR)/sonic/sonic.o $(APP_SRCS:src/%.c=$(BUILD_TARGE
 # Make flag changes invalidate every target object, including vendor rules
 # whose compiler flags are assembled separately from TARGET_CFLAGS.
 $(TARGET_OBJS): $(TARGET_CODE_SECTION_FLAGS_STAMP)
+
+$(HIBY_YT_SRCS:src/%.c=$(BUILD_HOST_DIR)/%.o): HOST_CFLAGS += -Werror
+$(HIBY_YT_SRCS:src/%.c=$(BUILD_TARGET_DIR)/%.o): TARGET_CFLAGS += -Werror
 
 # Use upstream configuration for these libraries, including libsndfile's
 # built-in CAF/ALAC support. No firmware shared libraries are loaded.
