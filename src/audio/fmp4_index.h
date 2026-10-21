@@ -61,4 +61,44 @@ void fmp4_sidx_free(fmp4_sidx_t * sidx);
 bool fmp4_sidx_find(const fmp4_sidx_t * sidx, uint64_t t, uint32_t * index,
                     uint64_t * frag_start);
 
+/* Per-track defaults from moov/mvex/trex. */
+typedef struct {
+    uint32_t track_id;
+    uint32_t default_duration;
+    uint32_t default_size;
+    uint32_t default_flags;
+} fmp4_trex_t;
+
+/* Parses the whole trex box at buf. */
+fmp4_status_t fmp4_parse_trex(const uint8_t * buf, size_t len, fmp4_trex_t * out);
+
+/* One sample of a fragment: 8 bytes. */
+typedef struct {
+    uint32_t offset; /* from data_start */
+    uint32_t size;
+} fmp4_sample_t;
+
+/* The sample table of one fragment (moof + its mdat). */
+typedef struct {
+    uint64_t decode_time; /* tfdt, in the track timescale; 0 without tfdt */
+    bool has_decode_time;
+    uint64_t data_start;  /* absolute offset of the mdat payload */
+    uint64_t next_offset; /* first byte after the mdat: the next fragment */
+    uint32_t count;
+    fmp4_sample_t * samples; /* malloc'd; fmp4_frag_free() */
+    uint32_t duration;       /* of every sample, unless var_duration */
+    bool var_duration;
+    uint32_t * durations; /* per sample, only with var_duration */
+    uint64_t total_duration;
+} fmp4_frag_t;
+
+/* Parses the moof at buf and the header of the mdat that must follow it.
+ * buf holds len bytes from file offset `offset`: the whole moof plus at
+ * least the mdat header (reading moof size + 16 bytes is enough). Sample
+ * values come from trun, else tfhd, else trex. Only one traf is supported,
+ * and every sample must lie inside the mdat. On failure *out is left empty. */
+fmp4_status_t fmp4_parse_moof(const uint8_t * buf, size_t len, uint64_t offset,
+                              const fmp4_trex_t * trex, fmp4_frag_t * out);
+void fmp4_frag_free(fmp4_frag_t * frag);
+
 #endif /* FMP4_INDEX_H */
