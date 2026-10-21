@@ -467,6 +467,8 @@ __pycache__/
 /scripts/tests/*
 !/scripts/tests/progress_http_fixture.c
 !/scripts/tests/run_peq_crossfeed_test.sh
+!/scripts/tests/wifi_ssid_escape_test.c
+!/scripts/tests/run_wifi_ssid_escape_test.sh
 !src/audio/peq_crossfeed_selftest.c
 
 # Local release assembly and settings regression harnesses.

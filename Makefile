@@ -1254,6 +1254,10 @@ i18n-check:
 # TARGET_DIR, BUILD_HOST_DIR) that need to already be fully resolved.
 -include $(shell find $(BUILD_TARGET_DIR) $(BUILD_HOST_DIR) -name '*.d' 2>/dev/null)
 
+.PHONY: test-wifi-ssid
+test-wifi-ssid:
+	sh scripts/tests/run_wifi_ssid_escape_test.sh
+
 $(BUILD_HOST_DIR)/sonic/%.o: sonic/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(HOST_CFLAGS) -c $< -o $@
