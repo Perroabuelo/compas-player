@@ -4,6 +4,8 @@
 #include "http_stream.h"
 #include "debug_log.h"
 #include "http_conn.h"
+#include "stream_log.h"
+#include "stream_resume.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -13,6 +15,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #define STREAM_RING_CAPACITY (256 * 1024)
@@ -58,6 +61,11 @@ struct http_stream {
      * connection and buffered bytes stay, so seeking back costs nothing. */
     bool at_virtual_end;
     bool stop_requested, ended, thread_started;
+    /* hiby-yt: stream_log id, completed resumes, and whether the stream
+     * ended because resuming it failed. */
+    unsigned log_sid;
+    unsigned reconnects;
+    bool failed;
 };
 
 typedef struct {
@@ -71,6 +79,10 @@ typedef struct {
 static bool fail_next_pump_create;
 void http_stream_test_fail_next_pump_create(void) {
     fail_next_pump_create = true;
+}
+static unsigned resume_delay_divisor = 1;
+void http_stream_test_set_resume_delay_divisor(unsigned divisor) {
+    resume_delay_divisor = divisor ? divisor : 1;
 }
 #endif
 
@@ -253,6 +265,38 @@ fail:
     return false;
 }
 
+/* Opens a replacement 206 response for [dest, length) of the same entity:
+ * the range must start at dest and end at the original length, and the
+ * entity validators must not have changed. On failure no connection stays
+ * open and r->status keeps the HTTP status (0 when no response arrived). */
+static bool open_validated_range(http_stream_t * s, uint64_t dest,
+                                 response_t * r) {
+    const char * if_range = NULL;
+    if (s->etag[0] && strncmp(s->etag, "W/", 2) != 0 && s->etag[0] == '"')
+        if_range = s->etag;
+    else if (s->last_modified[0])
+        if_range = s->last_modified;
+    bool if_range_is_etag = if_range && s->etag[0] && if_range == s->etag;
+    if (!open_response(s->final_url, s->verify_tls, STREAM_MAX_REDIRECTS, true,
+                       dest, if_range, r))
+        return false;
+    if (r->status != 206 || r->range_total != s->length || !r->range_valid ||
+        r->range_start != dest || r->range_end + 1 != r->range_total)
+        goto reject;
+    if ((if_range &&
+         strcmp(if_range, if_range_is_etag ? r->etag : r->last_modified) != 0) ||
+        (s->etag[0] && r->etag[0] && strcmp(s->etag, r->etag) != 0) ||
+        (s->last_modified[0] && r->last_modified[0] &&
+         strcmp(s->last_modified, r->last_modified) != 0))
+        goto reject;
+    return true;
+reject:
+    http_conn_close(r->conn);
+    free(r->conn);
+    r->conn = NULL;
+    return false;
+}
+
 static bool push_ring(http_stream_t * s, const uint8_t * data, size_t len) {
     size_t off = 0;
     while (off < len) {
@@ -279,9 +323,107 @@ static bool push_ring(http_stream_t * s, const uint8_t * data, size_t len) {
     return true;
 }
 
+/* hiby-yt: resuming a finite stream cut short (design D4). Only the pump
+ * calls these; the waits end early when the stream is being closed. */
+typedef struct {
+    http_stream_t * s;
+    uint64_t offset;
+} resume_ctx_t;
+
+static bool resume_wait_ms(void * arg, unsigned ms) {
+    http_stream_t * s = ((resume_ctx_t *)arg)->s;
+#ifdef HTTP_STREAM_TESTING
+    ms /= resume_delay_divisor;
+#endif
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += ms / 1000;
+    deadline.tv_nsec += (long)(ms % 1000) * 1000000L;
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec++;
+        deadline.tv_nsec -= 1000000000L;
+    }
+    pthread_mutex_lock(&s->mutex);
+    while (!s->stop_requested &&
+           pthread_cond_timedwait(&s->cond, &s->mutex, &deadline) == 0)
+        ;
+    bool keep_going = !s->stop_requested;
+    pthread_mutex_unlock(&s->mutex);
+    return keep_going;
+}
+
+static stream_resume_result_t resume_attempt(void * arg, unsigned attempt) {
+    resume_ctx_t * ctx = arg;
+    http_stream_t * s = ctx->s;
+    response_t r;
+    stream_resume_result_t result;
+    if (open_validated_range(s, ctx->offset, &r)) {
+        pthread_mutex_lock(&s->mutex);
+        if (s->stop_requested) {
+            pthread_mutex_unlock(&s->mutex);
+            http_conn_close(r.conn);
+            free(r.conn);
+            return STREAM_RESUME_STOPPED;
+        }
+        s->conn = r.conn;
+        s->reader = r.reader;
+        s->reader.conn = s->conn;
+        s->chunked = r.chunked;
+        s->has_content_length = !r.chunked;
+        s->remaining = r.has_length ? r.content_length
+                                    : r.range_end - r.range_start + 1;
+        s->reconnects++;
+        pthread_mutex_unlock(&s->mutex);
+        result = STREAM_RESUME_OK;
+    } else {
+        /* A response arrived but cannot continue the same entity. */
+        result = r.status == 200 || r.status == 206 ? STREAM_RESUME_BAD_RANGE
+                                                    : STREAM_RESUME_FAIL;
+    }
+    stream_log_event(s->log_sid, "reconnect", "attempt=%u offset=%llu result=%s",
+                     attempt, (unsigned long long)ctx->offset,
+                     result == STREAM_RESUME_OK          ? "ok"
+                     : result == STREAM_RESUME_BAD_RANGE ? "bad_range"
+                                                         : "fail");
+    return result;
+}
+
+/* True when the pump should go on reading a resumed connection. */
+static bool resume_after_cut(http_stream_t * s) {
+    pthread_mutex_lock(&s->mutex);
+    bool cut = !s->stop_requested && s->seekable && !s->chunked &&
+               s->has_content_length && s->remaining > 0;
+    resume_ctx_t ctx = {s, s->length - s->remaining};
+    if (cut) {
+        /* Never hold two connections: the broken one goes first. */
+        http_conn_close(s->conn);
+        free(s->conn);
+        s->conn = NULL;
+        s->reader.conn = NULL;
+    }
+    pthread_mutex_unlock(&s->mutex);
+    if (!cut)
+        return false;
+    static const stream_resume_ops_t ops = {resume_wait_ms, resume_attempt};
+    unsigned attempts = 0;
+    stream_resume_result_t result = stream_resume_run(&ops, &ctx, &attempts);
+    if (result == STREAM_RESUME_OK)
+        return true;
+    if (result != STREAM_RESUME_STOPPED) {
+        stream_log_event(s->log_sid, "error",
+                         "stage=reconnect detail=exhausted attempts=%u offset=%llu",
+                         attempts, (unsigned long long)ctx.offset);
+        pthread_mutex_lock(&s->mutex);
+        s->failed = true;
+        pthread_mutex_unlock(&s->mutex);
+    }
+    return false;
+}
+
 static void * pump(void * arg) {
     http_stream_t * s = arg;
     uint8_t buf[HTTP_CONN_READ_CHUNK];
+resume:
     for (;;) {
         pthread_mutex_lock(&s->mutex);
         bool stop = s->stop_requested;
@@ -335,10 +477,14 @@ static void * pump(void * arg) {
             pthread_mutex_unlock(&s->mutex);
         }
     }
+    /* hiby-yt: a finite stream cut short resumes at its first missing byte. */
+    if (resume_after_cut(s))
+        goto resume;
     pthread_mutex_lock(&s->mutex);
     s->ended = true;
     pthread_cond_broadcast(&s->cond);
-    http_conn_close(s->conn);
+    if (s->conn)
+        http_conn_close(s->conn);
     pthread_mutex_unlock(&s->mutex);
     return NULL;
 }
@@ -459,6 +605,7 @@ http_stream_t * http_stream_open(const char * url, bool verify_tls) {
     snprintf(s->final_url, sizeof(s->final_url), "%s", r.final_url);
     snprintf(s->etag, sizeof(s->etag), "%s", r.etag);
     snprintf(s->last_modified, sizeof(s->last_modified), "%s", r.last_modified);
+    s->log_sid = stream_log_next_sid();
     if (!start_pump(s)) {
         http_conn_close(s->conn);
         free(s->conn);
@@ -507,6 +654,23 @@ const char * http_stream_content_type(http_stream_t * s) {
     return s ? s->content_type : "";
 }
 bool http_stream_can_seek(http_stream_t * s) { return s && s->seekable; }
+unsigned http_stream_log_sid(http_stream_t * s) { return s ? s->log_sid : 0; }
+unsigned http_stream_reconnects(http_stream_t * s) {
+    if (!s)
+        return 0;
+    pthread_mutex_lock(&s->mutex);
+    unsigned n = s->reconnects;
+    pthread_mutex_unlock(&s->mutex);
+    return n;
+}
+bool http_stream_failed(http_stream_t * s) {
+    if (!s)
+        return false;
+    pthread_mutex_lock(&s->mutex);
+    bool failed = s->failed;
+    pthread_mutex_unlock(&s->mutex);
+    return failed;
+}
 int64_t http_stream_tell(http_stream_t * s) {
     if (!s)
         return -1;
@@ -592,36 +756,8 @@ bool http_stream_seek(http_stream_t * s, int64_t offset, int origin) {
     pthread_mutex_unlock(&s->mutex);
     response_t candidate;
     bool have_body = dest < s->length;
-    const char * if_range = NULL;
-    if (s->etag[0] && strncmp(s->etag, "W/", 2) != 0 && s->etag[0] == '"')
-        if_range = s->etag;
-    else if (s->last_modified[0])
-        if_range = s->last_modified;
-    bool if_range_is_etag = if_range && s->etag[0] && if_range == s->etag;
-    if (have_body &&
-        !open_response(s->final_url, s->verify_tls, STREAM_MAX_REDIRECTS, true,
-                       dest, if_range, &candidate))
+    if (have_body && !open_validated_range(s, dest, &candidate))
         return false;
-    if (have_body &&
-        (candidate.status != 206 || candidate.range_total != s->length ||
-         !candidate.range_valid || candidate.range_start != dest ||
-         candidate.range_end + 1 != candidate.range_total)) {
-        http_conn_close(candidate.conn);
-        free(candidate.conn);
-        return false;
-    }
-    if (have_body &&
-        ((if_range &&
-          strcmp(if_range, if_range_is_etag ? candidate.etag
-                                            : candidate.last_modified) != 0) ||
-         (s->etag[0] && candidate.etag[0] &&
-          strcmp(s->etag, candidate.etag) != 0) ||
-         (s->last_modified[0] && candidate.last_modified[0] &&
-          strcmp(s->last_modified, candidate.last_modified) != 0))) {
-        http_conn_close(candidate.conn);
-        free(candidate.conn);
-        return false;
-    }
     pthread_t candidate_thread;
     pump_gate_t * candidate_gate = NULL;
     if (have_body && !create_gated_pump(s, &candidate_thread, &candidate_gate)) {

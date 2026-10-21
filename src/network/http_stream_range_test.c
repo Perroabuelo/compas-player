@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "http_stream.h"
+#include "stream_log.h"
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -19,7 +20,13 @@ typedef enum {
     MALFORMED_RANGE,
     SEEK_416,
     BAD_LENGTH,
-    LIVE
+    LIVE,
+    /* hiby-yt resume modes: the first response declares the whole entity,
+     * sends TEST_CUT_AT bytes and drops the connection. */
+    CUT_ONCE,      /* the resume gets a valid 206 */
+    CUT_200,       /* first resume gets 200 + whole entity, then a valid 206 */
+    CUT_BAD_TOTAL, /* first resume gets a 206 of another total, then valid */
+    CUT_FOREVER    /* every resume is refused */
 } test_mode_t;
 typedef struct {
     int fd;
@@ -27,6 +34,9 @@ typedef struct {
     int requests;
 } server_t;
 #define TEST_ENTITY_SIZE 300000ULL
+/* Not a multiple of 10, so bytes of a response starting at 0 cannot pass
+ * for the bytes at the cut. */
+#define TEST_CUT_AT 100003ULL
 
 static void send_all(int fd, const char * p, size_t n) {
     while (n) {
@@ -36,6 +46,16 @@ static void send_all(int fd, const char * p, size_t n) {
         p += w;
         n -= (size_t)w;
     }
+}
+
+static void send_pattern(int fd, unsigned long long start,
+                         unsigned long long end) {
+    char * body = malloc((size_t)(end - start));
+    assert(body);
+    for (size_t i = 0; i < end - start; i++)
+        body[i] = (char)('0' + (start + i) % 10);
+    send_all(fd, body, (size_t)(end - start));
+    free(body);
 }
 
 static void * server_main(void * arg) {
@@ -100,6 +120,38 @@ static void * server_main(void * arg) {
                              "bytes */10\r\nContent-Length: 0\r\n\r\n";
             send_all(c, h, strlen(h));
             close(c);
+        } else if (s->mode >= CUT_ONCE && which == 0) {
+            char h[256];
+            int n = snprintf(h, sizeof(h),
+                             "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes "
+                             "0-%llu/%llu\r\nContent-Length: %llu\r\nETag: "
+                             "\"v1\"\r\n\r\n",
+                             TEST_ENTITY_SIZE - 1, TEST_ENTITY_SIZE,
+                             TEST_ENTITY_SIZE);
+            send_all(c, h, (size_t)n);
+            send_pattern(c, 0, TEST_CUT_AT);
+            close(c);
+        } else if (s->mode == CUT_FOREVER) {
+            close(c);
+        } else if (s->mode == CUT_200 && which == 1) {
+            char h[128];
+            int n = snprintf(h, sizeof(h),
+                             "HTTP/1.1 200 OK\r\nContent-Length: %llu\r\n\r\n",
+                             TEST_ENTITY_SIZE);
+            send_all(c, h, (size_t)n);
+            send_pattern(c, 0, TEST_ENTITY_SIZE);
+            close(c);
+        } else if (s->mode == CUT_BAD_TOTAL && which == 1) {
+            const unsigned long long total = TEST_ENTITY_SIZE + 1000;
+            char h[256];
+            int n = snprintf(h, sizeof(h),
+                             "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes "
+                             "%llu-%llu/%llu\r\nContent-Length: %llu\r\nETag: "
+                             "\"v1\"\r\n\r\n",
+                             TEST_CUT_AT, total - 1, total, total - TEST_CUT_AT);
+            send_all(c, h, (size_t)n);
+            send_pattern(c, 0, total - TEST_CUT_AT);
+            close(c);
         } else if (ranged) {
             unsigned long long start = 0;
             const char * p = strstr(req, "Range: bytes=");
@@ -130,6 +182,10 @@ static void * server_main(void * arg) {
                                        s->mode == SEEK_416 || s->mode == BAD_LENGTH
                                    ? 2
                                    : 1);
+        if (s->mode >= CUT_ONCE) {
+            static const int cut_requests[] = {2, 3, 3, 6};
+            max_requests = cut_requests[s->mode - CUT_ONCE];
+        }
         if (s->requests >= max_requests)
             break;
         if ((s->mode == IGNORE_RANGE || s->mode == BAD_LENGTH) && which > 0)
@@ -285,16 +341,101 @@ static void test_tls_range(unsigned port) {
     assert(http_stream_read(stream, b, 4) == 4 && !memcmp(b, "0123", 4));
     http_stream_close(stream);
 }
+static char log_root[] = "/tmp/http_stream_range_test.XXXXXX";
+
+static bool log_has(const char * needle) {
+    char path[128];
+    snprintf(path, sizeof(path), "%s/.hiby-yt/stream.log", log_root);
+    FILE * f = fopen(path, "r");
+    if (!f)
+        return false;
+    char line[STREAM_LOG_LINE_MAX];
+    bool found = false;
+    while (!found && fgets(line, sizeof(line), f))
+        found = strstr(line, needle) != NULL;
+    fclose(f);
+    return found;
+}
+
+static bool log_has_event(unsigned sid, const char * event_fields) {
+    char needle[256];
+    snprintf(needle, sizeof(needle), " sid=%u event=%s", sid, event_fields);
+    return log_has(needle);
+}
+
+static size_t read_all(http_stream_t * x, char * out, size_t cap) {
+    size_t got = 0;
+    for (;;) {
+        size_t n = http_stream_read(x, out + got, cap - got);
+        if (!n)
+            return got;
+        got += n;
+    }
+}
+
+static bool is_pattern(const char * data, size_t len) {
+    for (size_t i = 0; i < len; i++)
+        if (data[i] != (char)('0' + i % 10))
+            return false;
+    return true;
+}
+
+/* hiby-yt: resume after the server drops the connection mid-entity. */
+static void test_resume(test_mode_t mode) {
+    server_t s = {.mode = mode};
+    pthread_t t;
+    char url[80];
+    http_stream_t * x = open_test(&s, &t, url);
+    assert(x && http_stream_can_seek(x));
+    unsigned sid = http_stream_log_sid(x);
+    char * data = malloc(TEST_ENTITY_SIZE + 4096);
+    assert(data);
+    size_t got = read_all(x, data, TEST_ENTITY_SIZE + 4096);
+    if (mode == CUT_FOREVER) {
+        assert(got == TEST_CUT_AT && is_pattern(data, got));
+        assert(http_stream_failed(x) && http_stream_reconnects(x) == 0);
+        assert(log_has_event(sid, "reconnect attempt=1 offset=100003 result=fail"));
+        assert(log_has_event(sid, "reconnect attempt=5 offset=100003 result=fail"));
+        assert(!log_has_event(sid, "reconnect attempt=6"));
+        assert(log_has_event(sid, "error stage=reconnect"));
+    } else {
+        /* Identical, byte for byte: nothing of a rejected response leaks. */
+        assert(got == TEST_ENTITY_SIZE && is_pattern(data, got));
+        assert(!http_stream_failed(x) && http_stream_reconnects(x) == 1);
+        if (mode == CUT_ONCE) {
+            assert(log_has_event(sid, "reconnect attempt=1 offset=100003 result=ok"));
+        } else {
+            assert(log_has_event(sid, "reconnect attempt=1 offset=100003 result=bad_range"));
+            assert(log_has_event(sid, "reconnect attempt=2 offset=100003 result=ok"));
+        }
+        assert(!log_has_event(sid, "error"));
+    }
+    free(data);
+    http_stream_close(x);
+    pthread_join(t, NULL);
+}
+
 int main(int argc, char ** argv) {
     signal(SIGPIPE, SIG_IGN);
+    assert(mkdtemp(log_root));
+    stream_log_configure(log_root, false);
+    http_stream_test_set_resume_delay_divisor(100);
     test_good();
     test_ignored_and_bad_range();
     test_failed_seek_keeps_old();
     test_rewind_and_end_reuse_connection();
     test_pump_creation_failure_keeps_old();
     test_overflow_and_live_close();
+    test_resume(CUT_ONCE);
+    test_resume(CUT_200);
+    test_resume(CUT_BAD_TOTAL);
+    test_resume(CUT_FOREVER);
     if (argc > 1)
         test_tls_range((unsigned)strtoul(argv[1], NULL, 10));
+    char cleanup[96];
+    snprintf(cleanup, sizeof(cleanup), "rm -rf '%s'", log_root);
+    if (system(cleanup) != 0)
+        fprintf(stderr, "could not remove %s\n", log_root);
     puts("http_stream range tests passed");
     return 0;
 }
