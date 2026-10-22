@@ -918,8 +918,13 @@ and [Mountain Sunset](https://github.com/Starnished66/compas-plugins/tree/main/p
 - Live streams remain forward-only. Finite FLAC, MP3 and AAC-in-MP4 sources
   can seek when the server supports validated byte ranges; check
   `get_playback_format().seekable`. Raw ADTS AAC remains forward-only.
+  Fragmented MP4 (AAC, as YouTube's audio) plays too; it can seek only
+  when it carries a `sidx` index.
   Duration is shown when the decoder or remote-track metadata provides it.
-- No reconnect: if the connection drops, playback stops.
+- A finite, seekable stream whose connection drops is resumed from the
+  first missing byte: up to 5 attempts over about 23 s, then the track ends
+  with an error. Live streams are not resumed. Stream events are logged to
+  `<SD card>/.hiby-yt/stream.log` (host only, never the URL).
 - An endless stream (radio) never auto-advances. Finite tracks can.
 - Stream titles (ID3 or ICY metadata) are not shown.
 
@@ -949,7 +954,7 @@ plugin.play_remote({
 - Remote tracks are not resumed after a restart.
 - Playback follows the stream rules above: finite sources can seek when
   `get_playback_format().seekable` is true; live sources remain forward-only.
-  There is no reconnect.
+  A dropped finite stream is resumed as described above.
 
 ### Controls
 
