@@ -492,7 +492,14 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
          * MP3 remains the default for ordinary internet-radio URLs. */
         clock_gettime(CLOCK_MONOTONIC, &dec->log_open_time); /* hiby-yt: stream_log */
         dec->net_stream = http_stream_open(remote ? remote_meta.stream_url : path, remote ? remote_meta.verify_tls : true);
-        if (!dec->net_stream) return false;
+        if (!dec->net_stream) {
+            /* hiby-yt: a stream that never opened (no network, DNS, TLS or
+             * HTTP failure) still leaves a line, with the requested host. */
+            char host[256];
+            stream_log_url_host(remote ? remote_meta.stream_url : path, host, sizeof(host));
+            stream_log_event(stream_log_next_sid(), "error", "stage=connect host=%s", host);
+            return false;
+        }
         dec->log_sid = http_stream_log_sid(dec->net_stream);
 
         const char * content_type = http_stream_content_type(dec->net_stream);
