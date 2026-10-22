@@ -1408,6 +1408,38 @@ Older, blocking requests: the whole player freezes until they finish. Use
 404 included), or `nil, "network error"`. `http_post` sends `body` as is, with
 `content_type` defaulting to `application/x-www-form-urlencoded`.
 
+### `plugin.youtube_resolve(video_id, callback)` (hiby-yt)
+
+Check `network.youtube_resolve`. Resolves a YouTube video id to the URL of
+its AAC audio (itag 140, fragmented MP4) on the device itself, by running
+the hiby-yt resolver installed at `/usr/data/hiby-yt/hiby-yt-resolve`
+(`./hiby-yt/hiby-yt-resolve` on the simulator). It returns a handle at once,
+or `nil, error` (`"invalid video id"`, `"busy"`); `callback(result)` runs
+later with the resolver's result as a table:
+
+```lua
+plugin.youtube_resolve("aqz-KE-bpKQ", function(r)
+    if not r.ok then plugin.show_toast("YouTube: " .. r.class) return end
+    plugin.play_remote({ provider = "youtube", track_id = "aqz-KE-bpKQ",
+                         stream_url = r.url, codec = "aac" })
+end)
+```
+
+- On success: `ok = true`, `url`, `content_length`, `expire` (Unix time),
+  `itag`, `client` and `ladder`.
+- On failure: `ok = false`, `class` and `detail`. Classes: `bad_input`,
+  `unavailable`, `login_required`, `po_token_required`, `no_format`,
+  `challenge_failed`, `network`, `limit` and `internal`. `limit` with
+  `detail = "timeout"` means the resolver ran for 90 seconds and was
+  stopped; `internal` with `resolver_missing` means it is not installed.
+- One resolution at a time, for all plugins together. The video id must be
+  11 characters of `A-Z a-z 0-9 _ -`; nothing else is ever passed to the
+  resolver, and no other program can be started this way.
+- `plugin.cancel(handle)` stops it; its callback is then not called.
+  Refresh Plugins and reloading the UI stop it too.
+- The resolver runs at a lower priority than playback. Each resolution adds
+  an `event=resolve` line (`class`, `ms`, `exit`) to the stream log.
+
 ## Data and storage
 
 ### `plugin.storage` and `plugin.secrets`

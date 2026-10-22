@@ -22,6 +22,7 @@
 #include "http_client.h"
 #include "playlist_files.h"
 #include "plugin_json.h"
+#include "plugin_youtube.h"
 #include "plugin_storage.h"
 #include "plugin_internal.h"
 #include "plugin_disabled_list.h"
@@ -4531,8 +4532,16 @@ static int l_plugin_get_download_progress(lua_State * L) {
     return 1;
 }
 
+static int l_plugin_youtube_resolve(lua_State * L) {
+    return plugin_youtube_l_resolve(L, plugin_main_state(L));
+}
+
 static int l_plugin_cancel(lua_State * L) {
     int handle = (int) luaL_checkinteger(L, 1);
+    if (plugin_youtube_is_handle(handle)) {
+        lua_pushboolean(L, plugin_youtube_cancel(handle));
+        return 1;
+    }
     int slot = (handle & 0xFF) - 1;
     uint16_t generation = (uint16_t) ((unsigned int) handle >> 8);
     bool cancelled = false;
@@ -5512,7 +5521,7 @@ static const char * const plugin_capabilities[] = {
     "ui.player_actions", "ui.player_layout_restore",
     "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.more_menu", "ui.file_picker",
     "ui.startup_image", "audio.mseb.stock", "playback.stay_on_screen",
-    "ui.settings_list_10_sliders"
+    "ui.settings_list_10_sliders", "network.youtube_resolve"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -6503,6 +6512,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "download_file_async",       l_plugin_download_file_async },
     { "get_download_progress",     l_plugin_get_download_progress },
     { "cancel",                    l_plugin_cancel },
+    { "youtube_resolve",           l_plugin_youtube_resolve },
     { "md5",                       l_plugin_md5 },
     { "json_decode",               l_plugin_json_decode },
     { "json_encode",               l_plugin_json_encode },
@@ -7009,6 +7019,7 @@ static void discard_failed_plugin_resources(lua_State * L, bool aborted) {
         req->L = NULL;
         req->callback_ref = LUA_NOREF;
     }
+    plugin_youtube_release(L, !aborted);
     if (plugin_zip_image.active && failed_load_owner_matches(plugin_zip_image.L, L, aborted))
         plugin_zip_image_cancel();
     plugin_album_cover_drop_owner(L, aborted);
@@ -7481,6 +7492,7 @@ void plugin_manager_deinit(void) {
     audio_stage_custom_hw_volume_curve(false, NULL);
     deinit_diag("plugin_manager_deinit: cancel_all_async_http before");
     plugin_manager_cancel_all_async_http();
+    plugin_youtube_release(NULL, true);
     plugin_zip_image_cancel();
     plugin_album_cover_cancel_all();
     plugin_file_op_release();
@@ -7543,6 +7555,7 @@ void plugin_manager_poll(void) {
     plugin_zip_image_poll();
     plugin_album_cover_poll();
     plugin_file_op_poll();
+    plugin_youtube_poll(plugin_call);
     for (int i = 0; i < PLUGIN_MAX_ASYNC_HTTP; i++) {
         plugin_async_http_t * req = &plugin_async_http[i];
         if (!req->active || !atomic_load(&req->done)) continue;
@@ -7612,7 +7625,7 @@ void plugin_manager_poll(void) {
 bool plugin_manager_has_background_work(void) {
     for (int i = 0; i < PLUGIN_MAX_ASYNC_HTTP; i++)
         if (plugin_async_http[i].active) return true;
-    return plugin_zip_image.active;
+    return plugin_zip_image.active || plugin_youtube_busy();
 }
 
 /* Shared by plugin_manager_books_list_item_clicked()/_settings_list_item_
