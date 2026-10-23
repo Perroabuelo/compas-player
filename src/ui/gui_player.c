@@ -97,6 +97,10 @@ static bool is_sd_card_path(const char *path);
 #include "transition_compositor.h"
 #include "remote_youtube.h"
 #include "yt_prefetch_policy.h"
+#include "yt_resolve_policy.h"
+
+/* hiby-yt: YouTube tracks in a row that could not be resolved. */
+static yt_failure_count_t yt_resolve_failures;
 #include "yt_queue.h"
 #include "yt_resolver_proc.h"
 #include "lvgl/src/core/lv_obj_draw_private.h"
@@ -5400,6 +5404,7 @@ uint64_t gui_player_playback_intent_epoch(void) { return playback_intent_epoch; 
 
 void reset_decoder_failure_tracking(void) {
     consecutive_decoder_failure_skips = 0;
+    yt_failure_count_clear(&yt_resolve_failures);
     failed_physical_paths_count = 0;
 }
 
@@ -6977,6 +6982,10 @@ void gui_format_time(double seconds, char * buf, size_t buf_size) {
 }
 
 void gui_player_poll_confirmed_playback(void) {
+    /* hiby-yt: a track that reached its first audio ends a run of YouTube
+     * tracks that could not be resolved. */
+    if (yt_resolve_failures.failed_tracks > 0 && audio_is_playing() && audio_get_position_seconds() > 0.0)
+        yt_failure_count_clear(&yt_resolve_failures);
     if (consecutive_decoder_failure_skips > 0 && audio_is_playing()) {
         if (audio_get_position_seconds() >= 3.0) {
             reset_decoder_failure_tracking();
@@ -8589,21 +8598,34 @@ void gui_player_handle_playback_error_ex(audio_error_t err, uint64_t err_generat
     }
 
     if (err == AUDIO_ERROR_DECODER_FAILED || err == AUDIO_ERROR_FILE_UNAVAILABLE ||
-        err == AUDIO_ERROR_UNSUPPORTED_FORMAT || err == AUDIO_ERROR_UNSUPPORTED_CHANNELS) {
+        err == AUDIO_ERROR_UNSUPPORTED_FORMAT || err == AUDIO_ERROR_UNSUPPORTED_CHANNELS ||
+        err == AUDIO_ERROR_RESOLVE_FAILED) {
         char failure_message[96];
+        /* hiby-yt: a YouTube track that could not be resolved names the
+         * resolver's class, and three in a row stop playback. */
+        char reason[64];
+        bool resolve_stop = false;
+        if (err == AUDIO_ERROR_RESOLVE_FAILED) {
+            char cls[24];
+            audio_get_last_resolve_class(cls, sizeof(cls));
+            snprintf(reason, sizeof(reason), "YouTube %s", cls[0] ? cls : "internal");
+            resolve_stop = yt_failure_count_add(&yt_resolve_failures);
+        } else {
+            snprintf(reason, sizeof(reason), "%s", TR(audio_error_description(err)));
+        }
         /* Record the failed track's physical path */
         const char * failed_path = playlist_path_at(playlist_index);
         if (failed_path) record_failed_physical_path(failed_path);
 
         consecutive_decoder_failure_skips++;
         int max_skips = (playlist_count < 5) ? playlist_count : 5;
-        if (consecutive_decoder_failure_skips >= max_skips) {
+        if (resolve_stop || consecutive_decoder_failure_skips >= max_skips) {
             set_play_button_state(false);
             deferred_resume_pending = false;
             deferred_resume_position = 0.0;
             reset_decoder_failure_tracking();
             snprintf(failure_message, sizeof(failure_message), TR("Playback stopped: %s"),
-                     TR(audio_error_description(err)));
+                     reason);
             show_error_toast(failure_message);
             return;
         }
@@ -8637,7 +8659,7 @@ void gui_player_handle_playback_error_ex(audio_error_t err, uint64_t err_generat
             deferred_resume_position = 0.0;
             reset_decoder_failure_tracking();
             snprintf(failure_message, sizeof(failure_message), TR("Playback stopped: %s"),
-                     TR(audio_error_description(err)));
+                     reason);
             show_error_toast(failure_message);
             return;
         }
@@ -8645,7 +8667,7 @@ void gui_player_handle_playback_error_ex(audio_error_t err, uint64_t err_generat
         commit_decoder_failure_advance_plan(&plan);
         deferred_resume_pending = false;
         deferred_resume_position = 0.0;
-        snprintf(failure_message, sizeof(failure_message), TR("Skipped: %s"), TR(audio_error_description(err)));
+        snprintf(failure_message, sizeof(failure_message), TR("Skipped: %s"), reason);
         show_error_toast(failure_message);
         play_track_at_from_internal(plan.target_index, 0.0, false, false);
     }
