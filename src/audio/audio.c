@@ -38,6 +38,8 @@
 #include "http_stream_file.h"
 #include "stream_log.h"
 #include "remote_track.h"
+#include "remote_youtube.h"
+#include "yt_queue.h"
 #include "metadata.h"
 
 #include <math.h>
@@ -443,6 +445,44 @@ static bool file_is_caf(const char * path) {
     return matches;
 }
 
+/* hiby-yt: resolving a YouTube track when it opens (chain-youtube-queue
+ * D1). yt_open_epoch moves on every new play request and every Stop, so a
+ * resolution for a track the user already left is cancelled. */
+static atomic_uint yt_open_epoch = 0;
+static pthread_mutex_t yt_resolve_class_mutex = PTHREAD_MUTEX_INITIALIZER;
+static char yt_last_resolve_class[24] = "";
+
+static bool yt_open_cancelled(void * arg) {
+    return atomic_load(&yt_open_epoch) != *(const unsigned *) arg;
+}
+
+void audio_get_last_resolve_class(char * out, size_t size) {
+    pthread_mutex_lock(&yt_resolve_class_mutex);
+    snprintf(out, size, "%s", yt_last_resolve_class);
+    pthread_mutex_unlock(&yt_resolve_class_mutex);
+}
+
+/* Fills meta->stream_url of a YouTube track that came without one. */
+static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta) {
+    unsigned epoch = atomic_load(&yt_open_epoch);
+    yt_queue_url_t * u = malloc(sizeof(*u));
+    if (!u) return false;
+    yt_queue_status_t status = yt_queue_url_for_open(meta->track_id, yt_open_cancelled, &epoch, u);
+    bool ok = status == YT_QUEUE_URL_OK;
+    if (ok) {
+        snprintf(meta->stream_url, sizeof(meta->stream_url), "%s", u->url);
+    } else {
+        dec->open_error = AUDIO_ERROR_RESOLVE_FAILED;
+        pthread_mutex_lock(&yt_resolve_class_mutex);
+        snprintf(yt_last_resolve_class, sizeof(yt_last_resolve_class), "%s",
+                 status == YT_QUEUE_URL_CANCELLED ? "cancelled" : u->cls);
+        pthread_mutex_unlock(&yt_resolve_class_mutex);
+    }
+    memset(u, 0, sizeof(*u));
+    free(u);
+    return ok;
+}
+
 static bool decoder_open_internal(decoder_t * dec, const char * path) {
     memset(dec, 0, sizeof(*dec));
     dec->open_error = AUDIO_ERROR_DECODER_FAILED;
@@ -459,6 +499,9 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
     remote_track_meta_t remote_meta;
     bool remote = remote_track_path_is_remote(path) && remote_track_meta_copy_for_path(path, &remote_meta);
     if (remote_track_path_is_remote(path) && !remote) return false; /* stale/replaced queue entry */
+    if (remote && remote_youtube_is(&remote_meta) && !remote_meta.stream_url[0] &&
+        !yt_resolve_for_open(dec, &remote_meta))
+        return false;
 
     if (remote || is_stream_url(path)) {
         /* Fragment, then path extension, then Content-Type. A fragment or
@@ -1175,6 +1218,7 @@ const char * audio_error_description(audio_error_t error) {
         case AUDIO_ERROR_UNSUPPORTED_CHANNELS: return N_("Too many audio channels");
         case AUDIO_ERROR_OUTPUT_FAILED: return N_("Audio output failed");
         case AUDIO_ERROR_DECODER_FAILED: return N_("Audio could not be decoded");
+        case AUDIO_ERROR_RESOLVE_FAILED: return N_("YouTube track could not be resolved");
         default: return N_("Playback error");
     }
 }
@@ -5472,6 +5516,7 @@ void audio_init(void) {
 static void play_file_request(const char * path, double start_seconds,
                          bool has_replaygain, double replaygain_gain_db,
                          bool has_replaygain_peak, double replaygain_peak, bool read_tags, int gain_mode) {
+    atomic_fetch_add(&yt_open_epoch, 1);
     pthread_mutex_lock(&audio_mutex);
     ab_switch_clear_locked();
     free(restart_path);
@@ -5737,6 +5782,7 @@ void audio_toggle_pause(void) {
 }
 
 void audio_stop(void) {
+    atomic_fetch_add(&yt_open_epoch, 1);
     pthread_mutex_lock(&audio_mutex);
     ab_switch_clear_locked();
     ab_loop_enabled = false;

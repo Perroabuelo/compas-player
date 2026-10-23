@@ -74,6 +74,12 @@ bool yt_url_cache_has(yt_url_cache_t * c, const char * video_id, int64_t boot_no
     return find_valid(c, video_id, boot_now_ms) != NULL;
 }
 
+int64_t yt_url_cache_deadline(const yt_url_cache_t * c, const char * video_id) {
+    for (int i = 0; i < YT_URL_CACHE_SLOTS; i++)
+        if (id_matches(&c->slot[i], video_id)) return c->slot[i].deadline_ms;
+    return 0;
+}
+
 void yt_url_cache_keep(yt_url_cache_t * c, const char * current, const char * next) {
     for (int i = 0; i < YT_URL_CACHE_SLOTS; i++) {
         yt_url_slot_t * s = &c->slot[i];

@@ -418,6 +418,7 @@ typedef enum {
     AUDIO_ERROR_FILE_UNAVAILABLE,
     AUDIO_ERROR_UNSUPPORTED_FORMAT,
     AUDIO_ERROR_UNSUPPORTED_CHANNELS,
+    AUDIO_ERROR_RESOLVE_FAILED,  /* hiby-yt: a YouTube track's URL could not be resolved */
 } audio_error_t;
 
 /* Short, static explanation suitable for logs and playback error toasts. */
@@ -429,5 +430,9 @@ audio_error_t audio_consume_error_ex(uint64_t * out_generation);
 
 /* Returns the current playback generation counter. */
 uint64_t audio_get_playback_generation(void);
+
+/* hiby-yt: the class of the last YouTube resolution that failed when a
+ * track opened ("network", "unavailable", ...), for the skip toast. */
+void audio_get_last_resolve_class(char * out, size_t size);
 
 #endif /* AUDIO_H */

@@ -65,6 +65,10 @@ bool yt_url_cache_get(yt_url_cache_t * c, const char * video_id, int64_t boot_no
  * is wiped). */
 bool yt_url_cache_has(yt_url_cache_t * c, const char * video_id, int64_t boot_now_ms);
 
+/* The boot-clock deadline of video_id's URL, or 0 when there is none (it
+ * may have passed: this does not check or wipe). */
+int64_t yt_url_cache_deadline(const yt_url_cache_t * c, const char * video_id);
+
 /* Keeps only the slots of current and next (either may be NULL or empty)
  * and wipes the rest. */
 void yt_url_cache_keep(yt_url_cache_t * c, const char * current, const char * next);
