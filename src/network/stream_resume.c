@@ -11,6 +11,7 @@ int stream_resume_next_delay_ms(unsigned attempt) {
 stream_resume_result_t stream_resume_run(const stream_resume_ops_t * ops, void * ctx, unsigned * attempts) {
     unsigned made = 0;
     stream_resume_result_t result = STREAM_RESUME_FAIL;
+    bool refreshed = false, forbidden = false;
     for (unsigned attempt = 1;; attempt++) {
         int delay = stream_resume_next_delay_ms(attempt);
         if (delay < 0) {
@@ -22,8 +23,18 @@ stream_resume_result_t stream_resume_run(const stream_resume_ops_t * ops, void *
             break;
         }
         made = attempt;
+        if (ops->refresh && !refreshed && (forbidden || (ops->url_expired && ops->url_expired(ctx)))) {
+            refreshed = true;
+            result = ops->refresh(ctx);
+            if (result == STREAM_RESUME_STOPPED || result == STREAM_RESUME_LENGTH_CHANGED) break;
+            if (result != STREAM_RESUME_OK) {
+                result = STREAM_RESUME_FAIL;
+                continue;
+            }
+        }
         result = ops->attempt(ctx, attempt);
         if (result == STREAM_RESUME_OK || result == STREAM_RESUME_STOPPED) break;
+        forbidden = result == STREAM_RESUME_FORBIDDEN;
     }
     if (attempts) *attempts = made;
     return result;
