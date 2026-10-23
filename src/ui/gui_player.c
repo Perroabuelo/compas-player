@@ -6249,11 +6249,21 @@ static void notify_plugin_track_started(const track_metadata_t * meta, const cha
 void gui_player_poll_youtube_prefetch(void) {
     static yt_prefetch_state_t state;
     static uint32_t last_ms;
+    static char last_path[512];
     uint32_t now = lv_tick_get();
     if (lv_tick_diff(now, last_ms) < YT_PREFETCH_POLL_MS) return;
     last_ms = now;
 
     const char * path = playlist_index >= 0 ? playlist_path_at(playlist_index) : NULL;
+    /* The current track changed, even to one that never starts (skipped
+     * after a failure): keep only its URL (yt_url_cache.h). */
+    if (strcmp(path ? path : "", last_path) != 0) {
+        snprintf(last_path, sizeof(last_path), "%s", path ? path : "");
+        static remote_track_meta_t current_meta; /* a few KB: kept off the LVGL stack */
+        bool current_youtube = path && remote_track_meta_copy_for_path(path, &current_meta) &&
+                               remote_youtube_is(&current_meta);
+        yt_queue_track_started(current_youtube ? current_meta.track_id : NULL);
+    }
     int next_index = playlist_index >= 0 ? compute_auto_advance_index(playlist_index) : -1;
     const char * next_path = next_index >= 0 ? playlist_path_at(next_index) : NULL;
     static remote_track_meta_t next_meta; /* a few KB: kept off the LVGL stack */
@@ -6983,9 +6993,17 @@ void gui_format_time(double seconds, char * buf, size_t buf_size) {
 
 void gui_player_poll_confirmed_playback(void) {
     /* hiby-yt: a track that reached its first audio ends a run of YouTube
-     * tracks that could not be resolved. */
-    if (yt_resolve_failures.failed_tracks > 0 && audio_is_playing() && audio_get_position_seconds() > 0.0)
-        yt_failure_count_clear(&yt_resolve_failures);
+     * tracks that could not be resolved. The progress of that exact track:
+     * while the next one is still opening (resolving), the player already
+     * counts as playing and the position is the previous track's. */
+    if (yt_resolve_failures.failed_tracks > 0 && playlist_index >= 0) {
+        const char * path = playlist_path_at(playlist_index);
+        audio_playback_progress_t progress;
+        if (path && audio_get_playback_progress(path, &progress) &&
+            progress.state == AUDIO_PLAYBACK_PROGRESS_ACTIVE && progress.is_playing &&
+            progress.position_seconds > 0.0)
+            yt_failure_count_clear(&yt_resolve_failures);
+    }
     if (consecutive_decoder_failure_skips > 0 && audio_is_playing()) {
         if (audio_get_position_seconds() >= 3.0) {
             reset_decoder_failure_tracking();
