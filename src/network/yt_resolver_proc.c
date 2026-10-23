@@ -34,6 +34,7 @@ typedef struct {
 
     /* Set before the thread starts. */
     char video_id[YT_RESOLVER_VIDEO_ID_LEN + 1];
+    bool retry;
     yt_resolver_done_fn done;
     void * done_arg;
 
@@ -44,6 +45,10 @@ typedef struct {
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ended = PTHREAD_COND_INITIALIZER;
 static resolve_job_t job = { .cancel_pipe = { -1, -1 } };
+/* The last finished resolution, under lock, for the requests waiting on
+ * it (a new start replaces job, not this). */
+static uint16_t last_generation;
+static yt_resolver_result_t last;
 static const char * resolver_path = YT_RESOLVER_PATH;
 static int timeout_ms = YT_RESOLVER_TIMEOUT_MS;
 
@@ -184,6 +189,16 @@ static void set_log_class(yt_resolver_result_t * res) {
     }
 }
 
+static const char * owner_name(yt_owner_t owner) {
+    switch (owner) {
+        case YT_OWNER_PLUGIN: return "plugin";
+        case YT_OWNER_OPEN: return "open";
+        case YT_OWNER_PREFETCH: return "prefetch";
+        case YT_OWNER_REFRESH: return "refresh";
+        default: return "-";
+    }
+}
+
 static void * resolve_worker(void * arg) {
     resolve_job_t * j = arg;
     uint64_t start = now_ms();
@@ -191,11 +206,14 @@ static void * resolve_worker(void * arg) {
     const char * exit_desc = run_resolver(j, start + (uint64_t) timeout_ms, exit_buf, sizeof(exit_buf));
     j->result.cancelled = atomic_load(&j->cancelled);
     set_log_class(&j->result);
-    stream_log_event(stream_log_next_sid(), "resolve", "video_id=%s class=%s ms=%llu exit=%s", j->video_id,
-                     j->result.cls, (unsigned long long) (now_ms() - start), exit_desc);
+    stream_log_event(stream_log_next_sid(), "resolve", "video_id=%s stage=%s cache=miss%s class=%s ms=%llu exit=%s",
+                     j->video_id, owner_name(j->owner), j->retry ? " retry=1" : "", j->result.cls,
+                     (unsigned long long) (now_ms() - start), exit_desc);
     if (j->done) j->done(&j->result, j->done_arg);
 
     pthread_mutex_lock(&lock);
+    last = j->result;
+    last_generation = j->generation;
     close(j->cancel_pipe[0]);
     close(j->cancel_pipe[1]);
     j->cancel_pipe[0] = j->cancel_pipe[1] = -1;
@@ -205,18 +223,11 @@ static void * resolve_worker(void * arg) {
     return NULL;
 }
 
-uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_done_fn done, void * arg) {
-    if (!yt_resolver_video_id_valid(video_id)) return 0;
-    pthread_mutex_lock(&lock);
-    if (job.running) {
-        pthread_mutex_unlock(&lock);
-        return 0;
-    }
+/* Under lock, with nothing running. */
+static uint16_t start_locked(yt_owner_t owner, const char * video_id, bool retry, yt_resolver_done_fn done,
+                             void * arg) {
     int pipefd[2];
-    if (pipe2(pipefd, O_CLOEXEC) != 0) {
-        pthread_mutex_unlock(&lock);
-        return 0;
-    }
+    if (pipe2(pipefd, O_CLOEXEC) != 0) return 0;
     uint16_t generation = (uint16_t) (job.generation + 1);
     if (generation == 0) generation = 1;
     memset(&job, 0, sizeof(job));
@@ -226,6 +237,7 @@ uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_
     job.cancel_pipe[1] = pipefd[1];
     atomic_init(&job.cancelled, false);
     snprintf(job.video_id, sizeof(job.video_id), "%s", video_id);
+    job.retry = retry;
     job.done = done;
     job.done_arg = arg;
 
@@ -241,25 +253,109 @@ uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_
         close(pipefd[0]);
         close(pipefd[1]);
         job.cancel_pipe[0] = job.cancel_pipe[1] = -1;
-        pthread_mutex_unlock(&lock);
         return 0;
     }
     job.running = true;
+    return generation;
+}
+
+uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_done_fn done, void * arg) {
+    if (!yt_resolver_video_id_valid(video_id)) return 0;
+    pthread_mutex_lock(&lock);
+    uint16_t generation = job.running ? 0 : start_locked(owner, video_id, false, done, arg);
     pthread_mutex_unlock(&lock);
     return generation;
 }
 
+/* Under lock. */
+static bool cancel_locked(uint16_t generation) {
+    if (!job.running || job.generation != generation || atomic_exchange(&job.cancelled, true)) return false;
+    char b = 1;
+    ssize_t w = write(job.cancel_pipe[1], &b, 1);
+    (void) w; /* the worker also checks the flag; a full pipe still wakes it */
+    return true;
+}
+
 bool yt_resolver_cancel(uint16_t generation) {
     pthread_mutex_lock(&lock);
-    bool cancelled = false;
-    if (job.running && job.generation == generation && !atomic_exchange(&job.cancelled, true)) {
-        char b = 1;
-        ssize_t w = write(job.cancel_pipe[1], &b, 1);
-        (void) w; /* the worker also checks the flag; a full pipe still wakes it */
-        cancelled = true;
-    }
+    bool cancelled = cancel_locked(generation);
     pthread_mutex_unlock(&lock);
     return cancelled;
+}
+
+/* Under lock: waits up to YT_RESOLVER_POLL_MS for a resolution to end. */
+static void wait_tick_locked(void) {
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_nsec += (long) YT_RESOLVER_POLL_MS * 1000000L;
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec++;
+        deadline.tv_nsec -= 1000000000L;
+    }
+    pthread_cond_timedwait(&ended, &lock, &deadline);
+}
+
+static void fail(yt_resolver_result_t * out, const char * cls, const char * detail) {
+    memset(out, 0, sizeof(*out));
+    out->fail_class = cls;
+    out->fail_detail = detail;
+    snprintf(out->cls, sizeof(out->cls), "%s", cls);
+}
+
+yt_resolver_outcome_t yt_resolver_request(yt_owner_t owner, const char * video_id, bool retry,
+                                          bool (*cancelled)(void * arg), void * arg, yt_resolver_result_t * out) {
+    if (!yt_resolver_video_id_valid(video_id)) {
+        fail(out, "bad_input", "video_id");
+        return YT_RESOLVER_DONE;
+    }
+    pthread_mutex_lock(&lock);
+    uint16_t waiting_for = 0; /* generation whose result this call takes */
+    bool mine = false;        /* this call started it */
+    for (;;) {
+        if (cancelled && cancelled(arg)) {
+            if (mine) cancel_locked(waiting_for);
+            pthread_mutex_unlock(&lock);
+            return YT_RESOLVER_CANCELLED;
+        }
+        if (waiting_for) {
+            if (job.running && job.generation == waiting_for) {
+                wait_tick_locked();
+                continue;
+            }
+            /* Another resolution can only finish on top of it after a
+             * full run of its own; then the result is gone. */
+            if (last_generation == waiting_for) *out = last;
+            else fail(out, "internal", "result_lost");
+            pthread_mutex_unlock(&lock);
+            return YT_RESOLVER_DONE;
+        }
+        switch (yt_resolve_decide(job.running ? job.owner : YT_OWNER_NONE, job.video_id, owner, video_id)) {
+            case YT_REQ_START:
+                waiting_for = start_locked(owner, video_id, retry, NULL, NULL);
+                if (!waiting_for) {
+                    fail(out, "internal", "spawn_failed");
+                    pthread_mutex_unlock(&lock);
+                    return YT_RESOLVER_DONE;
+                }
+                mine = true;
+                break;
+            case YT_REQ_JOIN:
+                waiting_for = job.generation;
+                break;
+            case YT_REQ_CANCEL_AND_START:
+                cancel_locked(job.generation);
+                wait_tick_locked();
+                break;
+            case YT_REQ_WAIT:
+                wait_tick_locked();
+                break;
+            case YT_REQ_BUSY:
+            case YT_REQ_SKIP:
+            default:
+                pthread_mutex_unlock(&lock);
+                return YT_RESOLVER_REFUSED;
+        }
+    }
 }
 
 void yt_resolver_wait_ended(uint16_t generation) {

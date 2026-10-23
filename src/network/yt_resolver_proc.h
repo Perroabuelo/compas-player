@@ -10,7 +10,8 @@
  * anything starts. It runs with nice RESOLVER_NICE on a detached worker
  * thread that reads its one-line output, and is killed and reaped when it
  * has not finished after YT_RESOLVER_TIMEOUT_MS or when it is cancelled.
- * Every resolution leaves an event=resolve line in the stream log. */
+ * Every resolution leaves an event=resolve line in the stream log, with the
+ * owner as stage (plugin, open, prefetch or refresh) and cache=miss. */
 
 #include "yt_resolve_policy.h"
 
@@ -27,6 +28,8 @@
 /* The resolver prints one line of about 1-2 KiB. */
 #define YT_RESOLVER_OUTPUT_MAX 8192
 #define YT_RESOLVER_VIDEO_ID_LEN 11
+/* How often a waiting request checks its cancel callback. */
+#define YT_RESOLVER_POLL_MS 100
 
 typedef struct {
     /* Set when there is no usable output to decode (fixed strings). */
@@ -48,10 +51,29 @@ typedef void (*yt_resolver_done_fn)(const yt_resolver_result_t * result, void * 
 /* True for an 11-character [A-Za-z0-9_-] id. */
 bool yt_resolver_video_id_valid(const char * id);
 
-/* Starts resolving video_id for owner. Returns its generation (never 0),
- * or 0 when the id is invalid, a resolution is running or the thread could
- * not start. Thread-safe. */
+/* Starts resolving video_id for owner without waiting (the plugin and the
+ * prefetch). Returns its generation (never 0), or 0 when the id is
+ * invalid, a resolution is running or the thread could not start.
+ * Thread-safe. */
 uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_done_fn done, void * arg);
+
+typedef enum {
+    YT_RESOLVER_DONE,      /* *out has the result (which may be a failure) */
+    YT_RESOLVER_CANCELLED, /* cancelled() said so; *out is untouched */
+    YT_RESOLVER_REFUSED,   /* the policy said busy or skip; *out is untouched */
+} yt_resolver_outcome_t;
+
+/* Asks for video_id on behalf of owner (open or refresh) and waits for the
+ * result, following yt_resolve_decide(): it starts a resolution, joins the
+ * running one for the same track, waits for another one to end, or
+ * cancels it first. cancelled(arg), when not NULL, is polled every
+ * YT_RESOLVER_POLL_MS while waiting; when it returns true the call returns
+ * YT_RESOLVER_CANCELLED, and a resolution this call started is cancelled
+ * (the worker still kills and reaps the resolver). retry marks the log
+ * line of a second try. Blocks the calling thread: never from the UI
+ * thread. */
+yt_resolver_outcome_t yt_resolver_request(yt_owner_t owner, const char * video_id, bool retry,
+                                          bool (*cancelled)(void * arg), void * arg, yt_resolver_result_t * out);
 
 /* Asks the resolution with this generation to stop (it is killed and
  * reaped; done still runs with cancelled set). Returns whether it was
