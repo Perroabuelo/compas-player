@@ -23,6 +23,7 @@
 #include "playlist_files.h"
 #include "plugin_json.h"
 #include "plugin_youtube.h"
+#include "remote_youtube.h"
 #include "plugin_storage.h"
 #include "plugin_internal.h"
 #include "plugin_disabled_list.h"
@@ -2117,11 +2118,16 @@ static void parse_remote_track_table(lua_State * L, int table_index, remote_trac
         }
     }
 
+    /* hiby-yt: a YouTube track may come without a stream_url; the player
+     * then resolves its video id when it opens (remote_youtube.h). */
+    bool youtube = remote_youtube_is(out);
     lua_getfield(L, table_index, "stream_url");
-    const char * stream_url = luaL_checkstring(L, -1);
-    if (stream_url[0] == '\0') luaL_error(L, "%s: stream_url must not be empty", fn_name);
-    if (strlen(stream_url) >= sizeof(out->stream_url)) luaL_error(L, "%s: stream_url is too long", fn_name);
-    snprintf(out->stream_url, sizeof(out->stream_url), "%s", stream_url);
+    if (!(youtube && lua_isnil(L, -1))) {
+        const char * stream_url = luaL_checkstring(L, -1);
+        if (stream_url[0] == '\0') luaL_error(L, "%s: stream_url must not be empty", fn_name);
+        if (strlen(stream_url) >= sizeof(out->stream_url)) luaL_error(L, "%s: stream_url is too long", fn_name);
+        snprintf(out->stream_url, sizeof(out->stream_url), "%s", stream_url);
+    }
     lua_pop(L, 1);
 
 #define OPT_STR_FIELD(field, name) \
@@ -2181,6 +2187,11 @@ static void parse_remote_track_table(lua_State * L, int table_index, remote_trac
     lua_getfield(L, table_index, "verify_tls");
     out->verify_tls = lua_isnil(L, -1) ? true : lua_toboolean(L, -1);
     lua_pop(L, 1);
+
+    if (youtube) {
+        const char * err = remote_youtube_normalize(out);
+        if (err) luaL_error(L, "%s: %s", fn_name, err);
+    }
 }
 
 static int l_plugin_play_remote(lua_State * L) {
@@ -5521,7 +5532,7 @@ static const char * const plugin_capabilities[] = {
     "ui.player_actions", "ui.player_layout_restore",
     "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.more_menu", "ui.file_picker",
     "ui.startup_image", "audio.mseb.stock", "playback.stay_on_screen",
-    "ui.settings_list_10_sliders", "network.youtube_resolve"
+    "ui.settings_list_10_sliders", "network.youtube_resolve", "network.youtube_queue"
 };
 
 static int l_plugin_has_capability(lua_State * L) {

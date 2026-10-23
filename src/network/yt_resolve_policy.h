@@ -46,6 +46,9 @@ typedef enum {
     YT_REQ_SKIP,             /* do not start now (a prefetch is asked again later) */
 } yt_req_action_t;
 
+/* True for an 11-character [A-Za-z0-9_-] video id. */
+bool yt_video_id_valid(const char * id);
+
 yt_req_action_t yt_resolve_decide(yt_owner_t running, const char * running_id, yt_owner_t request,
                                   const char * request_id);
 

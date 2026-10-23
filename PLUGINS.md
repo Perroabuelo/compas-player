@@ -952,6 +952,18 @@ plugin.play_remote({
   so they add up even when the URL changes on every play. They don't appear
   in the Favorites and Most Played screens yet.
 - Remote tracks are not resumed after a restart.
+- YouTube tracks (hiby-yt; check `network.youtube_queue`): with
+  `provider = "youtube"` and a video id as `track_id`, `stream_url` may be
+  left out. The player then resolves each track on the device when it
+  opens, with the resolver of `plugin.youtube_resolve()`, and resolves the
+  next one while the current one plays. A `stream_url` you already resolved
+  is used as given. `codec` must be `"aac"` or omitted, and TLS is always
+  verified. An invalid video id raises an error and leaves the current
+  queue alone. A track that cannot be resolved is skipped with a toast
+  (`network` and `po_token_required` are tried twice first), and playback
+  stops after three such tracks in a row. When a stream that was cut short
+  gets 403 or its URL has expired, the player resolves the track again and
+  goes on from where it stopped.
 - Playback follows the stream rules above: finite sources can seek when
   `get_playback_format().seekable` is true; live sources remain forward-only.
   A dropped finite stream is resumed as described above.
@@ -1432,13 +1444,16 @@ end)
   `challenge_failed`, `network`, `limit` and `internal`. `limit` with
   `detail = "timeout"` means the resolver ran for 90 seconds and was
   stopped; `internal` with `resolver_missing` means it is not installed.
-- One resolution at a time, for all plugins together. The video id must be
+- One resolution at a time, for all plugins and the YouTube queue together
+  (`"busy"` while the queue resolves). The video id must be
   11 characters of `A-Z a-z 0-9 _ -`; nothing else is ever passed to the
   resolver, and no other program can be started this way.
 - `plugin.cancel(handle)` stops it; its callback is then not called.
   Refresh Plugins and reloading the UI stop it too.
 - The resolver runs at a lower priority than playback. Each resolution adds
-  an `event=resolve` line (`class`, `ms`, `exit`) to the stream log.
+  an `event=resolve` line (`stage`, `cache`, `class`, `ms`, `exit`) to the
+  stream log; `stage` is `plugin` for this function and `open`, `prefetch`
+  or `refresh` for the queue.
 
 ## Data and storage
 

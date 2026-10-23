@@ -6,6 +6,17 @@ static bool same_id(const char * a, const char * b) {
     return a && b && a[0] && strcmp(a, b) == 0;
 }
 
+bool yt_video_id_valid(const char * id) {
+    if (!id) return false;
+    size_t n = 0;
+    for (; id[n]; n++) {
+        char c = id[n];
+        bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+        if (!ok || n >= 11) return false;
+    }
+    return n == 11;
+}
+
 yt_req_action_t yt_resolve_decide(yt_owner_t running, const char * running_id, yt_owner_t request,
                                   const char * request_id) {
     if (running == YT_OWNER_NONE) return YT_REQ_START;

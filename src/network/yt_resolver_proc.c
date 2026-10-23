@@ -66,14 +66,7 @@ static uint64_t now_ms(void) {
 }
 
 bool yt_resolver_video_id_valid(const char * id) {
-    if (!id) return false;
-    size_t n = 0;
-    for (; id[n]; n++) {
-        char c = id[n];
-        bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-        if (!ok || n >= YT_RESOLVER_VIDEO_ID_LEN) return false;
-    }
-    return n == YT_RESOLVER_VIDEO_ID_LEN;
+    return yt_video_id_valid(id);
 }
 
 /* Waits for pid to exit until deadline. Returns true with *status when it
