@@ -98,6 +98,7 @@ static bool is_sd_card_path(const char *path);
 #include "remote_youtube.h"
 #include "yt_prefetch_policy.h"
 #include "yt_resolve_policy.h"
+#include "stream_log.h"
 
 /* hiby-yt: YouTube tracks in a row that could not be resolved. */
 static yt_failure_count_t yt_resolve_failures;
@@ -5402,10 +5403,28 @@ uint64_t gui_player_playback_intent_epoch(void) { return playback_intent_epoch; 
 /* Status bar and Quick Drawer moved to gui_shell.c */
 
 
-void reset_decoder_failure_tracking(void) {
-    consecutive_decoder_failure_skips = 0;
+/* hiby-yt: clears the run of YouTube tracks that could not be resolved,
+ * leaving a line in the stream log when there was one. */
+static void yt_failures_clear(const char * reason) {
+    if (yt_resolve_failures.failed_tracks > 0)
+        stream_log_event(stream_log_next_sid(), "skip_reset", "reason=%s failed_tracks=%u", reason,
+                         yt_resolve_failures.failed_tracks);
     yt_failure_count_clear(&yt_resolve_failures);
+}
+
+/* The broken-file skip counters only. hiby-yt: the 3 s confirmation in
+ * gui_player_poll_confirmed_playback() uses this, not the full reset: while
+ * the next YouTube track is still resolving, the player already counts as
+ * playing at the previous track's position, which cleared the YouTube
+ * count after every skip on the R1. */
+static void reset_decoder_skip_tracking(void) {
+    consecutive_decoder_failure_skips = 0;
     failed_physical_paths_count = 0;
+}
+
+void reset_decoder_failure_tracking(void) {
+    reset_decoder_skip_tracking();
+    yt_failures_clear("reset");
 }
 
 static bool is_failed_physical_path(const char * path) {
@@ -7002,11 +7021,11 @@ void gui_player_poll_confirmed_playback(void) {
         if (path && audio_get_playback_progress(path, &progress) &&
             progress.state == AUDIO_PLAYBACK_PROGRESS_ACTIVE && progress.is_playing &&
             progress.position_seconds > 0.0)
-            yt_failure_count_clear(&yt_resolve_failures);
+            yt_failures_clear("first_audio");
     }
     if (consecutive_decoder_failure_skips > 0 && audio_is_playing()) {
         if (audio_get_position_seconds() >= 3.0) {
-            reset_decoder_failure_tracking();
+            reset_decoder_skip_tracking();
         }
     }
 }
@@ -8628,6 +8647,8 @@ void gui_player_handle_playback_error_ex(audio_error_t err, uint64_t err_generat
             audio_get_last_resolve_class(cls, sizeof(cls));
             snprintf(reason, sizeof(reason), "YouTube %s", cls[0] ? cls : "internal");
             resolve_stop = yt_failure_count_add(&yt_resolve_failures);
+            stream_log_event(stream_log_next_sid(), "skip", "class=%s failed_tracks=%u stop=%d",
+                             cls[0] ? cls : "internal", yt_resolve_failures.failed_tracks, resolve_stop ? 1 : 0);
         } else {
             snprintf(reason, sizeof(reason), "%s", TR(audio_error_description(err)));
         }
