@@ -33,6 +33,27 @@ void http_stream_log_host(http_stream_t * s, char * out, size_t size);
 /* Bytes received from the network so far, across seeks and resumes. */
 uint64_t http_stream_bytes_received(http_stream_t * s);
 
+/* hiby-yt (chain-youtube-queue D5): a way to get a new URL for the same
+ * entity, for a stream whose URL expires (a YouTube track). When a cut is
+ * resumed and expired() says so, or a resume attempt gets 403, the pump
+ * calls refresh() once for that cut and goes on with the new URL, if its
+ * total length is the stream's; otherwise the stream ends with
+ * error stage=reconnect detail=length_changed. */
+typedef struct {
+    bool (*expired)(void * ctx); /* may be NULL */
+    /* Writes the new URL and its total length. cancelled(arg) turns true
+     * when the stream is closing. Returns 0 on success, 1 when cancelled,
+     * -1 when it failed. */
+    int (*refresh)(void * ctx, bool (*cancelled)(void * arg), void * arg, char * url, size_t url_size,
+                   uint64_t * total_length);
+    void (*free_ctx)(void * ctx); /* may be NULL */
+    void * ctx;
+} http_stream_refresher_t;
+
+/* Gives the stream a refresher; the stream owns r->ctx from then on and
+ * frees it with free_ctx when it closes. */
+void http_stream_set_refresher(http_stream_t * s, const http_stream_refresher_t * r);
+
 /* The caller owns and serializes read/seek/close operations. Close stops the
  * internal pump; it must not race a caller that is reading or seeking. */
 void http_stream_close(http_stream_t * s);

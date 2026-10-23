@@ -26,13 +26,19 @@ typedef enum {
     CUT_ONCE,      /* the resume gets a valid 206 */
     CUT_200,       /* first resume gets 200 + whole entity, then a valid 206 */
     CUT_BAD_TOTAL, /* first resume gets a 206 of another total, then valid */
-    CUT_FOREVER    /* every resume is refused */
+    CUT_FOREVER,   /* every resume is refused */
+    /* hiby-yt URL refresh (chain-youtube-queue D5): the stream has a
+     * refresher whose new URL is /new on the same server. */
+    CUT_403,       /* a resume to the old URL gets 403; /new works */
+    CUT_EXPIRED,   /* the URL has expired: the resume goes straight to /new */
+    CUT_NEW_LENGTH /* the new URL declares another total length */
 } test_mode_t;
 typedef struct {
     int fd;
     test_mode_t mode;
     int requests;
     int max_requests; /* when set, overrides the per-mode limit */
+    int old_resumes;  /* requests to the old URL after the cut */
 } server_t;
 #define TEST_ENTITY_SIZE 300000ULL
 /* Not a multiple of 10, so bytes of a response starting at 0 cannot pass
@@ -75,7 +81,10 @@ static void * server_main(void * arg) {
             req[used] = 0;
         }
         bool ranged = strstr(req, "Range: bytes=") != NULL;
+        bool new_url = strncmp(req, "GET /new ", 9) == 0;
         int which = s->requests++;
+        if (s->mode >= CUT_403 && which > 0 && !new_url)
+            s->old_resumes++;
         if (s->mode == SEEK_416 && which > 0)
             assert(strstr(req, "If-Range: \"v1\"\r\n"));
         if (s->mode == LIVE) {
@@ -130,9 +139,16 @@ static void * server_main(void * arg) {
                              TEST_ENTITY_SIZE - 1, TEST_ENTITY_SIZE,
                              TEST_ENTITY_SIZE);
             send_all(c, h, (size_t)n);
+            /* Let the test give the stream its refresher before the cut. */
+            if (s->mode >= CUT_403)
+                usleep(100000);
             send_pattern(c, 0, TEST_CUT_AT);
             close(c);
         } else if (s->mode == CUT_FOREVER) {
+            close(c);
+        } else if (s->mode >= CUT_403 && !new_url) {
+            const char * h = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+            send_all(c, h, strlen(h));
             close(c);
         } else if (s->mode == CUT_200 && which == 1) {
             char h[128];
@@ -184,7 +200,7 @@ static void * server_main(void * arg) {
                                    ? 2
                                    : 1);
         if (s->mode >= CUT_ONCE) {
-            static const int cut_requests[] = {2, 3, 3, 6};
+            static const int cut_requests[] = {2, 3, 3, 6, 3, 2, 1};
             max_requests = cut_requests[s->mode - CUT_ONCE];
         }
         if (s->max_requests)
@@ -423,6 +439,72 @@ static void test_resume(test_mode_t mode) {
     pthread_join(t, NULL);
 }
 
+/* hiby-yt: the refresher a YouTube track's stream gets (audio.c), faked:
+ * its new URL is /new on the test server. */
+typedef struct {
+    char url[80];
+    uint64_t total;
+    bool expired;
+    int refreshes;
+} fake_refresher_t;
+
+static bool fake_expired(void * ctx) {
+    return ((fake_refresher_t *)ctx)->expired;
+}
+
+static int fake_refresh(void * ctx, bool (*cancelled)(void * arg), void * arg,
+                        char * url, size_t url_size, uint64_t * total) {
+    fake_refresher_t * f = ctx;
+    assert(!cancelled(arg));
+    f->refreshes++;
+    f->expired = false;
+    snprintf(url, url_size, "%s", f->url);
+    *total = f->total;
+    return 0;
+}
+
+static void test_refresh(test_mode_t mode) {
+    server_t s = {.mode = mode};
+    pthread_t t;
+    char url[80];
+    http_stream_t * x = open_test(&s, &t, url);
+    assert(x && http_stream_can_seek(x));
+    static fake_refresher_t f;
+    memset(&f, 0, sizeof(f));
+    snprintf(f.url, sizeof(f.url), "%.*snew", (int)(strlen(url) - strlen("test")), url);
+    f.total = mode == CUT_NEW_LENGTH ? TEST_ENTITY_SIZE + 1000 : TEST_ENTITY_SIZE;
+    f.expired = mode != CUT_403; /* CUT_NEW_LENGTH: refresh before any request */
+    http_stream_refresher_t r = {fake_expired, fake_refresh, NULL, &f};
+    http_stream_set_refresher(x, &r);
+    unsigned sid = http_stream_log_sid(x);
+    char * data = malloc(TEST_ENTITY_SIZE + 4096);
+    assert(data);
+    size_t got = read_all(x, data, TEST_ENTITY_SIZE + 4096);
+    assert(f.refreshes == 1);
+    if (mode == CUT_NEW_LENGTH) {
+        /* Nothing is asked of the new URL. */
+        assert(got == TEST_CUT_AT && is_pattern(data, got));
+        assert(http_stream_failed(x));
+        assert(log_has_event(sid, "error stage=reconnect detail=length_changed"));
+        assert(!log_has_event(sid, "reconnect attempt="));
+    } else {
+        assert(got == TEST_ENTITY_SIZE && is_pattern(data, got));
+        assert(!http_stream_failed(x) && http_stream_reconnects(x) == 1);
+        if (mode == CUT_403) {
+            assert(s.old_resumes == 1);
+            assert(log_has_event(sid, "reconnect attempt=1 offset=100003 result=fail"));
+            assert(log_has_event(sid, "reconnect attempt=2 offset=100003 result=ok"));
+        } else {
+            assert(s.old_resumes == 0);
+            assert(log_has_event(sid, "reconnect attempt=1 offset=100003 result=ok"));
+        }
+        assert(!log_has_event(sid, "error"));
+    }
+    free(data);
+    http_stream_close(x);
+    pthread_join(t, NULL);
+}
+
 int main(int argc, char ** argv) {
     signal(SIGPIPE, SIG_IGN);
     assert(mkdtemp(log_root));
@@ -438,6 +520,9 @@ int main(int argc, char ** argv) {
     test_resume(CUT_200);
     test_resume(CUT_BAD_TOTAL);
     test_resume(CUT_FOREVER);
+    test_refresh(CUT_403);
+    test_refresh(CUT_EXPIRED);
+    test_refresh(CUT_NEW_LENGTH);
     if (argc > 1)
         test_tls_range((unsigned)strtoul(argv[1], NULL, 10));
     char cleanup[96];

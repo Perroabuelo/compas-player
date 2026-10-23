@@ -67,6 +67,9 @@ struct http_stream {
     unsigned reconnects;
     bool failed;
     uint64_t received; /* bytes from the network into the ring */
+    /* hiby-yt: new URLs for an expiring one (http_stream_set_refresher). */
+    bool has_refresher;
+    http_stream_refresher_t refresher;
 };
 
 typedef struct {
@@ -380,6 +383,7 @@ static stream_resume_result_t resume_attempt(void * arg, unsigned attempt) {
     } else {
         /* A response arrived but cannot continue the same entity. */
         result = r.status == 200 || r.status == 206 ? STREAM_RESUME_BAD_RANGE
+                 : r.status == 403                  ? STREAM_RESUME_FORBIDDEN
                                                     : STREAM_RESUME_FAIL;
     }
     stream_log_event(s->log_sid, "reconnect", "attempt=%u offset=%llu result=%s",
@@ -390,12 +394,53 @@ static stream_resume_result_t resume_attempt(void * arg, unsigned attempt) {
     return result;
 }
 
+static bool resume_url_expired(void * arg) {
+    http_stream_t * s = ((resume_ctx_t *)arg)->s;
+    return s->refresher.expired && s->refresher.expired(s->refresher.ctx);
+}
+
+static bool stream_closing(void * arg) {
+    http_stream_t * s = arg;
+    pthread_mutex_lock(&s->mutex);
+    bool closing = s->stop_requested;
+    pthread_mutex_unlock(&s->mutex);
+    return closing;
+}
+
+/* A new URL for the same entity; the attempts after it use it. */
+static stream_resume_result_t resume_refresh(void * arg) {
+    http_stream_t * s = ((resume_ctx_t *)arg)->s;
+    char * url = calloc(1, sizeof(s->final_url));
+    if (!url)
+        return STREAM_RESUME_FAIL;
+    uint64_t total = 0;
+    int r = s->refresher.refresh(s->refresher.ctx, stream_closing, s, url,
+                                 sizeof(s->final_url), &total);
+    stream_resume_result_t result;
+    if (r > 0) {
+        result = STREAM_RESUME_STOPPED;
+    } else if (r < 0 || !url[0]) {
+        result = STREAM_RESUME_FAIL;
+    } else if (total != s->length) {
+        result = STREAM_RESUME_LENGTH_CHANGED;
+    } else {
+        pthread_mutex_lock(&s->mutex);
+        snprintf(s->final_url, sizeof(s->final_url), "%s", url);
+        pthread_mutex_unlock(&s->mutex);
+        result = STREAM_RESUME_OK;
+    }
+    memset(url, 0, sizeof(s->final_url));
+    free(url);
+    return result;
+}
+
 /* True when the pump should go on reading a resumed connection. */
 static bool resume_after_cut(http_stream_t * s) {
     pthread_mutex_lock(&s->mutex);
     bool cut = !s->stop_requested && s->seekable && !s->chunked &&
                s->has_content_length && s->remaining > 0;
     resume_ctx_t ctx = {s, s->length - s->remaining};
+    bool can_refresh = s->has_refresher;
     if (cut) {
         /* Never hold two connections: the broken one goes first. */
         http_conn_close(s->conn);
@@ -406,14 +451,19 @@ static bool resume_after_cut(http_stream_t * s) {
     pthread_mutex_unlock(&s->mutex);
     if (!cut)
         return false;
-    static const stream_resume_ops_t ops = {resume_wait_ms, resume_attempt};
+    stream_resume_ops_t ops = {resume_wait_ms, resume_attempt, NULL, NULL};
+    if (can_refresh) {
+        ops.url_expired = resume_url_expired;
+        ops.refresh = resume_refresh;
+    }
     unsigned attempts = 0;
     stream_resume_result_t result = stream_resume_run(&ops, &ctx, &attempts);
     if (result == STREAM_RESUME_OK)
         return true;
     if (result != STREAM_RESUME_STOPPED) {
         stream_log_event(s->log_sid, "error",
-                         "stage=reconnect detail=exhausted attempts=%u offset=%llu",
+                         "stage=reconnect detail=%s attempts=%u offset=%llu",
+                         result == STREAM_RESUME_LENGTH_CHANGED ? "length_changed" : "exhausted",
                          attempts, (unsigned long long)ctx.offset);
         pthread_mutex_lock(&s->mutex);
         s->failed = true;
@@ -835,8 +885,20 @@ void http_stream_close(http_stream_t * s) {
     if (s->thread_started)
         pthread_join(s->thread, NULL);
     free(s->conn);
+    if (s->has_refresher && s->refresher.free_ctx)
+        s->refresher.free_ctx(s->refresher.ctx);
+    memset(s->final_url, 0, sizeof(s->final_url));
     pthread_mutex_destroy(&s->mutex);
     pthread_cond_destroy(&s->cond);
     free(s->ring);
     free(s);
+}
+
+void http_stream_set_refresher(http_stream_t * s, const http_stream_refresher_t * r) {
+    if (!s || !r || !r->refresh)
+        return;
+    pthread_mutex_lock(&s->mutex);
+    s->refresher = *r;
+    s->has_refresher = true;
+    pthread_mutex_unlock(&s->mutex);
 }

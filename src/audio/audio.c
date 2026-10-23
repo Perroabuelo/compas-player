@@ -462,8 +462,9 @@ void audio_get_last_resolve_class(char * out, size_t size) {
     pthread_mutex_unlock(&yt_resolve_class_mutex);
 }
 
-/* Fills meta->stream_url of a YouTube track that came without one. */
-static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta) {
+/* Fills meta->stream_url of a YouTube track that came without one, and
+ * *deadline_ms with when that URL expires (boot clock). */
+static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta, int64_t * deadline_ms) {
     unsigned epoch = atomic_load(&yt_open_epoch);
     yt_queue_url_t * u = malloc(sizeof(*u));
     if (!u) return false;
@@ -471,6 +472,7 @@ static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta) {
     bool ok = status == YT_QUEUE_URL_OK;
     if (ok) {
         snprintf(meta->stream_url, sizeof(meta->stream_url), "%s", u->url);
+        *deadline_ms = u->deadline_ms;
     } else {
         dec->open_error = AUDIO_ERROR_RESOLVE_FAILED;
         pthread_mutex_lock(&yt_resolve_class_mutex);
@@ -481,6 +483,44 @@ static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta) {
     memset(u, 0, sizeof(*u));
     free(u);
     return ok;
+}
+
+/* The stream's refresher for a YouTube track (http_stream_set_refresher):
+ * a new URL when the old one expired or got 403 (chain-youtube-queue D5). */
+typedef struct {
+    char video_id[sizeof(((remote_track_meta_t *) 0)->track_id)];
+    int64_t deadline_ms; /* 0: unknown (a URL the plugin resolved) */
+} yt_refresh_ctx_t;
+
+static bool yt_stream_url_expired(void * ctx) {
+    const yt_refresh_ctx_t * c = ctx;
+    return c->deadline_ms > 0 && yt_queue_boot_ms() >= c->deadline_ms;
+}
+
+static int yt_stream_refresh(void * ctx, bool (*cancelled)(void * arg), void * arg, char * url, size_t url_size,
+                             uint64_t * total_length) {
+    yt_refresh_ctx_t * c = ctx;
+    yt_queue_url_t * u = malloc(sizeof(*u));
+    if (!u) return -1;
+    yt_queue_status_t status = yt_queue_url_refresh(c->video_id, cancelled, arg, u);
+    int r = status == YT_QUEUE_URL_CANCELLED ? 1 : status == YT_QUEUE_URL_OK ? 0 : -1;
+    if (r == 0) {
+        snprintf(url, url_size, "%s", u->url);
+        *total_length = u->content_length;
+        c->deadline_ms = u->deadline_ms;
+    }
+    memset(u, 0, sizeof(*u));
+    free(u);
+    return r;
+}
+
+static void yt_set_stream_refresher(http_stream_t * stream, const char * video_id, int64_t deadline_ms) {
+    yt_refresh_ctx_t * c = calloc(1, sizeof(*c));
+    if (!c) return;
+    snprintf(c->video_id, sizeof(c->video_id), "%s", video_id);
+    c->deadline_ms = deadline_ms;
+    http_stream_refresher_t r = { yt_stream_url_expired, yt_stream_refresh, free, c };
+    http_stream_set_refresher(stream, &r);
 }
 
 static bool decoder_open_internal(decoder_t * dec, const char * path) {
@@ -499,8 +539,9 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
     remote_track_meta_t remote_meta;
     bool remote = remote_track_path_is_remote(path) && remote_track_meta_copy_for_path(path, &remote_meta);
     if (remote_track_path_is_remote(path) && !remote) return false; /* stale/replaced queue entry */
-    if (remote && remote_youtube_is(&remote_meta) && !remote_meta.stream_url[0] &&
-        !yt_resolve_for_open(dec, &remote_meta))
+    bool youtube = remote && remote_youtube_is(&remote_meta);
+    int64_t yt_deadline_ms = 0;
+    if (youtube && !remote_meta.stream_url[0] && !yt_resolve_for_open(dec, &remote_meta, &yt_deadline_ms))
         return false;
 
     if (remote || is_stream_url(path)) {
@@ -544,6 +585,7 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
             return false;
         }
         dec->log_sid = http_stream_log_sid(dec->net_stream);
+        if (youtube) yt_set_stream_refresher(dec->net_stream, remote_meta.track_id, yt_deadline_ms);
 
         const char * content_type = http_stream_content_type(dec->net_stream);
         if (remote) {
