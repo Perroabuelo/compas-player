@@ -18,6 +18,7 @@ typedef struct {
     uint64_t content_length;
     int64_t deadline_ms; /* boot clock (yt_queue_boot_ms); 0: unknown */
     char cls[24];        /* "ok", or the class of the failure */
+    bool cache_hit;      /* the URL came from the cache, not a resolution */
 } yt_queue_url_t;
 
 typedef enum {
@@ -31,6 +32,11 @@ typedef enum {
  * network is tried once more. Blocks; never call it from the UI thread. */
 yt_queue_status_t yt_queue_url_for_open(const char * video_id, bool (*cancelled)(void * arg), void * arg,
                                         yt_queue_url_t * out);
+
+/* Like yt_queue_url_for_open, after a cached URL for video_id could not be
+ * opened: that URL is dropped and the track is resolved again. */
+yt_queue_status_t yt_queue_url_reopen(const char * video_id, bool (*cancelled)(void * arg), void * arg,
+                                      yt_queue_url_t * out);
 
 /* A new URL for video_id, never the cached one (the stream's got 403 or
  * expired). One try. Blocks; never call it from the UI thread. */

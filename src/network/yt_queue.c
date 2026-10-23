@@ -107,6 +107,7 @@ yt_queue_status_t yt_queue_url_for_open(const char * video_id, bool (*cancelled)
     pthread_mutex_unlock(&lock);
     if (hit) {
         out->deadline_ms = deadline;
+        out->cache_hit = true;
         set_class(out, "ok");
         stream_log_event(stream_log_next_sid(), "resolve", "video_id=%s stage=open cache=hit class=ok ms=0 exit=-",
                          video_id);
@@ -118,6 +119,14 @@ yt_queue_status_t yt_queue_url_for_open(const char * video_id, bool (*cancelled)
         if (status != YT_QUEUE_URL_FAILED || !yt_resolve_should_retry(out->cls, tries)) break;
     }
     return status;
+}
+
+yt_queue_status_t yt_queue_url_reopen(const char * video_id, bool (*cancelled)(void * arg), void * arg,
+                                      yt_queue_url_t * out) {
+    pthread_mutex_lock(&lock);
+    yt_url_cache_drop(&cache, video_id);
+    pthread_mutex_unlock(&lock);
+    return yt_queue_url_for_open(video_id, cancelled, arg, out);
 }
 
 yt_queue_status_t yt_queue_url_refresh(const char * video_id, bool (*cancelled)(void * arg), void * arg,

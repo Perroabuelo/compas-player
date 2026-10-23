@@ -463,16 +463,21 @@ void audio_get_last_resolve_class(char * out, size_t size) {
 }
 
 /* Fills meta->stream_url of a YouTube track that came without one, and
- * *deadline_ms with when that URL expires (boot clock). */
-static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta, int64_t * deadline_ms) {
+ * *deadline_ms with when that URL expires (boot clock); *cache_hit tells
+ * whether it came from the cache. reopen: a cached URL could not be
+ * opened, so it is dropped and the track resolved again. */
+static bool yt_resolve_for_open(decoder_t * dec, remote_track_meta_t * meta, bool reopen, int64_t * deadline_ms,
+                                bool * cache_hit) {
     unsigned epoch = atomic_load(&yt_open_epoch);
     yt_queue_url_t * u = malloc(sizeof(*u));
     if (!u) return false;
-    yt_queue_status_t status = yt_queue_url_for_open(meta->track_id, yt_open_cancelled, &epoch, u);
+    yt_queue_status_t status = reopen ? yt_queue_url_reopen(meta->track_id, yt_open_cancelled, &epoch, u)
+                                      : yt_queue_url_for_open(meta->track_id, yt_open_cancelled, &epoch, u);
     bool ok = status == YT_QUEUE_URL_OK;
     if (ok) {
         snprintf(meta->stream_url, sizeof(meta->stream_url), "%s", u->url);
         *deadline_ms = u->deadline_ms;
+        *cache_hit = u->cache_hit;
     } else {
         dec->open_error = AUDIO_ERROR_RESOLVE_FAILED;
         pthread_mutex_lock(&yt_resolve_class_mutex);
@@ -540,8 +545,10 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
     bool remote = remote_track_path_is_remote(path) && remote_track_meta_copy_for_path(path, &remote_meta);
     if (remote_track_path_is_remote(path) && !remote) return false; /* stale/replaced queue entry */
     bool youtube = remote && remote_youtube_is(&remote_meta);
+    bool yt_resolved = youtube && !remote_meta.stream_url[0];
     int64_t yt_deadline_ms = 0;
-    if (youtube && !remote_meta.stream_url[0] && !yt_resolve_for_open(dec, &remote_meta, &yt_deadline_ms))
+    bool yt_cache_hit = false;
+    if (yt_resolved && !yt_resolve_for_open(dec, &remote_meta, false, &yt_deadline_ms, &yt_cache_hit))
         return false;
 
     if (remote || is_stream_url(path)) {
@@ -582,7 +589,17 @@ static bool decoder_open_internal(decoder_t * dec, const char * path) {
             char host[256];
             stream_log_url_host(remote ? remote_meta.stream_url : path, host, sizeof(host));
             stream_log_event(stream_log_next_sid(), "error", "stage=connect host=%s", host);
-            return false;
+            /* A cached YouTube URL that does not open (expired, another
+             * network, or no network) gets one fresh resolution. */
+            if (!(yt_resolved && yt_cache_hit)) return false;
+            remote_meta.stream_url[0] = '\0';
+            if (!yt_resolve_for_open(dec, &remote_meta, true, &yt_deadline_ms, &yt_cache_hit)) return false;
+            dec->net_stream = http_stream_open(remote_meta.stream_url, remote_meta.verify_tls);
+            if (!dec->net_stream) {
+                stream_log_url_host(remote_meta.stream_url, host, sizeof(host));
+                stream_log_event(stream_log_next_sid(), "error", "stage=connect host=%s", host);
+                return false;
+            }
         }
         dec->log_sid = http_stream_log_sid(dec->net_stream);
         if (youtube) yt_set_stream_refresher(dec->net_stream, remote_meta.track_id, yt_deadline_ms);
