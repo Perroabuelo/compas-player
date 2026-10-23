@@ -877,6 +877,7 @@ static void player_ui_timer_cb(lv_timer_t * timer) {
     gui_lyrics_poll_backdrop();
     gui_player_poll_confirmed_playback();
     gui_player_poll_waveform();
+    gui_player_poll_youtube_prefetch();
 
     if (!backlight_screen_is_on()) return;
     if (gui_navigation_transition_in_progress() || gui_player_lyrics_animation_in_progress()) return;

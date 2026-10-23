@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include "yt_queue.h"
 
 
 extern lv_style_t list_row_style;
@@ -633,6 +634,7 @@ void gui_plugin_play_remote_tracks(const remote_track_meta_t * tracks, int count
         return;
     }
 
+    yt_queue_clear(); /* hiby-yt: no URL of the old queue is kept */
     if (!remote_track_meta_set_all(tracks, count)) {
         for (int j = 0; j < count; j++) free(new_playlist[j]);
         free(new_playlist);

@@ -95,6 +95,10 @@ static bool is_sd_card_path(const char *path);
 #include "player_lyrics_backdrop.h"
 #include "player_timeline_labels.h"
 #include "transition_compositor.h"
+#include "remote_youtube.h"
+#include "yt_prefetch_policy.h"
+#include "yt_queue.h"
+#include "yt_resolver_proc.h"
 #include "lvgl/src/core/lv_obj_draw_private.h"
 #include "lvgl/src/draw/sw/lv_draw_sw_private.h"
 #include "artwork_coordinator.h"
@@ -6227,8 +6231,45 @@ static void notify_plugin_track_started(const track_metadata_t * meta, const cha
 
     remote_track_meta_t remote_meta;
     bool is_remote_track = remote_track_meta_copy_for_path(path, &remote_meta);
+    /* hiby-yt: only the starting track's URL stays (yt_url_cache.h). */
+    yt_queue_track_started(is_remote_track && remote_youtube_is(&remote_meta) ? remote_meta.track_id : NULL);
     plugin_manager_notify_track_started(meta->title, meta->artist, meta->album, plugin_now_playing_duration,
                                          is_remote_track ? remote_meta.provider : "", is_remote_track ? remote_meta.track_id : "");
+}
+
+/* hiby-yt: resolves the next YouTube track of the queue while the current
+ * one plays (chain-youtube-queue D4). Runs from the player UI timer; looks
+ * at most every YT_PREFETCH_POLL_MS. */
+#define YT_PREFETCH_POLL_MS 500
+void gui_player_poll_youtube_prefetch(void) {
+    static yt_prefetch_state_t state;
+    static uint32_t last_ms;
+    uint32_t now = lv_tick_get();
+    if (lv_tick_diff(now, last_ms) < YT_PREFETCH_POLL_MS) return;
+    last_ms = now;
+
+    const char * path = playlist_index >= 0 ? playlist_path_at(playlist_index) : NULL;
+    int next_index = playlist_index >= 0 ? compute_auto_advance_index(playlist_index) : -1;
+    const char * next_path = next_index >= 0 ? playlist_path_at(next_index) : NULL;
+    static remote_track_meta_t next_meta; /* a few KB: kept off the LVGL stack */
+    bool next_youtube = next_path && remote_track_meta_copy_for_path(next_path, &next_meta) &&
+                        remote_youtube_is(&next_meta) && !next_meta.stream_url[0];
+    audio_playback_progress_t progress;
+    bool active = path && audio_get_playback_progress(path, &progress) &&
+                  progress.state == AUDIO_PLAYBACK_PROGRESS_ACTIVE && (progress.is_playing || progress.is_paused);
+
+    yt_prefetch_input_t in = {
+        .next_video_id = next_youtube ? next_meta.track_id : NULL,
+        .played_ms = active ? (int64_t) (progress.position_seconds * 1000.0) : -1,
+        .remaining_ms = active && progress.duration_seconds > 0
+                            ? (int64_t) ((progress.duration_seconds - progress.position_seconds) * 1000.0)
+                            : -1,
+    };
+    if (in.next_video_id) {
+        in.next_cached = yt_queue_has_url(in.next_video_id);
+        in.service_busy = yt_resolver_busy();
+    }
+    if (yt_prefetch_should_start(&state, &in)) yt_queue_prefetch(in.next_video_id);
 }
 
 static void play_track_at_from_internal(int index, double start_seconds, bool push_nav, bool skip_airplay_disconnect) {
