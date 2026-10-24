@@ -35,6 +35,7 @@ typedef enum {
     YT_OWNER_OPEN,
     YT_OWNER_PREFETCH,
     YT_OWNER_REFRESH,
+    YT_OWNER_SEARCH, /* a YouTube Music search (yt_job_admit.h) */
 } yt_owner_t;
 
 typedef enum {
