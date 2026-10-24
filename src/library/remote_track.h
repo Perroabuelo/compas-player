@@ -82,6 +82,25 @@ bool remote_track_path_is_remote(const char * path);
  * access from other threads is fine regardless. */
 bool remote_track_meta_set_all(const remote_track_meta_t * entries, int count);
 
+typedef enum {
+    REMOTE_TRACK_APPEND_OK,
+    REMOTE_TRACK_APPEND_INVALID,   /* provider/track_id make no valid key */
+    REMOTE_TRACK_APPEND_FULL,      /* the queue's entries plus this one would pass the maximum */
+    REMOTE_TRACK_APPEND_NO_MEMORY,
+} remote_track_append_t;
+
+/* Adds entry to the table without replacing it (hiby-yt, design D7 of
+ * search-youtube-music), for a track appended to the current queue.
+ * Copy-on-write: builds a new table with the entries whose key is still in
+ * keep_keys (the paths of the current queue; others are skipped) plus a
+ * copy of entry (replacing an entry with the same key), swaps it in under
+ * the lock and frees the old one after unlocking, like
+ * remote_track_meta_set_all(). So the table never grows past the queue,
+ * and remote_track_meta_copy_for_path() readers never see freed memory.
+ * On anything but OK the table is left exactly as it was. UI thread only. */
+remote_track_append_t remote_track_meta_append(const remote_track_meta_t * entry, const char * const * keep_keys,
+                                               int keep_count);
+
 /* Copies the entry matching `path` into *out (caller-owned storage) while
  * holding this module's internal lock, and returns true -- or returns
  * false (leaving *out untouched) if path isn't "remote://" or doesn't
