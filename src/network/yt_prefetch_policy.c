@@ -25,3 +25,7 @@ bool yt_prefetch_should_start(yt_prefetch_state_t * st, const yt_prefetch_input_
     st->starts++;
     return true;
 }
+
+void yt_prefetch_uncount(yt_prefetch_state_t * st, const char * video_id) {
+    if (video_id && st->starts > 0 && strcmp(st->video_id, video_id) == 0) st->starts--;
+}

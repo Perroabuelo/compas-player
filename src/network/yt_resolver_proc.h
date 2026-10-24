@@ -1,19 +1,27 @@
 #ifndef YT_RESOLVER_PROC_H
 #define YT_RESOLVER_PROC_H
 
-/* The hiby-yt resolver as a child process (hiby-yt). One resolution at a
- * time in the whole player, shared by plugin.youtube_resolve() and the
- * YouTube queue (chain-youtube-queue D2).
+/* The hiby-yt resolver as a child process (hiby-yt). One YouTube job at a
+ * time in the whole player, shared by plugin.youtube_resolve(),
+ * plugin.youtube_search() and the YouTube queue (chain-youtube-queue D2,
+ * search-youtube-music D5): a resolution or a search, admitted by
+ * yt_job_admit().
  *
  * The resolver is a separate program at a fixed path; its only variable
  * argument is the video id, checked against [A-Za-z0-9_-]{11} before
- * anything starts. It runs with nice RESOLVER_NICE on a detached worker
- * thread that reads its one-line output, and is killed and reaped when it
- * has not finished after YT_RESOLVER_TIMEOUT_MS or when it is cancelled.
- * Every resolution leaves an event=resolve line in the stream log, with the
- * owner as stage (plugin, open, prefetch or refresh) and cache=miss. */
+ * anything starts. A search runs the same program with --search and
+ * writes the checked query and token to its stdin (yt_search_input.h), so
+ * they never show in its command line. It runs with nice RESOLVER_NICE on
+ * a detached worker thread that reads its one-line output, and is killed
+ * and reaped when it has not finished after YT_RESOLVER_TIMEOUT_MS
+ * (YT_SEARCH_PROC_TIMEOUT_MS for a search) or when it is cancelled. Every
+ * resolution leaves an event=resolve line in the stream log, with the
+ * owner as stage (plugin, open, prefetch or refresh) and cache=miss; a
+ * prefetch cancelled by a search adds reason=search. Every search leaves
+ * an event=search line with its class, time and exit, never the query. */
 
 #include "yt_resolve_policy.h"
+#include "yt_search_input.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -30,12 +38,19 @@
 #define YT_RESOLVER_VIDEO_ID_LEN 11
 /* How often a waiting request checks its cancel callback. */
 #define YT_RESOLVER_POLL_MS 100
+/* A search (spec youtube/search-play): its time limit, and its output line,
+ * which the program bounds to 68 KiB (search-youtube-music D2). */
+#define YT_SEARCH_PROC_TIMEOUT_MS 45000
+#define YT_SEARCH_PROC_OUTPUT_MAX (68 * 1024)
 
 typedef struct {
     /* Set when there is no usable output to decode (fixed strings). */
     const char * fail_class;
     const char * fail_detail;
     bool cancelled;
+    /* Cancelled to make way for a search: the prefetch policy does not
+     * count it as a try (yt_prefetch_uncount()). */
+    bool preempted;
     /* The class written to the log: "ok", the resolver's class,
      * fail_class or "cancelled". */
     char cls[24];
@@ -83,12 +98,40 @@ bool yt_resolver_cancel(uint16_t generation);
 /* Blocks until the resolution with this generation is no longer running. */
 void yt_resolver_wait_ended(uint16_t generation);
 
-/* True while a resolution runs. */
+/* True while a resolution or a search runs (or waits to start). */
 bool yt_resolver_busy(void);
+
+typedef struct {
+    /* Set when there is no usable output to decode (fixed strings). */
+    const char * fail_class;
+    const char * fail_detail;
+    bool cancelled;
+    /* The class written to the log, as for a resolution. */
+    char cls[24];
+    /* The program's line (NUL-terminated), valid during the done call. */
+    const char * output;
+    size_t output_len;
+} yt_search_result_t;
+
+/* Called on a worker thread when a search ends, cancelled or not. The
+ * service is still busy during the call and idle right after it. */
+typedef void (*yt_search_done_fn)(const yt_search_result_t * result, void * arg);
+
+/* Starts a search for query (and token, NULL or "" for page 1) without
+ * waiting, under yt_job_admit(): it starts at once, or cancels a running
+ * prefetch and starts as soon as that has been reaped. Returns its
+ * generation (never 0; yt_resolver_cancel() and yt_resolver_wait_ended()
+ * take it), or 0 with *why set to "bad_input" (query or token invalid:
+ * nothing starts), "busy" or "internal". Thread-safe; never blocks on the
+ * child. */
+uint16_t yt_resolver_start_search(const char * query, const char * token, yt_search_done_fn done, void * arg,
+                                  const char ** why);
 
 #ifdef HOST_BUILD
 /* PC tests only: another resolver program and time limit (NULL/0: default). */
 void yt_resolver_set_test_overrides(const char * resolver_path, int timeout_ms);
+/* PC tests only: the search time limit (0: default). */
+void yt_resolver_set_search_test_timeout(int timeout_ms);
 #endif
 
 #endif /* YT_RESOLVER_PROC_H */

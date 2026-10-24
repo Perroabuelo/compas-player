@@ -6303,6 +6303,9 @@ void gui_player_poll_youtube_prefetch(void) {
         in.next_cached = yt_queue_has_url(in.next_video_id);
         in.service_busy = yt_resolver_busy();
     }
+    /* A prefetch a search cancelled starts again once the search is over. */
+    char preempted[YT_RESOLVER_VIDEO_ID_LEN + 1];
+    if (yt_queue_take_preempted(preempted, sizeof(preempted))) yt_prefetch_uncount(&state, preempted);
     if (yt_prefetch_should_start(&state, &in)) yt_queue_prefetch(in.next_video_id);
 }
 

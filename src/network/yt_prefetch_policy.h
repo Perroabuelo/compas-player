@@ -43,4 +43,9 @@ void yt_prefetch_reset(yt_prefetch_state_t * st);
  * counted. A different next track than the last call starts over. */
 bool yt_prefetch_should_start(yt_prefetch_state_t * st, const yt_prefetch_input_t * in);
 
+/* A prefetch of video_id was cancelled to make way for a user's search
+ * (search-youtube-music D5): it does not count as a start, so it starts
+ * again under the same conditions once the service is free. */
+void yt_prefetch_uncount(yt_prefetch_state_t * st, const char * video_id);
+
 #endif /* YT_PREFETCH_POLICY_H */

@@ -703,7 +703,7 @@ HIBY_YT_SRCS = src/core/stream_log.c src/network/stream_resume.c src/audio/fmp4_
                src/audio/mp4_frag.c src/plugins/plugin_youtube.c src/network/yt_url_cache.c \
                src/network/yt_prefetch_policy.c src/network/yt_resolve_policy.c \
                src/network/yt_resolver_proc.c src/library/remote_youtube.c src/network/yt_queue.c \
-               src/network/wifi_lease_watch.c
+               src/network/wifi_lease_watch.c src/network/yt_search_input.c src/network/yt_job_admit.c
 APP_SRCS += $(HIBY_YT_SRCS)
 APP_SRCS += src/library/queue_resume.c
 APP_SRCS += src/audio/track_probe.c

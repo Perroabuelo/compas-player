@@ -13,6 +13,8 @@
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static yt_url_cache_t cache; /* under lock */
+/* The last prefetch a search cancelled, until the UI takes it (under lock). */
+static char preempted_id[YT_RESOLVER_VIDEO_ID_LEN + 1];
 
 #ifdef HOST_BUILD
 static int64_t test_clock_ms = -1;
@@ -144,8 +146,21 @@ static void prefetch_done(const yt_resolver_result_t * r, void * arg) {
             memset(out, 0, sizeof(*out));
             free(out);
         }
+    } else if (r->preempted) {
+        pthread_mutex_lock(&lock);
+        snprintf(preempted_id, sizeof(preempted_id), "%s", video_id);
+        pthread_mutex_unlock(&lock);
     }
     free(video_id);
+}
+
+bool yt_queue_take_preempted(char * video_id, size_t size) {
+    pthread_mutex_lock(&lock);
+    bool has = preempted_id[0] != '\0' && size > strlen(preempted_id);
+    if (has) snprintf(video_id, size, "%s", preempted_id);
+    preempted_id[0] = '\0';
+    pthread_mutex_unlock(&lock);
+    return has;
 }
 
 bool yt_queue_prefetch(const char * video_id) {

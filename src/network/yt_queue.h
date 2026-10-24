@@ -47,6 +47,11 @@ yt_queue_status_t yt_queue_url_refresh(const char * video_id, bool (*cancelled)(
  * resolution is running. Returns whether it started. */
 bool yt_queue_prefetch(const char * video_id);
 
+/* When a search cancelled a prefetch since the last call, copies its video
+ * id into video_id (size bytes) and returns true, once: the prefetch
+ * policy then does not count that try (yt_prefetch_uncount()). */
+bool yt_queue_take_preempted(char * video_id, size_t size);
+
 /* True when video_id has a cached URL still valid. */
 bool yt_queue_has_url(const char * video_id);
 
