@@ -1600,7 +1600,9 @@ static bool wifi_status_enabled;
 static void * wifi_status_thread_func(void * arg) {
     (void)arg;
     int level = 0;
-    wifi_status_result_connected = wifi_get_status(&level);
+    char ssid[WIFI_MAX_SSID_LEN];
+    wifi_status_result_connected = wifi_get_status_ssid(&level, ssid, sizeof(ssid));
+    wifi_control_check_lease(wifi_status_result_connected, ssid); /* hiby-yt: new network, new lease */
     wifi_status_result_level = level;
     atomic_store_explicit(&wifi_status_done, true, memory_order_release);
     return NULL;

@@ -29,9 +29,23 @@ static int rssi_to_level(int rssi_dbm) {
 }
 
 bool wifi_get_status(int * out_signal_level) {
+    return wifi_get_status_ssid(out_signal_level, NULL, 0);
+}
+
+bool wifi_get_status_ssid(int * out_signal_level, char * ssid, size_t ssid_size) {
+    if (ssid && ssid_size) ssid[0] = '\0';
     char status_buf[512];
     if (!run_wpa_cli("status", status_buf, sizeof(status_buf))) return false;
     if (!strstr(status_buf, "wpa_state=COMPLETED")) return false;
+
+    const char * p = ssid && ssid_size ? strstr(status_buf, "\nssid=") : NULL;
+    if (p) {
+        p += 6;
+        size_t len = strcspn(p, "\n");
+        if (len >= ssid_size) len = ssid_size - 1;
+        memcpy(ssid, p, len);
+        ssid[len] = '\0';
+    }
 
     int level = 0;
     char signal_buf[512];

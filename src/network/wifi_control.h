@@ -29,6 +29,17 @@ bool wifi_control_is_enabled(void);
 void wifi_control_enable(void);
 void wifi_control_disable(void);
 
+/* hiby-yt: kills any udhcpc left on wlan0 and asks for a lease
+ * (udhcpc -b -q, as wifi_control_enable() does). Blocking; worker only. */
+void wifi_control_renew_lease(void);
+
+/* hiby-yt (spec network/wifi-lease): feeds one `wpa_cli status` sample
+ * (from wifi_get_status_ssid()) to wifi_lease_watch and renews the lease
+ * when wlan0 joined another network with Wi-Fi still on. Turning Wi-Fi
+ * off (wifi_control_disable()) starts it over. Blocking when it renews;
+ * call from a worker thread, never the UI thread. */
+void wifi_control_check_lease(bool associated, const char * ssid);
+
 /* Kicks off an async radio scan (`wpa_cli scan`) -- results aren't ready
  * immediately, poll wifi_control_get_results() a couple of seconds later. */
 void wifi_control_scan_start(void);

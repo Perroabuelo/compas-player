@@ -2,6 +2,7 @@
 #define WIFI_STATUS_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Blocking worker-only API: returns true if connected to an access point,
  * checking `wpa_cli -i wlan0
@@ -15,5 +16,10 @@
  * should show the disconnected icon in every such case. Call from a worker
  * thread, never directly from the UI thread. */
 bool wifi_get_status(int * out_signal_level);
+
+/* hiby-yt: like wifi_get_status(), and also copies the associated network's
+ * SSID into ssid (empty when not associated), for
+ * wifi_control_check_lease(). Same worker-only rule. */
+bool wifi_get_status_ssid(int * out_signal_level, char * ssid, size_t ssid_size);
 
 #endif /* WIFI_STATUS_H */

@@ -340,11 +340,16 @@ static void * wifi_connect_thread_func(void * arg) {
      * already covers. */
     bool associated = false;
     if (accepted) {
+        char ssid[WIFI_MAX_SSID_LEN];
         for (int i = 0; i < 10 && !associated; i++) {
             int level;
-            associated = wifi_get_status(&level);
+            associated = wifi_get_status_ssid(&level, ssid, sizeof(ssid));
             if (!associated) usleep(500000);
         }
+        /* hiby-yt: joined from Wi-Fi on, so no lease yet for this network.
+         * If the old association is still reported, the status poll
+         * catches the switch a few seconds later. */
+        wifi_control_check_lease(associated, ssid);
     }
     wifi_connect_succeeded = accepted && associated;
     atomic_store_explicit(&wifi_connect_done_flag, true, memory_order_release); /* written last -- poll_wifi_connect only checks this flag */
@@ -411,11 +416,16 @@ static void * wifi_connect_saved_thread_func(void * arg) {
 
     bool associated = false;
     if (accepted) {
+        char ssid[WIFI_MAX_SSID_LEN];
         for (int i = 0; i < 10 && !associated; i++) {
             int level;
-            associated = wifi_get_status(&level);
+            associated = wifi_get_status_ssid(&level, ssid, sizeof(ssid));
             if (!associated) usleep(500000);
         }
+        /* hiby-yt: joined from Wi-Fi on, so no lease yet for this network.
+         * If the old association is still reported, the status poll
+         * catches the switch a few seconds later. */
+        wifi_control_check_lease(associated, ssid);
     }
     wifi_connect_saved_succeeded = accepted && associated;
     atomic_store_explicit(&wifi_connect_saved_done_flag, true, memory_order_release); /* written last -- poll_wifi_connect_saved only checks this flag */

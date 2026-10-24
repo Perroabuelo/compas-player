@@ -1,9 +1,11 @@
 #include "wifi_control.h"
 #include "subprocess.h"
+#include "wifi_lease_watch.h"
 
 #include <mbedtls/md.h>
 #include <mbedtls/pkcs5.h>
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,15 +41,35 @@ void wifi_control_enable(void) {
         associated = strstr(status_buf, "wpa_state=COMPLETED") != NULL;
         got_ip = strstr(status_buf, "\nip_address=") != NULL;
     }
-    if (associated && !got_ip) {
-        subprocess_kill_all_matching("udhcpc");
-        char * dhcp_argv[] = { (char *) "udhcpc", (char *) "-b", (char *) "-i", (char *) WIFI_INTERFACE,
-                               (char *) "-q", NULL };
-        subprocess_run(dhcp_argv, NULL, 0);
+    if (associated && !got_ip) wifi_control_renew_lease();
+}
+
+void wifi_control_renew_lease(void) {
+    subprocess_kill_all_matching("udhcpc");
+    char * dhcp_argv[] = { (char *) "udhcpc", (char *) "-b", (char *) "-i", (char *) WIFI_INTERFACE,
+                           (char *) "-q", NULL };
+    subprocess_run(dhcp_argv, NULL, 0);
+}
+
+/* hiby-yt (spec network/wifi-lease): the status poll and the connect
+ * workers feed it from their own threads. */
+static pthread_mutex_t lease_watch_mutex = PTHREAD_MUTEX_INITIALIZER;
+static wifi_lease_watch_t lease_watch;
+
+void wifi_control_check_lease(bool associated, const char * ssid) {
+    pthread_mutex_lock(&lease_watch_mutex);
+    bool renew = wifi_lease_watch_observe(&lease_watch, associated, ssid);
+    pthread_mutex_unlock(&lease_watch_mutex);
+    if (renew) {
+        fprintf(stderr, "wifi: joined another network, requesting a new lease\n");
+        wifi_control_renew_lease();
     }
 }
 
 void wifi_control_disable(void) {
+    pthread_mutex_lock(&lease_watch_mutex);
+    wifi_lease_watch_reset(&lease_watch);
+    pthread_mutex_unlock(&lease_watch_mutex);
     char * argv[] = { (char *) "/usr/bin/wifi_off.sh", NULL };
     if (access("/sys/devices/platform/bcm_wlbt_power/identity_state", F_OK) == 0) {
         int status;
