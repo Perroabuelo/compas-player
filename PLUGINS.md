@@ -968,6 +968,29 @@ plugin.play_remote({
   `get_playback_format().seekable` is true; live sources remain forward-only.
   A dropped finite stream is resumed as described above.
 
+### `plugin.queue_remote_append(track)` (hiby-yt)
+
+Check `network.queue_append`. Adds one remote track to the current queue
+without replacing it, exactly like Add to Queue does for a local file: it
+plays after the current track and after the tracks added before it, in the
+order they were added, also in shuffle. The track that plays goes on
+without a break. With nothing playing, the queue becomes this track, ready
+to play but not started. `track` takes the same fields and checks as one
+`queue_remote_list()` entry, YouTube tracks without `stream_url` included.
+
+```lua
+local ok, err = plugin.queue_remote_append({ provider = "youtube",
+    track_id = "VjSemnD-ZlE", title = "About Now", artist = "DAY6",
+    duration_ms = 180000 })
+if not ok then plugin.show_toast(err) end   -- "queue_full"
+```
+
+- Returns `true`, or `nil, "queue_full"` when the queue already has 500
+  tracks (nothing changes). An invalid track (a bad video id, a missing
+  `provider`) raises an error and leaves the queue alone.
+- Each call adds an `event=queue_append` line (`provider`, `result`) to the
+  stream log.
+
 ### Controls
 
 | Function | Does |
@@ -1493,7 +1516,8 @@ end)
   `event=search` line (`class`, `ms`, `exit`) to the stream log.
 - `plugin.cancel(handle)` stops it; its callback is then not called.
   Refresh Plugins and reloading the UI stop it too.
-- Results are ready for `plugin.queue_remote_list()` as YouTube tracks
+- Results are ready for `plugin.queue_remote_list()` and
+  `plugin.queue_remote_append()` as YouTube tracks
   (`provider = "youtube"`, `track_id = video_id`, no `stream_url`).
 
 ## Data and storage

@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define REMOTE_TRACK_MAX_ENTRIES 500 /* same bound as PLUGIN_MAX_LIST_ITEMS (plugin_manager.c), the Lua-facing cap on any queue-list plugin API -- kept in sync by comment, not #include, to avoid a library->plugins dependency */
+
 /* Native-side descriptor for one track from a provider-neutral remote music
  * plugin (Qobuz/Tidal/etc, see PLUGINS.md's plugin.play_remote() docs).
  * Populated by plugin_manager.c from a Lua table, consumed by gui.c (queue

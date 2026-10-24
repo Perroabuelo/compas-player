@@ -6067,6 +6067,37 @@ void queue_add_song(const char * path) {
     if (path && path[0]) gui_player_queue_add_many(&path, 1);
 }
 
+/* hiby-yt (search-youtube-music D7): the remote-track table first, keeping
+ * only the entries of tracks still queued, then the same Add to Queue path
+ * as a local file (queue_add_song()). Without an active track that path
+ * replaces the queue, so only the new entry is kept. */
+const char * gui_player_queue_append_remote(const remote_track_meta_t * track) {
+    char key[256];
+    if (!track || !remote_track_make_key(track->provider, track->track_id, key, sizeof(key))) return "invalid track";
+    if (audio_consume_track_advanced()) gui_player_handle_auto_advance();
+    bool active = gui_player_has_active_track();
+    const char * result = NULL;
+    if (active && playlist_count >= REMOTE_TRACK_MAX_ENTRIES) {
+        result = "queue_full";
+    } else {
+        switch (remote_track_meta_append(track, active ? (const char * const *) playlist : NULL,
+                                         active ? playlist_count : 0)) {
+            case REMOTE_TRACK_APPEND_OK: {
+                const char * path = key;
+                if (!gui_player_queue_try_add_many(&path, 1)) result = "no memory";
+                break;
+            }
+            case REMOTE_TRACK_APPEND_FULL: result = "queue_full"; break;
+            case REMOTE_TRACK_APPEND_INVALID: result = "invalid track"; break;
+            default: result = "no memory"; break;
+        }
+    }
+    /* The provider is the plugin's text: only "youtube" reaches the log. */
+    stream_log_event(stream_log_next_sid(), "queue_append", "provider=%s result=%s",
+                     remote_youtube_is(track) ? "youtube" : "other", result ? result : "ok");
+    return result;
+}
+
 static bool queue_budget_add(size_t * total, size_t bytes) {
     if (*total > SIZE_MAX - bytes) return false;
     *total += bytes;

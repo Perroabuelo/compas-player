@@ -2235,6 +2235,26 @@ static int l_plugin_queue_remote_list(lua_State * L) {
     return 0;
 }
 
+/* hiby-yt (search-youtube-music D7): one remote track added to the
+ * current queue, like a local Add to Queue. Same fields and checks as a
+ * queue_remote_list() entry (an invalid one raises a Lua error); returns
+ * true, or nil and "queue_full" (nothing changed) or another error. */
+static int l_plugin_queue_remote_append(lua_State * L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    /* A few KB: Lua userdata, so a luaL_error() in the parse leaks nothing
+     * (see l_plugin_queue_remote_list()). */
+    remote_track_meta_t * track = (remote_track_meta_t *) lua_newuserdata(L, sizeof(*track));
+    parse_remote_track_table(L, 1, track, "plugin.queue_remote_append");
+    const char * err = gui_player_queue_append_remote(track);
+    if (err) {
+        lua_pushnil(L);
+        lua_pushstring(L, err);
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static int l_plugin_show_toast(lua_State * L) {
     const char * msg = luaL_checkstring(L, 1);
     lua_Integer duration_ms = luaL_optinteger(L, 2, 5000);
@@ -5537,7 +5557,7 @@ static const char * const plugin_capabilities[] = {
     "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.more_menu", "ui.file_picker",
     "ui.startup_image", "audio.mseb.stock", "playback.stay_on_screen",
     "ui.settings_list_10_sliders", "network.youtube_resolve", "network.youtube_queue",
-    "network.youtube_search"
+    "network.youtube_search", "network.queue_append"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -6463,6 +6483,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "play_list",                 l_plugin_play_list },
     { "play_remote",               l_plugin_play_remote },
     { "queue_remote_list",         l_plugin_queue_remote_list },
+    { "queue_remote_append",       l_plugin_queue_remote_append },
     { "show_toast",                l_plugin_show_toast },
     { "show_progress",             l_plugin_show_progress },
     { "update_progress",           l_plugin_update_progress },

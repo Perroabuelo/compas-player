@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define REMOTE_TRACK_MAX_ENTRIES 500 /* same bound as PLUGIN_MAX_LIST_ITEMS (plugin_manager.c), the Lua-facing cap on any queue-list plugin API -- kept in sync by comment, not #include, to avoid a library->plugins dependency */
 
 /* Guards remote_track_table/remote_track_table_count -- written from the UI
  * thread only (gui_plugin_play_remote_tracks() -> remote_track_meta_set_all()),

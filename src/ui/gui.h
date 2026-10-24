@@ -450,6 +450,12 @@ void library_load_from_cache_only(void);
 
 
 void queue_add_song(const char * path);
+/* hiby-yt: plugin.queue_remote_append() (search-youtube-music D7). Adds a
+ * remote track to the queue like queue_add_song() adds a local file, and
+ * its entry to the remote-track table. NULL on success, or "queue_full",
+ * "invalid track", "no memory" (queue and table unchanged on the first
+ * two). Logs event=queue_append. UI thread only. */
+const char * gui_player_queue_append_remote(const remote_track_meta_t * track);
 void play_track_at(int target);
 void get_display_names(const char * path, char * out_title, size_t title_sz, char * out_folder, size_t folder_sz);
 void row_label_enable_marquee(lv_obj_t * label);
