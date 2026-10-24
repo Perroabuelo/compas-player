@@ -96,6 +96,17 @@ bool subprocess_popen(char * const argv[], pid_t * out_pid, int * out_read_fd);
  * false (nothing to clean up) if the fork/pipe setup itself failed. */
 bool subprocess_popen_stdin(char * const argv[], pid_t * out_pid, int * out_write_fd);
 
+/* Both directions at once (hiby-yt, design D5 of search-youtube-music): the
+ * caller writes the child's stdin through *out_write_fd and reads its stdout
+ * from *out_read_fd; stderr goes to /dev/null. For a short request/answer
+ * child that takes its input on stdin so it never shows in its command line.
+ * The caller closes *out_write_fd once the request is written (the child
+ * then sees end of input), closes *out_read_fd when done, and stops or
+ * reaps the child with subprocess_terminate() or waitpid(). Writing after
+ * the child exited fails with EPIPE (the player ignores SIGPIPE). Returns
+ * false (nothing to clean up) if the pipe/spawn setup itself failed. */
+bool subprocess_popen2(char * const argv[], pid_t * out_pid, int * out_write_fd, int * out_read_fd);
+
 /* Stops a child started by subprocess_popen()/subprocess_popen_stdin():
  * SIGTERM, a brief grace period polled via WNOHANG, then SIGKILL if it's
  * still alive -- and reaps it either way, so callers never need their own

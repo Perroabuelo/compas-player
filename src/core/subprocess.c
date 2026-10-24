@@ -335,6 +335,31 @@ bool subprocess_popen_stdin(char * const argv[], pid_t * out_pid, int * out_writ
     return true;
 }
 
+bool subprocess_popen2(char * const argv[], pid_t * out_pid, int * out_write_fd, int * out_read_fd) {
+    int in_pipe[2], out_pipe[2];
+    if (pipe2(in_pipe, O_CLOEXEC) != 0) return false;
+    if (pipe2(out_pipe, O_CLOEXEC) != 0) {
+        close(in_pipe[0]);
+        close(in_pipe[1]);
+        return false;
+    }
+
+    pid_t pid;
+    int spawn_rc = subprocess_spawn(argv, in_pipe[0], out_pipe[1], &pid, false);
+    close(in_pipe[0]);
+    close(out_pipe[1]);
+    if (spawn_rc != 0) {
+        close(in_pipe[1]);
+        close(out_pipe[0]);
+        return false;
+    }
+
+    *out_pid = pid;
+    *out_write_fd = in_pipe[1];
+    *out_read_fd = out_pipe[0];
+    return true;
+}
+
 void subprocess_terminate(pid_t pid) {
     kill(pid, SIGTERM);
     for (int waited_ms = 0; waited_ms < 1000; waited_ms += 50) {
