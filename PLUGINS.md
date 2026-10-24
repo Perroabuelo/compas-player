@@ -1455,6 +1455,47 @@ end)
   stream log; `stage` is `plugin` for this function and `open`, `prefetch`
   or `refresh` for the queue.
 
+### `plugin.youtube_search(query, continuation, callback)` (hiby-yt)
+
+Check `network.youtube_search`. Searches YouTube Music songs on the device
+itself (no account, no helper server), with the same hiby-yt program as
+`plugin.youtube_resolve()`. It returns a handle at once, or `nil, error`
+(`"bad_input"`, `"busy"`); `callback(result)` runs later:
+
+```lua
+plugin.youtube_search("day6 about now", nil, function(r)
+    if not r.ok then plugin.show_toast("YouTube: " .. r.class) return end
+    for _, s in ipairs(r.results) do
+        print(s.video_id, s.title, s.artist, s.album, s.duration_s)
+    end
+    -- r.continuation: pass it with the same query for the next page
+end)
+```
+
+- `query`: 1 to 200 bytes of UTF-8 with no control characters.
+  `continuation`: `nil` (or `""`) for the first page, or the
+  `continuation` of the previous result for the next one. Anything else
+  returns `nil, "bad_input"` without starting anything.
+- On success: `ok = true`, `results` (at most 40 per page; each with
+  `video_id`, `title`, `artist`, `duration_s` and, when YouTube gives one,
+  `album`) and `continuation` (`nil` on the last page). No results is a
+  success with an empty `results`. The next page can repeat songs of the
+  previous ones: drop repeated `video_id`s yourself.
+- On failure: `ok = false`, `class` and `detail`. Classes: `bad_input`,
+  `network`, `limit`, `malformed` and `internal`. `limit` with
+  `detail = "timeout"` means the search ran for 45 seconds and was stopped.
+- One YouTube job at a time for the whole player. A search stops the
+  queue's background resolution of the next track (it is tried again
+  afterwards), but returns `"busy"` while the track that plays is being
+  resolved, during a `plugin.youtube_resolve()` or another search.
+- The query and the token reach the program on its standard input, never
+  on its command line, and are not logged: each search adds an
+  `event=search` line (`class`, `ms`, `exit`) to the stream log.
+- `plugin.cancel(handle)` stops it; its callback is then not called.
+  Refresh Plugins and reloading the UI stop it too.
+- Results are ready for `plugin.queue_remote_list()` as YouTube tracks
+  (`provider = "youtube"`, `track_id = video_id`, no `stream_url`).
+
 ## Data and storage
 
 ### `plugin.storage` and `plugin.secrets`

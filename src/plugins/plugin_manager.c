@@ -4547,6 +4547,10 @@ static int l_plugin_youtube_resolve(lua_State * L) {
     return plugin_youtube_l_resolve(L, plugin_main_state(L));
 }
 
+static int l_plugin_youtube_search(lua_State * L) {
+    return plugin_youtube_l_search(L, plugin_main_state(L));
+}
+
 static int l_plugin_cancel(lua_State * L) {
     int handle = (int) luaL_checkinteger(L, 1);
     if (plugin_youtube_is_handle(handle)) {
@@ -5532,7 +5536,8 @@ static const char * const plugin_capabilities[] = {
     "ui.player_actions", "ui.player_layout_restore",
     "filesystem.file_ops", "ui.file_manager", "ui.player_menu", "ui.more_menu", "ui.file_picker",
     "ui.startup_image", "audio.mseb.stock", "playback.stay_on_screen",
-    "ui.settings_list_10_sliders", "network.youtube_resolve", "network.youtube_queue"
+    "ui.settings_list_10_sliders", "network.youtube_resolve", "network.youtube_queue",
+    "network.youtube_search"
 };
 
 static int l_plugin_has_capability(lua_State * L) {
@@ -6524,6 +6529,7 @@ static const luaL_Reg plugin_funcs[] = {
     { "get_download_progress",     l_plugin_get_download_progress },
     { "cancel",                    l_plugin_cancel },
     { "youtube_resolve",           l_plugin_youtube_resolve },
+    { "youtube_search",            l_plugin_youtube_search },
     { "md5",                       l_plugin_md5 },
     { "json_decode",               l_plugin_json_decode },
     { "json_encode",               l_plugin_json_encode },
