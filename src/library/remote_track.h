@@ -113,6 +113,14 @@ typedef enum {
 remote_track_append_t remote_track_meta_append(const remote_track_meta_t * entry, const char * const * keep_keys,
                                                int keep_count);
 
+/* remote_track_meta_append() for count entries at once (hiby-yt, design D7
+ * of youtube-music-browse: the radio adds up to 25), with one copy of the
+ * table instead of one per entry. Every entry must make a valid key, or
+ * nothing changes (INVALID); an entry whose key is already in the table or
+ * earlier in entries replaces it. UI thread only. */
+remote_track_append_t remote_track_meta_append_many(const remote_track_meta_t * entries, int count,
+                                                    const char * const * keep_keys, int keep_count);
+
 /* Copies the entry matching `path` into *out (caller-owned storage) while
  * holding this module's internal lock, and returns true -- or returns
  * false (leaving *out untouched) if path isn't "remote://" or doesn't

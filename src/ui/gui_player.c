@@ -8347,6 +8347,63 @@ const char * gui_player_queue_play_next_remote(const remote_track_meta_t * track
     return NULL;
 }
 
+/* hiby-yt (youtube-music-browse D7): the radio's tracks at the end of the
+ * queue, after every track there (the ones added with Add to Queue or Play
+ * next too), without a toast and without touching the playing track. The
+ * playlist grows first, then the remote-track table takes every track in
+ * one copy-on-write (remote_track_meta_append_many()), then the paths go
+ * in: a failure before the table changes leaves queue and table as they
+ * were. Later Add to Queue taps still go before the radio's tracks. */
+const char * gui_player_queue_extend_remote(const remote_track_meta_t * tracks, int count) {
+    if (!tracks || count <= 0) return "invalid";
+    if (audio_consume_track_advanced()) gui_player_handle_auto_advance();
+    if (!gui_player_has_active_track()) return "no_track";
+    if (count > REMOTE_TRACK_MAX_ENTRIES - playlist_count) return "queue_full";
+
+    char ** copies = calloc((size_t) count, sizeof(*copies));
+    if (!copies) return "no_memory";
+    const char * result = NULL;
+    for (int i = 0; i < count && !result; i++) {
+        char key[256];
+        if (!remote_track_make_key(tracks[i].provider, tracks[i].track_id, key, sizeof(key))) result = "invalid";
+        else if (!(copies[i] = strdup(key))) result = "no_memory";
+    }
+    if (!result) {
+        char ** grown = realloc(playlist, sizeof(*playlist) * (size_t) (playlist_count + count));
+        if (grown) playlist = grown;
+        int * grown_order = playlist_lazy_sort_order
+            ? realloc(playlist_lazy_sort_order, sizeof(*playlist_lazy_sort_order) * (size_t) (playlist_count + count))
+            : NULL;
+        if (grown_order) playlist_lazy_sort_order = grown_order;
+        if (!grown || (playlist_lazy_sort_order && !grown_order)) result = "no_memory";
+    }
+    if (!result) {
+        switch (remote_track_meta_append_many(tracks, count, (const char * const *) playlist, playlist_count)) {
+            case REMOTE_TRACK_APPEND_OK: break;
+            case REMOTE_TRACK_APPEND_FULL: result = "queue_full"; break;
+            case REMOTE_TRACK_APPEND_INVALID: result = "invalid"; break;
+            default: result = "no_memory"; break;
+        }
+    }
+    if (result) {
+        for (int i = 0; i < count; i++) free(copies[i]);
+        free(copies);
+        return result;
+    }
+    int pos = playlist_count;
+    for (int i = 0; i < count; i++) {
+        playlist[pos + i] = copies[i];
+        if (playlist_lazy_sort_order) playlist_lazy_sort_order[pos + i] = -1;
+    }
+    free(copies);
+    playlist_count += count;
+    queue_shuffle_insert(pos, count);
+    player_set_song_count(playlist_index, playlist_count);
+    arm_next_track_for_audio(playlist_index);
+    playback_intent_epoch++;
+    return NULL;
+}
+
 typedef struct {
     int *order, *ranks;
     char **explicit_paths;

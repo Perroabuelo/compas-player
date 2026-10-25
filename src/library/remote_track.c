@@ -139,6 +139,62 @@ remote_track_append_t remote_track_meta_append(const remote_track_meta_t * entry
     return REMOTE_TRACK_APPEND_OK;
 }
 
+/* True when one of entries[from..count) has key. */
+static bool key_in_entries(const char * key, const remote_track_meta_t * entries, int from, int count) {
+    char k[256];
+    for (int i = from; i < count; i++) {
+        if (remote_track_make_key(entries[i].provider, entries[i].track_id, k, sizeof(k)) && strcmp(k, key) == 0)
+            return true;
+    }
+    return false;
+}
+
+remote_track_append_t remote_track_meta_append_many(const remote_track_meta_t * entries, int count,
+                                                    const char * const * keep_keys, int keep_count) {
+    char key[256];
+    if (!entries || count <= 0) return REMOTE_TRACK_APPEND_INVALID;
+    for (int i = 0; i < count; i++) {
+        if (!remote_track_make_key(entries[i].provider, entries[i].track_id, key, sizeof(key)))
+            return REMOTE_TRACK_APPEND_INVALID;
+    }
+    if (keep_count < 0 || !keep_keys) keep_count = 0;
+
+    /* As in remote_track_meta_append(): the UI thread is the only writer. */
+    const remote_track_meta_t * old = remote_track_table;
+    int old_count = remote_track_table_count;
+    int kept = 0, added = 0;
+    for (int i = 0; i < old_count; i++) {
+        if (!remote_track_make_key(old[i].provider, old[i].track_id, key, sizeof(key))) continue;
+        if (!key_in_entries(key, entries, 0, count) && key_kept(key, keep_keys, keep_count)) kept++;
+    }
+    /* A key repeated in entries counts once: its last copy. */
+    for (int i = 0; i < count; i++) {
+        remote_track_make_key(entries[i].provider, entries[i].track_id, key, sizeof(key));
+        if (!key_in_entries(key, entries, i + 1, count)) added++;
+    }
+    if (kept + added > REMOTE_TRACK_MAX_ENTRIES) return REMOTE_TRACK_APPEND_FULL;
+
+    remote_track_meta_t * new_table = malloc(sizeof(remote_track_meta_t) * (size_t) (kept + added));
+    if (!new_table) return REMOTE_TRACK_APPEND_NO_MEMORY;
+    int n = 0;
+    for (int i = 0; i < old_count; i++) {
+        if (!remote_track_make_key(old[i].provider, old[i].track_id, key, sizeof(key))) continue;
+        if (!key_in_entries(key, entries, 0, count) && key_kept(key, keep_keys, keep_count)) new_table[n++] = old[i];
+    }
+    for (int i = 0; i < count; i++) {
+        remote_track_make_key(entries[i].provider, entries[i].track_id, key, sizeof(key));
+        if (!key_in_entries(key, entries, i + 1, count)) new_table[n++] = entries[i];
+    }
+
+    pthread_mutex_lock(&remote_track_mutex);
+    remote_track_meta_t * old_table = remote_track_table;
+    remote_track_table = new_table;
+    remote_track_table_count = n;
+    pthread_mutex_unlock(&remote_track_mutex);
+    free(old_table);
+    return REMOTE_TRACK_APPEND_OK;
+}
+
 bool remote_track_meta_copy_for_path(const char * path, remote_track_meta_t * out) {
     if (!remote_track_path_is_remote(path)) return false;
     const char * rest = path + 9; /* skip the "remote://" prefix already confirmed present */

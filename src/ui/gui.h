@@ -469,6 +469,12 @@ const char * gui_player_queue_append_remote(const remote_track_meta_t * track);
  * Without an active track the track becomes the queue, not playing. UI
  * thread only. */
 const char * gui_player_queue_play_next_remote(const remote_track_meta_t * track);
+/* hiby-yt: the radio's tracks at the end of the queue (youtube-music-browse
+ * D7), with the table's copy-on-write and the queue's maximum. NULL on
+ * success, or "invalid", "no_track" (nothing plays), "queue_full",
+ * "no_memory" (queue and table unchanged). The playing track goes on. UI
+ * thread only. */
+const char * gui_player_queue_extend_remote(const remote_track_meta_t * tracks, int count);
 void play_track_at(int target);
 void get_display_names(const char * path, char * out_title, size_t title_sz, char * out_folder, size_t folder_sz);
 void row_label_enable_marquee(lv_obj_t * label);
