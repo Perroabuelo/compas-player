@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 10:56-0600\n"
+"POT-Creation-Date: 2026-10-24 22:22-0300\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Finnish\n"
@@ -32,6 +32,10 @@ msgstr "Äänentoisto epäonnistui"
 
 msgid "Audio could not be decoded"
 msgstr "Äänen dekoodaus epäonnistui"
+
+#, fuzzy
+msgid "YouTube track could not be resolved"
+msgstr "Joidenkin kansikuvien päivitys epäonnistui"
 
 msgid "Playback error"
 msgstr "Toistovirhe"
@@ -1691,17 +1695,14 @@ msgstr "Bluetooth-koodekin tallennus epäonnistui"
 msgid "Turn Bluetooth off and on to apply"
 msgstr "Ota asetus käyttöön katkaisemalla Bluetooth ja kytkemällä se uudelleen"
 
-msgid "Automatic (44.1 kHz)"
-msgstr "Automaattinen (44,1 kHz)"
-
 msgid "Reading supported rates..."
 msgstr "Luetaan tuettuja näytteenottotaajuuksia..."
 
 msgid "Connect a device to see its supported rates"
 msgstr "Yhdistä laite nähdäksesi tuetut näytteenottotaajuudet"
 
-msgid "Still applying the previous choice"
-msgstr "Edellistä valintaa otetaan vielä käyttöön"
+msgid "Service is busy"
+msgstr "Palvelu on varattu"
 
 msgid "Headset may disconnect, manual reconnection might be required"
 msgstr "Kuulokkeet voivat katketa; yhteys saattaa joutua muodostamaan uudelleen käsin"
@@ -1846,12 +1847,17 @@ msgstr "Aseta lisälaite löydettäväksi ja napauta sitten Etsi uudelleen."
 msgid "Connect to Wi-Fi first"
 msgstr "Yhdistä ensin Wi-Fi-verkkoon"
 
-msgid "Open this address on your phone or computer:"
-msgstr "Avaa tämä osoite puhelimella tai tietokoneella:"
+#, fuzzy
+msgid "Remote Control PIN"
+msgstr "Kauko-ohjaus"
 
+msgid "Open Remote Control to manage files:"
+msgstr ""
+
+#, fuzzy
 msgid ""
 "Closing\n"
-"Web Server..."
+"File Import..."
 msgstr ""
 "Suljetaan\n"
 "verkkopalvelin..."
@@ -1862,8 +1868,9 @@ msgstr "Tuo Wi-Fi-yhteyden kautta"
 msgid "Enable WiFi to access"
 msgstr "Ota Wi-Fi käyttöön käyttöä varten"
 
-msgid "Web Server is busy"
-msgstr "Verkkopalvelin on varattu"
+#, fuzzy
+msgid "File import is busy"
+msgstr "Wi-Fi on varattu"
 
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Kun tämä on käytössä, laite näkyy Wi-Fi-verkon AirPlay-lähettimille. Voit suoratoistaa ääntä iPhonesta, iPadista tai Macista ja toistaa sen tämän laitteen oman ulostulon kautta."
@@ -1879,9 +1886,6 @@ msgstr "DLNA-renderöijä"
 
 msgid "When on, this device is visible to DLNA/UPnP controller apps on your Wi-Fi network -- cast a track from one to play it here. Pause, mute, volume, and seek from the controller app aren't supported; use this device's own controls instead once a track starts."
 msgstr "Kun tämä on käytössä, laite näkyy Wi-Fi-verkon DLNA/UPnP-ohjaussovelluksille. Lähetä kappale tähän toistettavaksi. Ohjaussovellus ei tue taukoa, mykistystä, äänenvoimakkuutta eikä hakua; käytä tämän laitteen omia säätimiä toiston alettua."
-
-msgid "Service is busy"
-msgstr "Palvelu on varattu"
 
 msgid "Unavailable"
 msgstr "Ei käytettävissä"
@@ -1942,6 +1946,23 @@ msgstr "Langaton"
 
 msgid "No track loaded"
 msgstr "Kappaletta ei ole ladattu"
+
+#, fuzzy
+msgid "Repeat all"
+msgstr "Valitse kaikki"
+
+msgid "Repeat one"
+msgstr ""
+
+msgid "Shuffle + repeat"
+msgstr ""
+
+msgid "Shuffle once"
+msgstr ""
+
+#, fuzzy
+msgid "Sequential"
+msgstr "Aloita järjestyksessä"
 
 msgid "Song deleted"
 msgstr "Kappale poistettu"
@@ -2991,6 +3012,10 @@ msgstr "Nyt soi -asettelut"
 msgid "More"
 msgstr "Lisää"
 
+#, fuzzy
+msgid "YouTube Music"
+msgstr "Musiikkisi"
+
 msgid "0 dB"
 msgstr "0 dB"
 
@@ -3556,6 +3581,61 @@ msgstr "Sijainti"
 msgid "Track details are not available yet. Keep playback open and check again."
 msgstr "Kappaleen tiedot eivät ole vielä saatavilla. Pidä toisto avoinna ja tarkista myöhemmin uudelleen."
 
+msgid "Home"
+msgstr ""
+
+msgid "Explore"
+msgstr ""
+
+msgid "Try again in a moment"
+msgstr ""
+
+#, fuzzy, c-format
+msgid "Search failed: %s"
+msgstr "Kuvakaappaus epäonnistui (%s)"
+
+msgid "More results"
+msgstr ""
+
+#, fuzzy
+msgid "Playing next"
+msgstr "Toista seuraavaksi"
+
+#, fuzzy
+msgid "Added to queue"
+msgstr "Lisää jonoon"
+
+#, fuzzy
+msgid "Queue is full"
+msgstr "Jono on tyhjä"
+
+#, fuzzy
+msgid "Play next"
+msgstr "Toista seuraavaksi"
+
+#, fuzzy
+msgid "Add to queue"
+msgstr "Lisää jonoon"
+
+msgid "Search YouTube Music"
+msgstr ""
+
+msgid "No results"
+msgstr ""
+
+msgid "Coming soon"
+msgstr ""
+
+#, fuzzy
+msgid "Search"
+msgstr "maaliskuu"
+
+msgid "Back to tab"
+msgstr ""
+
+msgid "Searching…"
+msgstr ""
+
 msgid "No items"
 msgstr "Ei kohteita"
 
@@ -3588,6 +3668,18 @@ msgstr "Virtatoiminnot"
 
 msgid "Playback and device actions"
 msgstr "Toisto- ja laitetoiminnot"
+
+#~ msgid "Automatic (44.1 kHz)"
+#~ msgstr "Automaattinen (44,1 kHz)"
+
+#~ msgid "Still applying the previous choice"
+#~ msgstr "Edellistä valintaa otetaan vielä käyttöön"
+
+#~ msgid "Open this address on your phone or computer:"
+#~ msgstr "Avaa tämä osoite puhelimella tai tietokoneella:"
+
+#~ msgid "Web Server is busy"
+#~ msgstr "Verkkopalvelin on varattu"
 
 #~ msgid "Saved games stay on the SD card."
 #~ msgstr "Tallennetut pelit säilyvät SD-kortilla."

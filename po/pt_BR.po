@@ -28,7 +28,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 10:56-0600\n"
+"POT-Creation-Date: 2026-10-24 22:22-0300\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Portuguese (Brazil)\n"
@@ -53,6 +53,10 @@ msgstr "Falha na saída de áudio"
 
 msgid "Audio could not be decoded"
 msgstr "Não foi possível decodificar o áudio"
+
+#, fuzzy
+msgid "YouTube track could not be resolved"
+msgstr "Algumas capas não puderam ser atualizadas"
 
 msgid "Playback error"
 msgstr "Erro de reprodução"
@@ -1760,17 +1764,14 @@ msgstr "Não foi possível salvar o codec Bluetooth"
 msgid "Turn Bluetooth off and on to apply"
 msgstr "Desligue e ligue o Bluetooth para aplicar"
 
-msgid "Automatic (44.1 kHz)"
-msgstr "Automático (44,1 kHz)"
-
 msgid "Reading supported rates..."
 msgstr "Lendo taxas compatíveis..."
 
 msgid "Connect a device to see its supported rates"
 msgstr "Conecte um dispositivo para ver as taxas compatíveis"
 
-msgid "Still applying the previous choice"
-msgstr "Ainda aplicando a escolha anterior"
+msgid "Service is busy"
+msgstr "O serviço está ocupado"
 
 msgid "Headset may disconnect, manual reconnection might be required"
 msgstr "O fone pode desconectar; pode ser preciso reconectar manualmente"
@@ -1915,12 +1916,17 @@ msgstr "Deixe um acessório visível e toque em Buscar de novo."
 msgid "Connect to Wi-Fi first"
 msgstr "Conecte-se ao Wi-Fi primeiro"
 
-msgid "Open this address on your phone or computer:"
-msgstr "Abra este endereço no celular ou computador:"
+#, fuzzy
+msgid "Remote Control PIN"
+msgstr "Controle remoto"
 
+msgid "Open Remote Control to manage files:"
+msgstr ""
+
+#, fuzzy
 msgid ""
 "Closing\n"
-"Web Server..."
+"File Import..."
 msgstr ""
 "Fechando\n"
 "servidor web..."
@@ -1931,8 +1937,9 @@ msgstr "Importar por Wi-Fi"
 msgid "Enable WiFi to access"
 msgstr "Ative o Wi-Fi para acessar"
 
-msgid "Web Server is busy"
-msgstr "O servidor web está ocupado"
+#, fuzzy
+msgid "File import is busy"
+msgstr "O Wi-Fi está ocupado"
 
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Quando ligado, este aparelho fica visível para emissores AirPlay na sua rede Wi-Fi -- envie áudio de um iPhone, iPad ou Mac para tocar pela saída do próprio aparelho."
@@ -1948,9 +1955,6 @@ msgstr "Renderizador DLNA"
 
 msgid "When on, this device is visible to DLNA/UPnP controller apps on your Wi-Fi network -- cast a track from one to play it here. Pause, mute, volume, and seek from the controller app aren't supported; use this device's own controls instead once a track starts."
 msgstr "Quando ligado, este aparelho fica visível para apps controladores DLNA/UPnP na sua rede Wi-Fi -- envie uma faixa de um deles para tocá-la aqui. Pausar, silenciar, volume e avançar pelo app controlador não são compatíveis; use os controles do próprio aparelho depois que a faixa começar."
-
-msgid "Service is busy"
-msgstr "O serviço está ocupado"
 
 msgid "Unavailable"
 msgstr "Indisponível"
@@ -2011,6 +2015,23 @@ msgstr "Sem fio"
 
 msgid "No track loaded"
 msgstr "Nenhuma faixa carregada"
+
+#, fuzzy
+msgid "Repeat all"
+msgstr "Selecionar tudo"
+
+msgid "Repeat one"
+msgstr ""
+
+msgid "Shuffle + repeat"
+msgstr ""
+
+msgid "Shuffle once"
+msgstr ""
+
+#, fuzzy
+msgid "Sequential"
+msgstr "Iniciar em sequência"
 
 msgid "Song deleted"
 msgstr "Música excluída"
@@ -3070,6 +3091,10 @@ msgstr "Layouts do reprodutor"
 msgid "More"
 msgstr "Mais"
 
+#, fuzzy
+msgid "YouTube Music"
+msgstr "Sua música"
+
 msgid "0 dB"
 msgstr "0 dB"
 
@@ -3636,6 +3661,61 @@ msgstr "Local"
 msgid "Track details are not available yet. Keep playback open and check again."
 msgstr "Os detalhes da faixa ainda não estão disponíveis. Mantenha a reprodução aberta e verifique de novo."
 
+msgid "Home"
+msgstr ""
+
+msgid "Explore"
+msgstr ""
+
+msgid "Try again in a moment"
+msgstr ""
+
+#, fuzzy, c-format
+msgid "Search failed: %s"
+msgstr "Falha na captura (%s)"
+
+msgid "More results"
+msgstr ""
+
+#, fuzzy
+msgid "Playing next"
+msgstr "Tocar a seguir"
+
+#, fuzzy
+msgid "Added to queue"
+msgstr "Adicionar à fila"
+
+#, fuzzy
+msgid "Queue is full"
+msgstr "A fila está vazia"
+
+#, fuzzy
+msgid "Play next"
+msgstr "Tocar a seguir"
+
+#, fuzzy
+msgid "Add to queue"
+msgstr "Adicionar à fila"
+
+msgid "Search YouTube Music"
+msgstr ""
+
+msgid "No results"
+msgstr ""
+
+msgid "Coming soon"
+msgstr ""
+
+#, fuzzy
+msgid "Search"
+msgstr "março"
+
+msgid "Back to tab"
+msgstr ""
+
+msgid "Searching…"
+msgstr ""
+
 msgid "No items"
 msgstr "Nenhum item"
 
@@ -3668,6 +3748,18 @@ msgstr "Controles de energia"
 
 msgid "Playback and device actions"
 msgstr "Ações de reprodução e do aparelho"
+
+#~ msgid "Automatic (44.1 kHz)"
+#~ msgstr "Automático (44,1 kHz)"
+
+#~ msgid "Still applying the previous choice"
+#~ msgstr "Ainda aplicando a escolha anterior"
+
+#~ msgid "Open this address on your phone or computer:"
+#~ msgstr "Abra este endereço no celular ou computador:"
+
+#~ msgid "Web Server is busy"
+#~ msgstr "O servidor web está ocupado"
 
 #~ msgid "Saved games stay on the SD card."
 #~ msgstr "Os jogos salvos ficam no cartão SD."

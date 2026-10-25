@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-17 10:56-0600\n"
+"POT-Creation-Date: 2026-10-24 22:22-0300\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -32,6 +32,10 @@ msgstr "Audio-uitvoer mislukt"
 
 msgid "Audio could not be decoded"
 msgstr "Audio kon niet worden gedecodeerd"
+
+#, fuzzy
+msgid "YouTube track could not be resolved"
+msgstr "Sommige covers konden niet worden vernieuwd"
 
 msgid "Playback error"
 msgstr "Afspeelfout"
@@ -1691,17 +1695,14 @@ msgstr "Kan Bluetooth-codec niet opslaan"
 msgid "Turn Bluetooth off and on to apply"
 msgstr "Schakel Bluetooth uit en weer in om toe te passen"
 
-msgid "Automatic (44.1 kHz)"
-msgstr "Automatisch (44,1 kHz)"
-
 msgid "Reading supported rates..."
 msgstr "Ondersteunde samplefrequenties lezen..."
 
 msgid "Connect a device to see its supported rates"
 msgstr "Verbind een apparaat om de ondersteunde samplefrequenties te zien"
 
-msgid "Still applying the previous choice"
-msgstr "Vorige keuze wordt nog toegepast"
+msgid "Service is busy"
+msgstr "Service is bezet"
 
 msgid "Headset may disconnect, manual reconnection might be required"
 msgstr "De headset kan worden losgekoppeld; handmatig opnieuw verbinden kan nodig zijn"
@@ -1846,12 +1847,17 @@ msgstr "Zet een accessoire in detecteerbare modus en tik daarna op Opnieuw scann
 msgid "Connect to Wi-Fi first"
 msgstr "Maak eerst verbinding met wifi"
 
-msgid "Open this address on your phone or computer:"
-msgstr "Open dit adres op je telefoon of computer:"
+#, fuzzy
+msgid "Remote Control PIN"
+msgstr "Afstandsbediening"
 
+msgid "Open Remote Control to manage files:"
+msgstr ""
+
+#, fuzzy
 msgid ""
 "Closing\n"
-"Web Server..."
+"File Import..."
 msgstr "Webserver sluiten..."
 
 msgid "Import via Wi-Fi"
@@ -1860,8 +1866,9 @@ msgstr "Importeren via wifi"
 msgid "Enable WiFi to access"
 msgstr "Schakel wifi in voor toegang"
 
-msgid "Web Server is busy"
-msgstr "Webserver is bezet"
+#, fuzzy
+msgid "File import is busy"
+msgstr "Wifi is bezet"
 
 msgid "When on, this device is visible to AirPlay senders on your Wi-Fi network -- stream audio from an iPhone, iPad, or Mac to be played through this device's own output."
 msgstr "Als deze optie aanstaat, is dit apparaat zichtbaar voor AirPlay-zenders op je wifi-netwerk. Stream audio vanaf een iPhone, iPad of Mac om die via de eigen uitgang van dit apparaat af te spelen."
@@ -1877,9 +1884,6 @@ msgstr "DLNA-renderer"
 
 msgid "When on, this device is visible to DLNA/UPnP controller apps on your Wi-Fi network -- cast a track from one to play it here. Pause, mute, volume, and seek from the controller app aren't supported; use this device's own controls instead once a track starts."
 msgstr "Als deze optie aanstaat, is dit apparaat zichtbaar voor DLNA/UPnP-controllerapps op je wifi-netwerk. Cast er een nummer naartoe om het hier af te spelen. Pauzeren, dempen, volume en zoeken worden niet door de controllerapp ondersteund; gebruik de bediening van dit apparaat zodra een nummer start."
-
-msgid "Service is busy"
-msgstr "Service is bezet"
 
 msgid "Unavailable"
 msgstr "Niet beschikbaar"
@@ -1940,6 +1944,23 @@ msgstr "Draadloos"
 
 msgid "No track loaded"
 msgstr "Geen nummer geladen"
+
+#, fuzzy
+msgid "Repeat all"
+msgstr "Alles selecteren"
+
+msgid "Repeat one"
+msgstr ""
+
+msgid "Shuffle + repeat"
+msgstr ""
+
+msgid "Shuffle once"
+msgstr ""
+
+#, fuzzy
+msgid "Sequential"
+msgstr "Sequentieel starten"
 
 msgid "Song deleted"
 msgstr "Nummer verwijderd"
@@ -2989,6 +3010,10 @@ msgstr "Nu aan het afspelen-indelingen"
 msgid "More"
 msgstr "Meer"
 
+#, fuzzy
+msgid "YouTube Music"
+msgstr "Je muziek"
+
 msgid "0 dB"
 msgstr "0 dB"
 
@@ -3554,6 +3579,61 @@ msgstr "Locatie"
 msgid "Track details are not available yet. Keep playback open and check again."
 msgstr "Trackgegevens zijn nog niet beschikbaar. Laat het afspelen open en controleer later opnieuw."
 
+msgid "Home"
+msgstr ""
+
+msgid "Explore"
+msgstr ""
+
+msgid "Try again in a moment"
+msgstr ""
+
+#, fuzzy, c-format
+msgid "Search failed: %s"
+msgstr "Schermafbeelding mislukt (%s)"
+
+msgid "More results"
+msgstr ""
+
+#, fuzzy
+msgid "Playing next"
+msgstr "Hierna afspelen"
+
+#, fuzzy
+msgid "Added to queue"
+msgstr "Toevoegen aan wachtrij"
+
+#, fuzzy
+msgid "Queue is full"
+msgstr "Wachtrij is leeg"
+
+#, fuzzy
+msgid "Play next"
+msgstr "Hierna afspelen"
+
+#, fuzzy
+msgid "Add to queue"
+msgstr "Toevoegen aan wachtrij"
+
+msgid "Search YouTube Music"
+msgstr ""
+
+msgid "No results"
+msgstr ""
+
+msgid "Coming soon"
+msgstr ""
+
+#, fuzzy
+msgid "Search"
+msgstr "maart"
+
+msgid "Back to tab"
+msgstr ""
+
+msgid "Searching…"
+msgstr ""
+
 msgid "No items"
 msgstr "Geen items"
 
@@ -3586,6 +3666,18 @@ msgstr "Voedingsbediening"
 
 msgid "Playback and device actions"
 msgstr "Afspelen en apparaatacties"
+
+#~ msgid "Automatic (44.1 kHz)"
+#~ msgstr "Automatisch (44,1 kHz)"
+
+#~ msgid "Still applying the previous choice"
+#~ msgstr "Vorige keuze wordt nog toegepast"
+
+#~ msgid "Open this address on your phone or computer:"
+#~ msgstr "Open dit adres op je telefoon of computer:"
+
+#~ msgid "Web Server is busy"
+#~ msgstr "Webserver is bezet"
 
 #~ msgid "Saved games stay on the SD card."
 #~ msgstr "Opgeslagen games blijven op de SD-kaart staan."
