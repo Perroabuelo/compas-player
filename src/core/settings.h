@@ -467,6 +467,11 @@ typedef struct {
     char setup_plugin_ids[SETTINGS_SETUP_PLUGIN_MAX][SETTINGS_SETUP_PLUGIN_ID_MAX];
     char setup_layout_plugin_id[SETTINGS_SETUP_PLUGIN_ID_MAX];
     bool setup_scan_music;
+
+    /* hiby-yt (youtube-music-browse D6/D7): the YouTube Music radio adds
+     * related songs when a YouTube queue reaches its last track. On by
+     * default. */
+    bool ytm_radio_enabled;
 } player_settings_t;
 
 /* Validate a relative Subsonic download folder. Empty is a valid setting;

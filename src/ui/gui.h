@@ -475,6 +475,12 @@ const char * gui_player_queue_play_next_remote(const remote_track_meta_t * track
  * "no_memory" (queue and table unchanged). The playing track goes on. UI
  * thread only. */
 const char * gui_player_queue_extend_remote(const remote_track_meta_t * tracks, int count);
+/* hiby-yt: «Iniciar radio» (youtube-music-browse D7). The caller has already
+ * made video_id the queue and started it; the related songs are asked for
+ * once the service is free after its open, and appended like the radio at
+ * the queue's end (event=radio reason=start). A failure shows a toast and
+ * the song plays alone. UI thread only. */
+void gui_player_youtube_radio_start(const char * video_id);
 void play_track_at(int target);
 void get_display_names(const char * path, char * out_title, size_t title_sz, char * out_folder, size_t folder_sz);
 void row_label_enable_marquee(lv_obj_t * label);

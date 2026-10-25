@@ -96,7 +96,12 @@ static bool is_sd_card_path(const char *path);
 #include "player_timeline_labels.h"
 #include "transition_compositor.h"
 #include "remote_youtube.h"
+#include "yt_browse_line.h"
+#include "yt_mailbox.h"
+#include "yt_page_queue.h"
 #include "yt_prefetch_policy.h"
+#include "yt_radio.h"
+#include "yt_radio_policy.h"
 #include "yt_resolve_policy.h"
 #include "stream_log.h"
 
@@ -6292,9 +6297,137 @@ static void notify_plugin_track_started(const track_metadata_t * meta, const cha
                                          is_remote_track ? remote_meta.provider : "", is_remote_track ? remote_meta.track_id : "");
 }
 
+/* hiby-yt (youtube-music-browse D7): the radio. When the last YouTube track
+ * of the queue plays (yt_radio_policy.h), or after «Iniciar radio», the
+ * related songs of the playing track are asked for as a YT_OWNER_RADIO
+ * job. The page comes back through its own mailbox; the UI thread appends
+ * the songs the queue does not have (yt_radio.h) with
+ * gui_player_queue_extend_remote(), and only while the same track plays:
+ * a result for a queue that changed meanwhile is dropped. */
+static yt_mailbox_t radio_mailbox;
+static bool radio_mailbox_ready;
+static yt_radio_state_t radio_state;
+static uint32_t radio_ticket;                                  /* the request in flight, 0 for none */
+static char radio_video_id[YT_RESOLVER_VIDEO_ID_LEN + 1];      /* its track */
+static bool radio_from_start;                                  /* «Iniciar radio», not the queue's end */
+static char radio_start_video_id[YT_RESOLVER_VIDEO_ID_LEN + 1]; /* «Iniciar radio» waiting for the service */
+
+static void radio_free_page(void * page) {
+    yt_page_free(page);
+}
+
+/* On the service's worker thread: decode the line, deliver the page. */
+static void radio_done(const yt_browse_result_t * r, void * arg) {
+    uint32_t ticket = (uint32_t) (uintptr_t) arg;
+    if (r->cancelled) {
+        yt_mailbox_deliver(&radio_mailbox, ticket, NULL, r->preempted ? "preempted" : "cancelled");
+        return;
+    }
+    if (r->fail_class) {
+        yt_mailbox_deliver(&radio_mailbox, ticket, NULL, r->fail_class);
+        return;
+    }
+    yt_page_t * page = NULL;
+    char cls[YT_PAGE_CLASS_MAX + 1];
+    switch (yt_browse_line_parse(r->output, r->output_len, &page, cls)) {
+        case YT_BROWSE_LINE_OK: yt_mailbox_deliver(&radio_mailbox, ticket, page, NULL); break;
+        case YT_BROWSE_LINE_FAILED: yt_mailbox_deliver(&radio_mailbox, ticket, NULL, cls); break;
+        case YT_BROWSE_LINE_NO_MEMORY: yt_mailbox_deliver(&radio_mailbox, ticket, NULL, "internal"); break;
+        default: yt_mailbox_deliver(&radio_mailbox, ticket, NULL, "malformed"); break;
+    }
+}
+
+static bool radio_launch(const char * video_id, bool from_start) {
+    if (!radio_mailbox_ready) {
+        yt_mailbox_init(&radio_mailbox, radio_free_page);
+        radio_mailbox_ready = true;
+    }
+    uint32_t ticket = yt_mailbox_expect(&radio_mailbox);
+    if (!yt_resolver_start_browse(YT_OWNER_RADIO, YT_BROWSE_RELATED, video_id, NULL, NULL, radio_done,
+                                  (void *) (uintptr_t) ticket, NULL)) {
+        yt_mailbox_forget(&radio_mailbox);
+        return false;
+    }
+    radio_ticket = ticket;
+    radio_from_start = from_start;
+    snprintf(radio_video_id, sizeof(radio_video_id), "%.11s", video_id);
+    return true;
+}
+
+static bool radio_in_queue(void * ctx, const char * video_id) {
+    (void) ctx;
+    char key[256];
+    if (!remote_track_make_key(REMOTE_YOUTUBE_PROVIDER, video_id, key, sizeof(key))) return false;
+    for (int i = 0; i < playlist_count; i++) {
+        if (playlist[i] && strcmp(playlist[i], key) == 0) return true;
+    }
+    return false;
+}
+
+/* The radio's result, if it came: append its songs while current_video_id
+ * (the playing YouTube track, or NULL) is still the one asked for. */
+static void radio_take(const char * current_video_id) {
+    if (!radio_ticket) return;
+    void * payload = NULL;
+    char cls[YT_MAILBOX_CLASS_MAX + 1];
+    if (!yt_mailbox_take(&radio_mailbox, &payload, cls, NULL)) return;
+    radio_ticket = 0;
+    const char * reason = radio_from_start ? "start" : "queue_end";
+    yt_page_t * page = payload;
+    if (!page) {
+        if (strcmp(cls, "preempted") == 0) {
+            /* Made way for the user or the track that opens: asked again
+             * later, not counted. */
+            if (radio_from_start) snprintf(radio_start_video_id, sizeof(radio_start_video_id), "%s", radio_video_id);
+            else yt_radio_uncount(&radio_state, radio_video_id);
+            return;
+        }
+        if (!radio_from_start) yt_radio_finished(&radio_state, radio_video_id, false);
+        stream_log_radio(reason, 0, cls);
+        if (radio_from_start) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), TR("Radio unavailable (%s)"), cls);
+            show_info_toast(msg);
+        }
+        return;
+    }
+    if (!radio_from_start) yt_radio_finished(&radio_state, radio_video_id, true);
+    if (!current_video_id || strcmp(current_video_id, radio_video_id) != 0) {
+        yt_page_free(page);
+        stream_log_radio(reason, 0, "stale");
+        return;
+    }
+    uint16_t idx[YT_RADIO_PER_REQUEST];
+    size_t n = yt_radio_pick(page, radio_in_queue, NULL, (size_t) playlist_count, idx);
+    const char * result = NULL;
+    int added = 0;
+    if (n > 0) {
+        remote_track_meta_t * tracks = calloc(n, sizeof(*tracks));
+        if (!tracks) {
+            result = "no_memory";
+        } else {
+            int k = 0;
+            for (size_t i = 0; i < n; i++) {
+                if (yt_page_item_to_track(page, &page->items[idx[i]], &tracks[k])) k++;
+            }
+            if (k > 0) result = gui_player_queue_extend_remote(tracks, k);
+            if (!result) added = k;
+            free(tracks);
+        }
+    }
+    yt_page_free(page);
+    stream_log_radio(reason, added, result ? result : "ok");
+}
+
+void gui_player_youtube_radio_start(const char * video_id) {
+    if (!video_id || !yt_resolver_video_id_valid(video_id)) return;
+    snprintf(radio_start_video_id, sizeof(radio_start_video_id), "%.11s", video_id);
+}
+
 /* hiby-yt: resolves the next YouTube track of the queue while the current
- * one plays (chain-youtube-queue D4). Runs from the player UI timer; looks
- * at most every YT_PREFETCH_POLL_MS. */
+ * one plays (chain-youtube-queue D4), and asks the radio for more at the
+ * queue's end (youtube-music-browse D7). Runs from the player UI timer;
+ * looks at most every YT_PREFETCH_POLL_MS. */
 #define YT_PREFETCH_POLL_MS 500
 void gui_player_poll_youtube_prefetch(void) {
     static yt_prefetch_state_t state;
@@ -6338,6 +6471,30 @@ void gui_player_poll_youtube_prefetch(void) {
     char preempted[YT_RESOLVER_VIDEO_ID_LEN + 1];
     if (yt_queue_take_preempted(preempted, sizeof(preempted))) yt_prefetch_uncount(&state, preempted);
     if (yt_prefetch_should_start(&state, &in)) yt_queue_prefetch(in.next_video_id);
+
+    /* The radio, at the queue's end or after «Iniciar radio». */
+    static remote_track_meta_t playing_meta; /* a few KB: kept off the LVGL stack */
+    bool playing_youtube = path && remote_track_meta_copy_for_path(path, &playing_meta) &&
+                           remote_youtube_is(&playing_meta);
+    const char * playing_id = playing_youtube ? playing_meta.track_id : NULL;
+    radio_take(playing_id);
+    if (radio_ticket) return;
+    if (radio_start_video_id[0]) {
+        /* After the open of the song: when the service is free. */
+        if (!yt_resolver_busy() && radio_launch(radio_start_video_id, true)) radio_start_video_id[0] = '\0';
+        return;
+    }
+    yt_radio_input_t radio_in = {
+        .current_video_id = playing_id,
+        .has_next = next_index >= 0,
+        .enabled = current_settings.ytm_radio_enabled,
+        .queue_count = playlist_count > 0 ? (size_t) playlist_count : 0,
+        .service_busy = yt_resolver_busy(),
+        .played_ms = in.played_ms,
+        .remaining_ms = in.remaining_ms,
+    };
+    if (yt_radio_should_start(&radio_state, &radio_in) && !radio_launch(playing_id, false))
+        yt_radio_uncount(&radio_state, playing_id);
 }
 
 static void play_track_at_from_internal(int index, double start_seconds, bool push_nav, bool skip_airplay_disconnect) {

@@ -196,6 +196,7 @@ static void set_defaults(player_settings_t * out) {
     memset(out->setup_plugin_ids, 0, sizeof(out->setup_plugin_ids));
     out->setup_layout_plugin_id[0] = '\0';
     out->setup_scan_music = true;
+    out->ytm_radio_enabled = true; /* hiby-yt: on by default (youtube-music-browse) */
     out->volume = 1.0f;
     out->last_track[0] = '\0';
     out->last_position = 0.0;
@@ -436,6 +437,8 @@ bool settings_load(player_settings_t * out) {
                 snprintf(out->setup_layout_plugin_id, sizeof(out->setup_layout_plugin_id), "%s", value);
         } else if (strcmp(key, "setup_scan_music") == 0) {
             out->setup_scan_music = strcmp(value, "1") == 0;
+        } else if (strcmp(key, "ytm_radio") == 0) {
+            out->ytm_radio_enabled = strcmp(value, "1") == 0;
         } else if (strcmp(key, "volume") == 0) {
             out->volume = (float) atof(value);
         } else if (strcmp(key, "last_track") == 0) {
@@ -908,6 +911,7 @@ static void settings_write_file(const player_settings_t * settings) {
         ? settings->setup_layout_plugin_id : "";
     fprintf(f, "setup_layout_plugin_id=%s\n", layout_id);
     fprintf(f, "setup_scan_music=%d\n", settings->setup_scan_music ? 1 : 0);
+    fprintf(f, "ytm_radio=%d\n", settings->ytm_radio_enabled ? 1 : 0);
 
     fflush(f);
     fsync(fileno(f));
