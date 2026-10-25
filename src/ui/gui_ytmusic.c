@@ -1031,13 +1031,18 @@ static void page_loaded(yt_page_entry_t * e, yt_page_t * page, const char * cls)
         return;
     }
     if (more) {
-        /* The list points into the old page: rebuild it on the new one. */
+        /* The list points into the old page: rebuild it on the new one,
+         * where it was scrolled to (emptying it first resets the scroll). */
+        int32_t scroll_y = top && ytm_shelf_list ? lv_obj_get_scroll_y(ytm_shelf_list) : 0;
         compact_list_set_items(ytm_shelf_list, NULL, 0);
         int added = yt_page_append_songs(&e->view.pages[0], page, YT_PAGE_MAX_ITEMS);
         yt_page_free(page);
         stream_log_ytm_ui("more", added > 0 ? added : 0, added < 0 ? "no_memory" : "ok");
         if (added < 0) show_browse_failure("no_memory");
-        if (top) refresh_shelf_list(true);
+        if (top) {
+            refresh_shelf_list(false);
+            if (scroll_y > 0) lv_obj_scroll_to_y(ytm_shelf_list, scroll_y, LV_ANIM_OFF);
+        }
         return;
     }
     size_t items = page->item_count;
