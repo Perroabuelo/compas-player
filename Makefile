@@ -707,7 +707,7 @@ HIBY_YT_SRCS = src/core/stream_log.c src/network/stream_resume.c src/audio/fmp4_
                src/network/yt_search_line.c src/network/yt_results.c src/network/yt_row_format.c \
                src/network/yt_search_mailbox.c src/ui/gui_ytmusic.c src/network/yt_browse_input.c \
                src/network/yt_browse_line.c src/network/yt_mailbox.c src/network/yt_page_stack.c \
-               src/network/yt_page_queue.c
+               src/network/yt_page_queue.c src/network/yt_radio.c src/network/yt_radio_policy.c
 APP_SRCS += $(HIBY_YT_SRCS)
 APP_SRCS += src/library/queue_resume.c
 APP_SRCS += src/audio/track_probe.c
