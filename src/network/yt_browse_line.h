@@ -96,6 +96,15 @@ const char * yt_page_str(const yt_page_t * page, yt_page_str_t s);
 /* Frees the page and its arena. NULL is fine. */
 void yt_page_free(yt_page_t * page);
 
+/* «Más» of a playlist (spec youtube/music-screen): appends to the last shelf
+ * of *page the songs of more whose videoId it does not have yet, in order,
+ * until it holds max_items items, and takes more's token. When nothing new
+ * comes, the token is dropped, so «Más» goes away (a playlist YouTube Music
+ * makes answers its first page again; design D6). *page is replaced by a new
+ * page and the old one freed; more is left to the caller. Returns how many
+ * songs were added, or -1 when memory runs out (then *page is unchanged). */
+int yt_page_append_songs(yt_page_t ** page, const yt_page_t * more, size_t max_items);
+
 #ifdef HOST_BUILD
 /* PC tests only: the allocator of both blocks (NULL: malloc). */
 void yt_browse_line_set_test_alloc(void * (*alloc)(size_t));

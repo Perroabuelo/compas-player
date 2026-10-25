@@ -218,3 +218,68 @@ void yt_page_free(yt_page_t * page) {
     free(page->arena);
     free(page);
 }
+
+static bool has_video(const yt_page_t * p, size_t count, const char * vid) {
+    for (size_t i = 0; i < count; i++) {
+        if (p->items[i].type == YT_ITEM_SONG && strcmp(p->items[i].video_id, vid) == 0) return true;
+    }
+    return false;
+}
+
+/* Shifts every text offset of an item copied from another arena. */
+static yt_page_str_t moved(yt_page_str_t s, size_t by) {
+    return s ? (yt_page_str_t) (s + by) : 0;
+}
+
+int yt_page_append_songs(yt_page_t ** pagep, const yt_page_t * more, size_t max_items) {
+    yt_page_t * old = pagep ? *pagep : NULL;
+    if (!old || !more) return 0;
+    if (max_items > YT_PAGE_MAX_ITEMS) max_items = YT_PAGE_MAX_ITEMS;
+    /* The new songs, counted first: they may repeat each other too. */
+    size_t room = old->item_count < max_items ? max_items - old->item_count : 0;
+    size_t shelves = old->shelf_count ? old->shelf_count : 1;
+    size_t items = old->item_count + (room < more->item_count ? room : more->item_count);
+    size_t head = sizeof(yt_page_t) + shelves * sizeof(yt_page_shelf_t) + items * sizeof(yt_page_item_t);
+    size_t arena_len = old->arena_len + more->arena_len;
+    yt_page_t * page = block_alloc(head);
+    char * arena = page ? block_alloc(arena_len) : NULL;
+    if (!page || !arena) {
+        free(page);
+        return -1;
+    }
+    memset(page, 0, head);
+    page->items = (yt_page_item_t *) (page + 1);
+    page->shelves = (yt_page_shelf_t *) (page->items + items);
+    page->arena = arena;
+    page->arena_len = arena_len;
+    memcpy(arena, old->arena, old->arena_len);
+    memcpy(arena + old->arena_len, more->arena, more->arena_len);
+    page->title = old->title;
+    page->shelf_count = shelves;
+    if (old->shelf_count) {
+        memcpy(page->shelves, old->shelves, old->shelf_count * sizeof(yt_page_shelf_t));
+    } else {
+        page->shelves[0] = (yt_page_shelf_t) { 0 };
+    }
+    memcpy(page->items, old->items, old->item_count * sizeof(yt_page_item_t));
+    size_t n = old->item_count;
+    uint8_t last = (uint8_t) (shelves - 1);
+    for (size_t i = 0; i < more->item_count && n < items; i++) {
+        const yt_page_item_t * it = &more->items[i];
+        if (it->type != YT_ITEM_SONG || has_video(page, n, it->video_id)) continue;
+        yt_page_item_t c = *it;
+        size_t by = old->arena_len;
+        c.shelf = last;
+        c.title = moved(c.title, by), c.subtitle = moved(c.subtitle, by), c.artist = moved(c.artist, by);
+        c.album = moved(c.album, by), c.id = moved(c.id, by), c.params = moved(c.params, by);
+        c.artist_id = moved(c.artist_id, by), c.album_id = moved(c.album_id, by);
+        page->items[n++] = c;
+    }
+    size_t added = n - old->item_count;
+    page->item_count = n;
+    page->shelves[last].count = (uint16_t) (page->shelves[last].count + added);
+    page->token = added ? moved(more->token, old->arena_len) : 0;
+    yt_page_free(old);
+    *pagep = page;
+    return (int) added;
+}

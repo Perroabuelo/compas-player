@@ -2,7 +2,8 @@
 #define YT_SEARCH_MAILBOX_H
 
 /* Where a search result waits for the YouTube Music screen (hiby-yt,
- * design D3 of youtube-music-screen). Pure: no LVGL.
+ * design D3 of youtube-music-screen): a yt_mailbox_t (yt_mailbox.h) whose
+ * payload is a yt_search_line_page_t on the heap, freed with free().
  *
  * The screen asks for a ticket before it starts a search and passes it to
  * the search's done callback. The callback runs on the search service's
@@ -13,20 +14,13 @@
  * the spot, so a late result never reaches the screen. Leaving the screen
  * does not close the mailbox: the result waits for the next poll. */
 
+#include "yt_mailbox.h"
 #include "yt_search_line.h"
 
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef struct {
-    pthread_mutex_t lock;
-    uint32_t ticket;      /* the search the screen waits for, 0 for none */
-    bool closed;
-    bool ready;
-    yt_search_line_page_t * page; /* NULL when the search failed */
-    char fail_class[YT_SEARCH_LINE_CLASS_MAX + 1];
-} yt_search_mailbox_t;
+typedef yt_mailbox_t yt_search_mailbox_t;
 
 /* An open, empty mailbox. */
 void yt_search_mailbox_init(yt_search_mailbox_t * m);
