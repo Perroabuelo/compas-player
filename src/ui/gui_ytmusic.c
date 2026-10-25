@@ -10,8 +10,10 @@
 #include "gui_theme.h"
 #include "i18n.h"
 #include "screen_builders.h"
+#include "stream_log.h"
 #include "yt_resolver_proc.h"
 #include "yt_results.h"
+#include "yt_row_format.h"
 #include "yt_search_line.h"
 #include "yt_search_mailbox.h"
 
@@ -23,6 +25,12 @@
 #define YTM_TAB_COUNT 3
 #define YTM_TABS_H BOARD_SCALE_PX(56)
 #define YTM_BACK_ROW_H BOARD_SCALE_PX(48)
+/* The cover slot of a row (D4): the same box in every row, with or without
+ * an image, so youtube-music-covers only changes what it shows. */
+#define YTM_ART_PX BOARD_SCALE_PX(56)
+#define YTM_ART_INSET 14 /* the list's own leading image offset */
+#define YTM_ART_ICON "launcher/music.png"
+#define YTM_MORE_ICON "navigation/more.png"
 
 typedef enum {
     YTM_VIEW_TAB,     /* the selected tab's panel */
@@ -37,6 +45,10 @@ static lv_obj_t * ytm_panels[YTM_TAB_COUNT];
 static lv_obj_t * ytm_content;      /* panels and the results view */
 static lv_obj_t * ytm_results_view; /* back row and result list */
 static lv_obj_t * ytm_status;       /* "Searching…" */
+static lv_obj_t * ytm_list;
+/* Second lines of the rows: the list borrows its strings (titles point
+ * into the store). Allocated with the first results. */
+static char (*ytm_subtitles)[YT_ROW_SUBTITLE_MAX];
 static int ytm_tab;
 static ytm_view_t ytm_view;
 
@@ -49,6 +61,8 @@ static bool ytm_searching;
 static bool ytm_search_more;   /* the running search asks for the next page */
 static uint16_t ytm_search_gen; /* yt_resolver_proc generation, for cancel and wait */
 static yt_results_t ytm_results;
+
+static void start_search(bool more);
 
 static int32_t screen_height(void) {
     return lv_display_get_vertical_resolution(lv_display_get_default());
@@ -104,9 +118,89 @@ static void show_search_failure(const char * cls) {
     show_info_toast(msg);
 }
 
-/* Fills the result list from the store; keep_scroll for a next page. */
+static void clear_results_list(void) {
+    if (ytm_list) compact_list_set_items(ytm_list, NULL, 0);
+}
+
+/* Fills the result list from the store, with "More results" at the end
+ * while there is a next page. keep_scroll for a next page: the list grows
+ * without jumping to the top. */
 static void update_results_list(bool keep_scroll) {
-    (void) keep_scroll;
+    if (!ytm_list) return;
+    int32_t scroll_y = keep_scroll ? lv_obj_get_scroll_y(ytm_list) : 0;
+    int n = (int) ytm_results.count;
+    int total = n + (yt_results_has_more(&ytm_results) ? 1 : 0);
+    if (total == 0) {
+        clear_results_list();
+        return;
+    }
+    if (!ytm_subtitles) ytm_subtitles = malloc(sizeof(*ytm_subtitles) * YT_RESULTS_MAX);
+    compact_list_item_t * items = calloc((size_t) total, sizeof(*items));
+    if (!ytm_subtitles || !items) {
+        free(items);
+        clear_results_list();
+        show_search_failure("internal");
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        const yt_song_t * s = &ytm_results.songs[i];
+        yt_row_subtitle(ytm_subtitles[i], YT_ROW_SUBTITLE_MAX, s->artist, s->album, s->duration_ms);
+        items[i].label = s->title;
+        items[i].subtitle = ytm_subtitles[i];
+        items[i].trailing_asset = YTM_MORE_ICON;
+        items[i].identity = i + 1;
+        items[i].artwork_key = (uint64_t) i + 1;
+    }
+    if (total > n) {
+        items[n].label = TR("More results");
+        items[n].is_action = true;
+    }
+    /* The list copies the array, not the strings. */
+    compact_list_set_items(ytm_list, items, total);
+    free(items);
+    if (scroll_y > 0) lv_obj_scroll_to_y(ytm_list, scroll_y, LV_ANIM_OFF);
+}
+
+/* The fixed cover slot with the note icon; "More results" has none. */
+static void row_decorator(lv_obj_t * list, lv_obj_t * row, lv_obj_t * image, int logical_index, int pool_slot,
+                          int64_t identity, uint64_t artwork_key, const char * artwork_name, void * ctx) {
+    (void) list;
+    (void) logical_index;
+    (void) pool_slot;
+    (void) identity;
+    (void) artwork_name;
+    (void) ctx;
+    if (artwork_key == 0) {
+        lv_obj_set_style_pad_left(row, LIST_ROW_LABEL_INSET, 0);
+        lv_obj_add_flag(image, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_set_style_pad_left(row, YTM_ART_INSET + YTM_ART_PX + YTM_ART_INSET, 0);
+    /* The source first: an empty image has no size to fit. */
+    lv_image_set_src(image, asset_path(YTM_ART_ICON));
+    lv_obj_set_size(image, YTM_ART_PX, YTM_ART_PX);
+    lv_image_set_inner_align(image, LV_IMAGE_ALIGN_CONTAIN);
+    lv_obj_remove_flag(image, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void open_row_menu(int index) {
+    (void) index;
+}
+
+static void play_from(int index) {
+    (void) index;
+}
+
+static void row_click_cb(int index) {
+    if (index == (int) ytm_results.count) {
+        if (yt_results_has_more(&ytm_results)) start_search(true);
+        return;
+    }
+    if (index >= 0 && index < (int) ytm_results.count) play_from(index);
+}
+
+static void row_menu_cb(int index) {
+    if (index >= 0 && index < (int) ytm_results.count) open_row_menu(index);
 }
 
 /* On the search service's worker thread: decodes the line off the UI
@@ -190,6 +284,7 @@ static void take_search_result(void) {
     bool more = ytm_search_more;
     set_searching(false);
     if (!page) {
+        if (more) stream_log_ytm_ui("more", 0, cls);
         if (strcmp(cls, "cancelled") != 0) show_search_failure(cls);
         return;
     }
@@ -199,10 +294,11 @@ static void take_search_result(void) {
         return;
     }
     if (more) {
-        yt_results_add_page(&ytm_results, page);
+        size_t added = yt_results_add_page(&ytm_results, page);
+        stream_log_ytm_ui("more", (int) added, "ok");
     } else {
         /* The list points into the store: empty it before the store. */
-        update_results_list(false);
+        clear_results_list();
         yt_results_clear(&ytm_results);
         yt_results_add_page(&ytm_results, page);
         if (ytm_results.count == 0) show_info_toast(TR("No results"));
@@ -304,6 +400,14 @@ static lv_obj_t * build_results_view(lv_obj_t * parent) {
     lv_obj_add_style(label, &style_theme_text_muted, 0);
     lv_obj_set_style_text_font(label, gui_theme_font(GUI_FONT_ROLE_SUBTEXT), 0);
     lv_obj_align(label, LV_ALIGN_LEFT_MID, GUI_TEXT_INSET, 0);
+
+    /* Tap plays; the "…" button and a long press open the row menu. */
+    ytm_list = build_compact_list_widget(view, NULL, 0, row_click_cb, row_menu_cb, LIST_ROW_WIDTH_WIDE, false, NULL);
+    compact_list_set_row_height(ytm_list, MUSIC_LIST_ROW_HEIGHT);
+    compact_list_set_row_decorator(ytm_list, row_decorator, NULL);
+    compact_list_set_trailing_click(ytm_list, row_menu_cb);
+    lv_obj_set_size(ytm_list, lv_pct(100), content_height() - YTM_BACK_ROW_H);
+    lv_obj_align(ytm_list, LV_ALIGN_TOP_MID, 0, YTM_BACK_ROW_H);
     return view;
 }
 
@@ -311,7 +415,8 @@ static lv_obj_t * build_ytmusic_screen(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_theme_screen_bg, 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-    build_screen_header(scr, TR("YouTube Music"), generic_back_cb, "navigation/search.png", search_click_cb);
+    build_screen_header(scr, TR("YouTube Music"), generic_back_cb, asset_path("navigation/search.png"),
+                        search_click_cb);
     build_tabs(scr);
 
     ytm_content = lv_obj_create(scr);
@@ -363,12 +468,17 @@ void gui_ytmusic_teardown(void) {
     }
     ytm_searching = false;
     if (ytm_mailbox_ready) yt_search_mailbox_close(&ytm_mailbox);
+    /* The list (and its copy of the items) goes with the screen, before the
+     * strings it points at. */
     if (ytm_screen) lv_obj_delete(ytm_screen);
     yt_results_free(&ytm_results);
+    free(ytm_subtitles);
+    ytm_subtitles = NULL;
     ytm_screen = NULL;
     ytm_content = NULL;
     ytm_results_view = NULL;
     ytm_status = NULL;
+    ytm_list = NULL;
     memset(ytm_tab_buttons, 0, sizeof(ytm_tab_buttons));
     memset(ytm_panels, 0, sizeof(ytm_panels));
 }
