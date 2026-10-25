@@ -13,6 +13,10 @@
 #include "i18n.h"
 #include "screen_builders.h"
 #include "stream_log.h"
+#include "yt_browse_line.h"
+#include "yt_mailbox.h"
+#include "yt_page_queue.h"
+#include "yt_page_stack.h"
 #include "yt_resolver_proc.h"
 #include "yt_results.h"
 #include "yt_row_format.h"
@@ -68,7 +72,62 @@ static bool ytm_search_more;   /* the running search asks for the next page */
 static uint16_t ytm_search_gen; /* yt_resolver_proc generation, for cancel and wait */
 static yt_results_t ytm_results;
 
+/* Shelves (youtube-music-browse D6). Home and Explore keep their pages for
+ * the life of the screen; one list shows whichever of them is on screen
+ * (each compact list carries a page cache of about 100 KB, so the views
+ * share it and keep only their scroll position). */
+typedef enum {
+    YTM_LOAD_IDLE,    /* never asked for */
+    YTM_LOAD_LOADING,
+    YTM_LOAD_DONE,
+    YTM_LOAD_ERROR,
+} ytm_load_t;
+
+typedef struct {
+    yt_page_view_t view;
+    ytm_load_t state;
+    char error[YT_MAILBOX_CLASS_MAX + 1];
+    uint32_t ticket;   /* the request it waits for, 0 for none */
+    int next_kind;     /* Explore: the next of explore, moods, charts to ask for */
+    bool refreshing;   /* Home: «Refresh» asked again, the old shelves stay meanwhile */
+    int32_t scroll;
+} ytm_shelves_t;
+
+static ytm_shelves_t ytm_home, ytm_explore;
+static const yt_browse_kind_t ytm_explore_kinds[] = { YT_BROWSE_EXPLORE, YT_BROWSE_MOODS, YT_BROWSE_CHARTS };
+#define YTM_EXPLORE_REQUESTS ((int) (sizeof(ytm_explore_kinds) / sizeof(ytm_explore_kinds[0])))
+
+/* The one content request in flight (one YouTube job at a time) and the
+ * mailbox its page comes back through. */
+static yt_mailbox_t ytm_content_mailbox;
+static bool ytm_content_mailbox_ready;
+static bool ytm_browsing;
+static uint16_t ytm_browse_gen;
+
+/* Rows of the shared shelf list: what each logical row stands for. */
+typedef enum {
+    YTM_ROW_REFRESH, /* Home's «Refresh» */
+    YTM_ROW_HEADER,  /* a shelf's title */
+    YTM_ROW_ITEM,    /* an item of a page */
+    YTM_ROW_RETRY,   /* the error and its retry */
+    YTM_ROW_MORE,    /* a playlist's next page */
+} ytm_row_kind_t;
+
+typedef struct {
+    uint8_t kind;
+    uint8_t page;   /* index in the view's pages */
+    uint16_t index; /* the shelf of a header, the item of an item */
+} ytm_row_t;
+
+static lv_obj_t * ytm_shelf_panel; /* the shared list, under the tabs or a page's header */
+static lv_obj_t * ytm_shelf_list;
+static ytm_row_t * ytm_rows;
+static int ytm_row_count;
+static char * ytm_shelf_subtitles; /* the rows' second lines, back to back */
+static const yt_page_view_t * ytm_shelf_shown; /* the view the list shows now */
+
 static void start_search(bool more);
+static void refresh_shelf_list(bool keep_scroll);
 
 static int32_t screen_height(void) {
     return lv_display_get_vertical_resolution(lv_display_get_default());
@@ -97,6 +156,7 @@ static void layout_content(void) {
     int32_t h = content_height() - (ytm_mini_shown ? YTM_MINI_H : 0);
     if (ytm_content) lv_obj_set_height(ytm_content, h);
     if (ytm_list) lv_obj_set_height(ytm_list, h - YTM_BACK_ROW_H);
+    if (ytm_shelf_list) lv_obj_set_height(ytm_shelf_list, h);
 }
 
 /* Reads the player and updates the bar only where something changed, so
@@ -228,35 +288,67 @@ static void build_mini_player(lv_obj_t * scr) {
     lv_timer_pause(ytm_mini_timer);
 }
 
-/* Shows the panel of the selected tab or the results, and marks the tab. */
+static void set_hidden(lv_obj_t * obj, bool hidden) {
+    if (!obj) return;
+    if (hidden) lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+static ytm_shelves_t * shown_tab_shelves(void);
+static void load_shown_tab(void);
+
+/* Shows the panel of the selected tab, the shelves or the results, and
+ * marks the tab. The shelf list shows Home's or Explore's shelves, back at
+ * the position they were left in. */
 static void show_view(void) {
+    bool shelves = shown_tab_shelves() != NULL;
     for (int i = 0; i < YTM_TAB_COUNT; i++) {
-        if (ytm_view == YTM_VIEW_TAB && i == ytm_tab) lv_obj_remove_flag(ytm_panels[i], LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_add_flag(ytm_panels[i], LV_OBJ_FLAG_HIDDEN);
+        set_hidden(ytm_panels[i], !(ytm_view == YTM_VIEW_TAB && i == ytm_tab && ytm_panels[i]));
         if (i == ytm_tab) lv_obj_add_state(ytm_tab_buttons[i], LV_STATE_CHECKED);
         else lv_obj_remove_state(ytm_tab_buttons[i], LV_STATE_CHECKED);
     }
-    if (ytm_view == YTM_VIEW_RESULTS) lv_obj_remove_flag(ytm_results_view, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(ytm_results_view, LV_OBJ_FLAG_HIDDEN);
+    set_hidden(ytm_shelf_panel, !shelves);
+    set_hidden(ytm_results_view, ytm_view != YTM_VIEW_RESULTS);
+    if (shelves) {
+        refresh_shelf_list(false);
+        int32_t scroll = shown_tab_shelves()->scroll;
+        if (scroll > 0 && ytm_shelf_list) lv_obj_scroll_to_y(ytm_shelf_list, scroll, LV_ANIM_OFF);
+        load_shown_tab();
+    }
 }
 
-/* Changing tabs makes no request (spec «Recorrer las pestañas»). */
+/* Keeps where the shelves on screen were scrolled to. */
+static void save_shelf_scroll(void) {
+    ytm_shelves_t * t = shown_tab_shelves();
+    if (t && ytm_shelf_list) t->scroll = lv_obj_get_scroll_y(ytm_shelf_list);
+}
+
+/* Changing tabs makes no request but the first load of Home and Explore
+ * (spec «Recorrer las pestañas»). */
 static void tab_click_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    save_shelf_scroll();
     ytm_tab = (int) (intptr_t) lv_event_get_user_data(e);
     ytm_view = YTM_VIEW_TAB;
     show_view();
 }
 
-static void set_searching(bool searching) {
-    ytm_searching = searching;
+/* The status pill: "Searching…" while a search runs, "Loading…" while a
+ * content request does (one YouTube job at a time: never both). */
+static void update_status(void) {
     if (!ytm_status) return;
-    if (searching) {
+    if (ytm_searching || ytm_browsing) {
+        lv_label_set_text(ytm_status, ytm_searching ? TR("Searching…") : TR("Loading…"));
         lv_obj_remove_flag(ytm_status, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(ytm_status);
     } else {
         lv_obj_add_flag(ytm_status, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+static void set_searching(bool searching) {
+    ytm_searching = searching;
+    update_status();
 }
 
 /* The toast of a search that did not give a page: busy, or the class. */
@@ -288,10 +380,17 @@ static size_t utf8_floor(const char * s, size_t n) {
     return n;
 }
 
+/* A song's second line: artist, album and duration (0: unknown). */
+typedef struct {
+    const char * artist;
+    const char * album;
+    uint32_t duration_ms;
+} ytm_song_line_t;
+
 /* Writes the second line with the first keep bytes of the shortened part
  * (album when shorten_album, else artist) plus "…"; the other part whole
  * (or, for the artist pass, no album). */
-static void compose_subtitle(char * out, size_t size, const yt_song_t * s, bool shorten_album, size_t keep) {
+static void compose_subtitle(char * out, size_t size, const ytm_song_line_t * s, bool shorten_album, size_t keep) {
     char part[YT_SONG_TEXT_MAX + sizeof(YTM_ELLIPSIS)];
     const char * src = shorten_album ? s->album : s->artist;
     if (keep > 0) snprintf(part, sizeof(part), "%.*s" YTM_ELLIPSIS, (int) keep, src);
@@ -304,7 +403,7 @@ static void compose_subtitle(char * out, size_t size, const yt_song_t * s, bool 
  * album and then the artist shortened (ending in "…") until it fits width,
  * so the duration always shows (spec «Fila completa»). Binary search on the
  * bytes kept, at character boundaries. */
-static void fit_subtitle(char * out, size_t size, const yt_song_t * s, const lv_font_t * font, int32_t width) {
+static void fit_subtitle(char * out, size_t size, const ytm_song_line_t * s, const lv_font_t * font, int32_t width) {
     yt_row_subtitle(out, size, s->artist, s->album, s->duration_ms);
     if (text_width(out, font) <= width) return;
     for (int pass = 0; pass < 2; pass++) {
@@ -352,7 +451,8 @@ static void update_results_list(bool keep_scroll) {
     int32_t width = LIST_ROW_WIDTH_WIDE - (YTM_ART_INSET + YTM_ART_PX + YTM_ART_INSET) - YTM_TRAILING_PAD;
     for (int i = 0; i < n; i++) {
         const yt_song_t * s = &ytm_results.songs[i];
-        fit_subtitle(ytm_subtitles[i], YT_ROW_SUBTITLE_MAX, s, font, width);
+        ytm_song_line_t line = { s->artist, s->album, s->duration_ms };
+        fit_subtitle(ytm_subtitles[i], YT_ROW_SUBTITLE_MAX, &line, font, width);
         items[i].label = s->title;
         items[i].subtitle = ytm_subtitles[i];
         items[i].trailing_asset = YTM_MORE_ICON;
@@ -415,15 +515,38 @@ static void play_from(int index) {
 static lv_obj_t * ytm_menu;
 static lv_obj_t * ytm_menu_backdrop;
 static int ytm_menu_index = -1;
+/* A song of a shelf (youtube-music-browse D6) instead of a result. */
+static const yt_page_t * ytm_menu_page;
+static size_t ytm_menu_item;
 
 static void hide_row_menu(void) {
     if (ytm_menu) lv_obj_add_flag(ytm_menu, LV_OBJ_FLAG_HIDDEN);
     if (ytm_menu_backdrop) lv_obj_add_flag(ytm_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
 }
 
+/* True while page is one of the pages the shelf list shows. */
+static bool page_shown(const yt_page_t * page) {
+    if (!page || !ytm_shelf_shown) return false;
+    for (size_t i = 0; i < ytm_shelf_shown->page_count; i++) {
+        if (ytm_shelf_shown->pages[i] == page) return true;
+    }
+    return false;
+}
+
+/* The queue entry of the menu's song, a result or a shelf's. */
+static bool menu_track(remote_track_meta_t * out) {
+    if (ytm_menu_page) {
+        if (!page_shown(ytm_menu_page) || ytm_menu_item >= ytm_menu_page->item_count) return false;
+        return yt_page_item_to_track(ytm_menu_page, &ytm_menu_page->items[ytm_menu_item], out);
+    }
+    if (ytm_menu_index < 0 || ytm_menu_index >= (int) ytm_results.count) return false;
+    return yt_results_song_to_track(&ytm_results.songs[ytm_menu_index], out);
+}
+
 static void open_row_menu(int index) {
     if (!ytm_menu || !ytm_menu_backdrop) return;
     ytm_menu_index = index;
+    ytm_menu_page = NULL;
     lv_obj_remove_flag(ytm_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(ytm_menu, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(ytm_menu_backdrop);
@@ -441,13 +564,11 @@ static const char * append_class(const char * err) {
 /* "Play next" or "Add to queue" on the menu's row: the playing track goes
  * on, and a toast confirms or says why not. */
 static void queue_menu_row(bool next) {
-    int index = ytm_menu_index;
     hide_row_menu();
-    if (index < 0 || index >= (int) ytm_results.count) return;
     remote_track_meta_t * track = malloc(sizeof(*track));
     const char * cls = "no_memory";
     if (track) {
-        if (!yt_results_song_to_track(&ytm_results.songs[index], track)) cls = "invalid";
+        if (!menu_track(track)) cls = "invalid";
         else if (next) cls = append_class(gui_player_queue_play_next_remote(track));
         else cls = append_class(gui_player_queue_append_remote(track));
         free(track);
@@ -591,11 +712,353 @@ static void take_search_result(void) {
         yt_results_clear(&ytm_results);
         yt_results_add_page(&ytm_results, page);
         if (ytm_results.count == 0) show_info_toast(TR("No results"));
+        save_shelf_scroll();
         ytm_view = YTM_VIEW_RESULTS;
         show_view();
     }
     free(page);
     update_results_list(more);
+}
+
+/* ---- shelves (youtube-music-browse D6) ---- */
+
+static void free_page_payload(void * page) {
+    yt_page_free(page);
+}
+
+/* On the service's worker thread: decode the page off the UI thread. */
+static void browse_done(const yt_browse_result_t * r, void * arg) {
+    uint32_t ticket = (uint32_t) (uintptr_t) arg;
+    if (r->cancelled) {
+        yt_mailbox_deliver(&ytm_content_mailbox, ticket, NULL, "cancelled");
+        return;
+    }
+    if (r->fail_class) {
+        yt_mailbox_deliver(&ytm_content_mailbox, ticket, NULL, r->fail_class);
+        return;
+    }
+    yt_page_t * page = NULL;
+    char cls[YT_PAGE_CLASS_MAX + 1];
+    switch (yt_browse_line_parse(r->output, r->output_len, &page, cls)) {
+        case YT_BROWSE_LINE_OK: yt_mailbox_deliver(&ytm_content_mailbox, ticket, page, NULL); break;
+        case YT_BROWSE_LINE_FAILED: yt_mailbox_deliver(&ytm_content_mailbox, ticket, NULL, cls); break;
+        case YT_BROWSE_LINE_NO_MEMORY: yt_mailbox_deliver(&ytm_content_mailbox, ticket, NULL, "internal"); break;
+        default: yt_mailbox_deliver(&ytm_content_mailbox, ticket, NULL, "malformed"); break;
+    }
+}
+
+/* Starts a content request. Returns its ticket, or 0 with *why set (busy:
+ * another YouTube job of the user's, or this screen's own request). */
+static uint32_t start_browse(yt_browse_kind_t kind, const char * id, const char * params, const char * token,
+                             const char ** why) {
+    if (ytm_browsing) {
+        *why = "busy";
+        return 0;
+    }
+    uint32_t ticket = yt_mailbox_expect(&ytm_content_mailbox);
+    *why = "internal";
+    uint16_t gen = yt_resolver_start_browse(YT_OWNER_BROWSE, kind, id, params, token, browse_done,
+                                            (void *) (uintptr_t) ticket, why);
+    if (gen == 0) {
+        yt_mailbox_forget(&ytm_content_mailbox);
+        return 0;
+    }
+    ytm_browse_gen = gen;
+    ytm_browsing = true;
+    update_status();
+    return ticket;
+}
+
+/* The toast of a content request that did not give a page. */
+static void show_browse_failure(const char * cls) {
+    if (strcmp(cls, "busy") == 0) {
+        show_info_toast(TR("Try again in a moment"));
+        return;
+    }
+    char msg[96];
+    snprintf(msg, sizeof(msg), TR("Could not load: %s"), cls);
+    show_info_toast(msg);
+}
+
+/* The tab whose shelves the list shows, or NULL (Library, results). */
+static ytm_shelves_t * shown_tab_shelves(void) {
+    if (ytm_view != YTM_VIEW_TAB) return NULL;
+    if (ytm_tab == 0) return &ytm_home;
+    if (ytm_tab == 1) return &ytm_explore;
+    return NULL;
+}
+
+/* Asks for Home, or for the next page of Explore. */
+static void request_tab(ytm_shelves_t * t) {
+    if (t->ticket) return;
+    bool home = t == &ytm_home;
+    if (!home && t->next_kind >= YTM_EXPLORE_REQUESTS) return;
+    const char * why = NULL;
+    uint32_t ticket = start_browse(home ? YT_BROWSE_HOME : ytm_explore_kinds[t->next_kind], NULL, NULL, NULL, &why);
+    if (!ticket) {
+        if (!t->refreshing) {
+            t->state = YTM_LOAD_ERROR;
+            snprintf(t->error, sizeof(t->error), "%s", why);
+        }
+        t->refreshing = false;
+        show_browse_failure(why);
+        refresh_shelf_list(true);
+        return;
+    }
+    t->ticket = ticket;
+    if (!t->refreshing) t->state = YTM_LOAD_LOADING;
+    refresh_shelf_list(true);
+}
+
+/* A tab's result: Home's page (replacing the shelves on «Refresh»), or the
+ * next of Explore's three pages, asking for the one after it. */
+static void tab_loaded(ytm_shelves_t * t, yt_page_t * page, const char * cls) {
+    t->ticket = 0;
+    bool refresh = t->refreshing;
+    t->refreshing = false;
+    if (!page) {
+        if (refresh) {
+            stream_log_ytm_ui("refresh", 0, cls);
+        } else {
+            t->state = YTM_LOAD_ERROR;
+            snprintf(t->error, sizeof(t->error), "%s", cls);
+        }
+        if (strcmp(cls, "cancelled") != 0) show_browse_failure(cls);
+        refresh_shelf_list(true);
+        return;
+    }
+    if (t == &ytm_home) {
+        size_t items = page->item_count;
+        /* The list points into the old page: show the new one first. */
+        yt_page_view_t old = t->view;
+        memset(&t->view, 0, sizeof(t->view));
+        yt_page_view_add(&t->view, page);
+        t->state = YTM_LOAD_DONE;
+        refresh_shelf_list(false);
+        yt_page_view_clear(&old);
+        if (refresh) stream_log_ytm_ui("refresh", (int) items, "ok");
+        return;
+    }
+    yt_page_view_add(&t->view, page);
+    t->next_kind++;
+    t->state = t->next_kind >= YTM_EXPLORE_REQUESTS ? YTM_LOAD_DONE : YTM_LOAD_LOADING;
+    refresh_shelf_list(true);
+    if (t->next_kind < YTM_EXPLORE_REQUESTS) request_tab(t);
+}
+
+/* A finished content request, on the UI thread: to the view whose ticket
+ * it carries; a page closed meanwhile has forgotten its ticket. */
+static void take_browse_result(void) {
+    void * payload = NULL;
+    char cls[YT_MAILBOX_CLASS_MAX + 1];
+    uint32_t ticket = 0;
+    if (!yt_mailbox_take(&ytm_content_mailbox, &payload, cls, &ticket)) return;
+    yt_resolver_wait_ended(ytm_browse_gen);
+    ytm_browsing = false;
+    update_status();
+    yt_page_t * page = payload;
+    if (ticket == ytm_home.ticket) tab_loaded(&ytm_home, page, cls);
+    else if (ticket == ytm_explore.ticket) tab_loaded(&ytm_explore, page, cls);
+    else yt_page_free(page);
+}
+
+/* The first time Home or Explore is on screen, it asks for its shelves. */
+static void load_shown_tab(void) {
+    ytm_shelves_t * t = shown_tab_shelves();
+    if (t && t->state == YTM_LOAD_IDLE && lv_screen_active() == ytm_screen) request_tab(t);
+}
+
+/* A shelf's header row: the title as a section heading, without the cover
+ * slot or a card; every other row gets the list's own look back (rows are
+ * recycled). */
+static void shelf_row_decorator(lv_obj_t * list, lv_obj_t * row, lv_obj_t * image, int logical_index, int pool_slot,
+                                int64_t identity, uint64_t artwork_key, const char * artwork_name, void * ctx) {
+    bool header = logical_index >= 0 && logical_index < ytm_row_count && ytm_rows[logical_index].kind == YTM_ROW_HEADER;
+    if (header) {
+        lv_obj_set_style_pad_left(row, LIST_ROW_LABEL_INSET, 0);
+        lv_obj_add_flag(image, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_text_font(row, gui_theme_font(GUI_FONT_ROLE_TITLE), 0);
+        return;
+    }
+    lv_obj_remove_local_style_prop(row, LV_STYLE_BG_OPA, 0);
+    lv_obj_remove_local_style_prop(row, LV_STYLE_TEXT_FONT, 0);
+    row_decorator(list, row, image, logical_index, pool_slot, identity, artwork_key, artwork_name, ctx);
+}
+
+static const yt_page_view_t * shown_shelf_view(void) {
+    ytm_shelves_t * t = shown_tab_shelves();
+    return t ? &t->view : NULL;
+}
+
+/* Rebuilds the shelf list for the view on screen: «Refresh» first on Home,
+ * a header per titled shelf and a row per item, then the error with its
+ * retry. keep_scroll keeps the position (a page appended at the end). */
+static void refresh_shelf_list(bool keep_scroll) {
+    if (!ytm_shelf_list) return;
+    ytm_shelves_t * tab = shown_tab_shelves();
+    const yt_page_view_t * v = shown_shelf_view();
+    int32_t scroll_y = keep_scroll ? lv_obj_get_scroll_y(ytm_shelf_list) : 0;
+    /* The list borrows labels and second lines: give it the new ones before
+     * the old ones are freed. */
+    compact_list_set_items(ytm_shelf_list, NULL, 0);
+    free(ytm_rows);
+    free(ytm_shelf_subtitles);
+    ytm_rows = NULL;
+    ytm_shelf_subtitles = NULL;
+    ytm_row_count = 0;
+    ytm_shelf_shown = v;
+    if (!v) return;
+
+    bool home = tab == &ytm_home;
+    bool error = tab && tab->state == YTM_LOAD_ERROR;
+    int max = (home ? 1 : 0) + (int) yt_page_view_rows(v) + (error ? 1 : 0);
+    if (max == 0) return;
+    ytm_rows = calloc((size_t) max, sizeof(*ytm_rows));
+    compact_list_item_t * items = calloc((size_t) max, sizeof(*items));
+    /* Second lines: at most YT_ROW_SUBTITLE_MAX each, packed. */
+    size_t subs_cap = (size_t) max * 96, subs_len = 0;
+    ytm_shelf_subtitles = malloc(subs_cap);
+    if (!ytm_rows || !items || !ytm_shelf_subtitles) {
+        free(items);
+        free(ytm_rows);
+        free(ytm_shelf_subtitles);
+        ytm_rows = NULL;
+        ytm_shelf_subtitles = NULL;
+        show_browse_failure("internal");
+        return;
+    }
+    const lv_font_t * font = gui_theme_font(GUI_FONT_ROLE_SUBTEXT);
+    int32_t width = LIST_ROW_WIDTH_WIDE - (YTM_ART_INSET + YTM_ART_PX + YTM_ART_INSET) - YTM_TRAILING_PAD;
+    int n = 0;
+    if (home) {
+        ytm_rows[n].kind = YTM_ROW_REFRESH;
+        items[n].label = TR("Refresh");
+        items[n].is_action = true;
+        n++;
+    }
+    for (int r = 0; r < (int) yt_page_view_rows(v); r++) {
+        yt_page_row_t row;
+        if (!yt_page_view_row(v, (size_t) r, &row)) break;
+        size_t page_index = 0;
+        while (page_index < v->page_count && v->pages[page_index] != row.page) page_index++;
+        if (!row.item) {
+            ytm_rows[n] = (ytm_row_t) { YTM_ROW_HEADER, (uint8_t) page_index, (uint16_t) row.shelf };
+            items[n].label = yt_page_str(row.page, row.page->shelves[row.shelf].title);
+            n++;
+            continue;
+        }
+        const yt_page_item_t * it = row.item;
+        ytm_rows[n] = (ytm_row_t) { YTM_ROW_ITEM, (uint8_t) page_index, (uint16_t) row.item_index };
+        items[n].label = yt_page_str(row.page, it->title);
+        items[n].identity = n + 1;
+        items[n].artwork_key = (uint64_t) n + 1;
+        char sub[YT_ROW_SUBTITLE_MAX];
+        sub[0] = '\0';
+        if (it->type == YT_ITEM_SONG) {
+            ytm_song_line_t line = { yt_page_str(row.page, it->artist), yt_page_str(row.page, it->album),
+                                     it->duration_s > 0 ? (uint32_t) it->duration_s * 1000u : 0 };
+            fit_subtitle(sub, sizeof(sub), &line, font, width);
+            items[n].trailing_asset = YTM_MORE_ICON;
+        } else if (it->type != YT_ITEM_CATEGORY) {
+            const char * word = it->type == YT_ITEM_ALBUM ? TR("Album")
+                                : it->type == YT_ITEM_PLAYLIST ? TR("Playlist")
+                                                               : TR("Artist");
+            yt_row_page_subtitle(sub, sizeof(sub), word, yt_page_str(row.page, it->subtitle));
+        }
+        size_t len = strlen(sub);
+        if (len > 0 && subs_len + len + 1 > subs_cap) {
+            size_t cap = subs_cap * 2 + len + 1;
+            char * grown = realloc(ytm_shelf_subtitles, cap);
+            if (grown) {
+                ytm_shelf_subtitles = grown;
+                subs_cap = cap;
+            } else {
+                len = 0;
+            }
+        }
+        if (len > 0) {
+            /* An offset for now: the block may still move. */
+            memcpy(ytm_shelf_subtitles + subs_len, sub, len + 1);
+            items[n].subtitle = (const char *) (uintptr_t) (subs_len + 1);
+            subs_len += len + 1;
+        }
+        n++;
+    }
+    for (int k = 0; k < n; k++) {
+        if (items[k].subtitle) items[k].subtitle = ytm_shelf_subtitles + ((uintptr_t) items[k].subtitle - 1);
+    }
+    if (error) {
+        static char retry[96];
+        snprintf(retry, sizeof(retry), TR("Could not load (%s). Tap to try again"), tab->error);
+        ytm_rows[n].kind = YTM_ROW_RETRY;
+        items[n].label = retry;
+        items[n].is_action = true;
+        n++;
+    }
+    ytm_row_count = n;
+    compact_list_set_items(ytm_shelf_list, items, n);
+    free(items);
+    if (scroll_y > 0) lv_obj_scroll_to_y(ytm_shelf_list, scroll_y, LV_ANIM_OFF);
+}
+
+/* The page and item of shelf row index, or NULL. */
+static const yt_page_t * row_item(int index, size_t * item) {
+    if (index < 0 || index >= ytm_row_count || ytm_rows[index].kind != YTM_ROW_ITEM || !ytm_shelf_shown) return NULL;
+    const ytm_row_t * r = &ytm_rows[index];
+    if (r->page >= ytm_shelf_shown->page_count) return NULL;
+    const yt_page_t * page = ytm_shelf_shown->pages[r->page];
+    if (r->index >= page->item_count) return NULL;
+    *item = r->index;
+    return page;
+}
+
+/* A song of a shelf: the queue is that shelf's songs from it to the last,
+ * and it plays (spec «Reproducir desde un estante»). */
+static void play_shelf_song(const yt_page_t * page, size_t item) {
+    static uint16_t order[YT_PAGE_MAX_ITEMS];
+    yt_page_queue_t q = { .page = page, .order = order };
+    q.count = yt_page_queue_from(page, item, false, order, YT_PAGE_MAX_ITEMS);
+    if (q.count == 0) return;
+    if (!gui_plugin_play_remote_tracks_from((int) q.count, 0, yt_page_queue_fill, &q)) {
+        stream_log_ytm_ui("play_from", 0, "no_memory");
+        show_browse_failure("no_memory");
+        return;
+    }
+    stream_log_ytm_ui("play_from", (int) q.count, "ok");
+}
+
+static void shelf_click_cb(int index) {
+    if (index < 0 || index >= ytm_row_count) return;
+    ytm_shelves_t * tab = shown_tab_shelves();
+    switch (ytm_rows[index].kind) {
+        case YTM_ROW_REFRESH:
+            if (tab && !tab->ticket) {
+                tab->refreshing = tab->state == YTM_LOAD_DONE;
+                request_tab(tab);
+            }
+            return;
+        case YTM_ROW_RETRY:
+            if (tab && !tab->ticket) request_tab(tab);
+            return;
+        case YTM_ROW_ITEM: {
+            size_t item;
+            const yt_page_t * page = row_item(index, &item);
+            if (page && page->items[item].type == YT_ITEM_SONG) play_shelf_song(page, item);
+            return;
+        }
+        default:
+            return;
+    }
+}
+
+static void shelf_menu_cb(int index) {
+    size_t item;
+    const yt_page_t * page = row_item(index, &item);
+    if (!page || page->items[item].type != YT_ITEM_SONG || !ytm_menu || !ytm_menu_backdrop) return;
+    open_row_menu(-1);
+    ytm_menu_page = page;
+    ytm_menu_item = item;
 }
 
 static void search_click_cb(lv_event_t * e) {
@@ -607,6 +1070,23 @@ static void results_back_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
     ytm_view = YTM_VIEW_TAB;
     show_view();
+}
+
+/* Home's and Explore's shelves: the shared list. Tap plays a song or opens
+ * a page; the "…" of a song and a long press open its menu. */
+static lv_obj_t * build_shelf_panel(lv_obj_t * parent) {
+    lv_obj_t * panel = lv_obj_create(parent);
+    lv_obj_remove_style_all(panel);
+    lv_obj_set_size(panel, lv_pct(100), lv_pct(100));
+    lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    ytm_shelf_list =
+        build_compact_list_widget(panel, NULL, 0, shelf_click_cb, shelf_menu_cb, LIST_ROW_WIDTH_WIDE, false, NULL);
+    compact_list_set_row_height(ytm_shelf_list, MUSIC_LIST_ROW_HEIGHT);
+    compact_list_set_row_decorator(ytm_shelf_list, shelf_row_decorator, NULL);
+    compact_list_set_trailing_click(ytm_shelf_list, shelf_menu_cb);
+    lv_obj_set_size(ytm_shelf_list, lv_pct(100), content_height());
+    lv_obj_align(ytm_shelf_list, LV_ALIGN_TOP_MID, 0, 0);
+    return panel;
 }
 
 static lv_obj_t * build_tabs(lv_obj_t * scr) {
@@ -719,7 +1199,9 @@ static lv_obj_t * build_ytmusic_screen(void) {
     lv_obj_set_size(ytm_content, lv_pct(100), content_height());
     lv_obj_set_pos(ytm_content, 0, content_top());
     lv_obj_remove_flag(ytm_content, LV_OBJ_FLAG_SCROLLABLE);
-    for (int i = 0; i < YTM_TAB_COUNT; i++) ytm_panels[i] = build_coming_soon_panel(ytm_content);
+    /* Home and Explore share the shelf panel; Library is still coming. */
+    ytm_panels[2] = build_coming_soon_panel(ytm_content);
+    ytm_shelf_panel = build_shelf_panel(ytm_content);
     ytm_results_view = build_results_view(ytm_content);
 
     ytm_status = lv_label_create(scr);
@@ -746,6 +1228,15 @@ void gui_ytmusic_init(void) {
     } else {
         yt_search_mailbox_reopen(&ytm_mailbox);
     }
+    if (!ytm_content_mailbox_ready) {
+        yt_mailbox_init(&ytm_content_mailbox, free_page_payload);
+        ytm_content_mailbox_ready = true;
+    } else {
+        yt_mailbox_reopen(&ytm_content_mailbox);
+    }
+    memset(&ytm_home, 0, sizeof(ytm_home));
+    memset(&ytm_explore, 0, sizeof(ytm_explore));
+    ytm_browsing = false;
     yt_results_init(&ytm_results);
     ytm_query[0] = '\0';
     ytm_searching = false;
@@ -765,6 +1256,14 @@ void gui_ytmusic_teardown(void) {
     }
     ytm_searching = false;
     if (ytm_mailbox_ready) yt_search_mailbox_close(&ytm_mailbox);
+    /* The same for a content request (spec «Recarga de la interfaz durante
+     * un pedido de contenido»). */
+    if (ytm_browsing) {
+        yt_resolver_cancel(ytm_browse_gen);
+        yt_resolver_wait_ended(ytm_browse_gen);
+    }
+    ytm_browsing = false;
+    if (ytm_content_mailbox_ready) yt_mailbox_close(&ytm_content_mailbox);
     if (ytm_mini_timer) lv_timer_delete(ytm_mini_timer);
     ytm_mini_timer = NULL;
     ytm_mini = ytm_mini_title = ytm_mini_artist = ytm_mini_play = NULL;
@@ -780,6 +1279,19 @@ void gui_ytmusic_teardown(void) {
     yt_results_free(&ytm_results);
     free(ytm_subtitles);
     ytm_subtitles = NULL;
+    free(ytm_rows);
+    free(ytm_shelf_subtitles);
+    ytm_rows = NULL;
+    ytm_shelf_subtitles = NULL;
+    ytm_row_count = 0;
+    ytm_shelf_shown = NULL;
+    yt_page_view_clear(&ytm_home.view);
+    yt_page_view_clear(&ytm_explore.view);
+    memset(&ytm_home, 0, sizeof(ytm_home));
+    memset(&ytm_explore, 0, sizeof(ytm_explore));
+    ytm_menu_page = NULL;
+    ytm_shelf_panel = NULL;
+    ytm_shelf_list = NULL;
     ytm_screen = NULL;
     ytm_content = NULL;
     ytm_results_view = NULL;
@@ -804,4 +1316,7 @@ void poll_ytmusic(void) {
     if (!ytm_screen) return;
     sync_mini_timer();
     if (ytm_searching) take_search_result();
+    if (ytm_browsing) take_browse_result();
+    /* Home asks for its shelves the first time the screen is on screen. */
+    load_shown_tab();
 }
