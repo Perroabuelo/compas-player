@@ -34,6 +34,48 @@ size_t yt_row_cut(char * out, size_t size, const char * text) {
     return utf8_truncate_safe_bounded(out, size, text ? text : "", text ? strlen(text) : 0);
 }
 
+/* U+2022 BULLET between spaces: YouTube's separator. */
+#define YT_SEP " \xE2\x80\xA2 "
+#define YT_SEP_LEN 5
+
+/* True when s starts with one of YouTube's type words and its separator. */
+static bool starts_with_type(const char * s) {
+    static const char * const types[] = {"Album", "Single", "EP", "Playlist", "Artist", "Song", "Video"};
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
+        size_t n = strlen(types[i]);
+        if (strncmp(s, types[i], n) == 0 && strncmp(s + n, YT_SEP, YT_SEP_LEN) == 0) return true;
+    }
+    return false;
+}
+
+size_t yt_row_page_subtitle(char * out, size_t size, const char * kind, const char * subtitle) {
+    if (!out || size == 0) return 0;
+    char line[YT_ROW_SUBTITLE_MAX * 2];
+    size_t n = 0;
+    const char * sub = subtitle ? subtitle : "";
+    if (kind && kind[0] && !starts_with_type(sub)) {
+        n = (size_t) snprintf(line, sizeof(line), "%s", kind);
+        if (n >= sizeof(line)) n = sizeof(line) - 1;
+        if (sub[0] && n + SEP_LEN < sizeof(line)) {
+            memcpy(line + n, SEP, SEP_LEN);
+            n += SEP_LEN;
+        }
+    }
+    /* YouTube's text, with each " • " as " · " (one byte shorter). */
+    for (const char * p = sub; *p && n + 1 < sizeof(line);) {
+        if (strncmp(p, YT_SEP, YT_SEP_LEN) == 0) {
+            if (n + SEP_LEN >= sizeof(line)) break;
+            memcpy(line + n, SEP, SEP_LEN);
+            n += SEP_LEN;
+            p += YT_SEP_LEN;
+        } else {
+            line[n++] = *p++;
+        }
+    }
+    line[n] = '\0';
+    return yt_row_cut(out, size, line);
+}
+
 size_t yt_row_subtitle(char * out, size_t size, const char * artist, const char * album, uint32_t duration_ms) {
     if (!out || size == 0) return 0;
     char dur[16];

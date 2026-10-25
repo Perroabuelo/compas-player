@@ -28,4 +28,14 @@ size_t yt_row_subtitle(char * out, size_t size, const char * artist, const char 
  * UTF-8 character that fits. Returns the length. */
 size_t yt_row_cut(char * out, size_t size, const char * text);
 
+/* The second line of an album, a playlist or an artist of a shelf
+ * (youtube-music-browse D5): kind (the screen's word, "Album" or "Álbum")
+ * and what YouTube gives, joined by " · ", with YouTube's own " • " turned
+ * into " · ". When YouTube's text already starts with the type ("Album",
+ * "Single", "EP", "Playlist", "Artist", "Song" or "Video", followed by
+ * " • "), kind is left out, so it does not show twice. Cut at a UTF-8
+ * character boundary. Returns the length. A song uses yt_row_subtitle(), a
+ * category has no second line. */
+size_t yt_row_page_subtitle(char * out, size_t size, const char * kind, const char * subtitle);
+
 #endif /* YT_ROW_FORMAT_H */
