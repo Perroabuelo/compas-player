@@ -65,6 +65,36 @@ bool remote_track_meta_set_all(const remote_track_meta_t * entries, int count) {
     return true;
 }
 
+bool remote_track_meta_set_all_from(int count, remote_track_fill_fn fill, void * ctx) {
+    if (count < 0) count = 0;
+    if (count > REMOTE_TRACK_MAX_ENTRIES) count = REMOTE_TRACK_MAX_ENTRIES;
+    if (count > 0 && !fill) return false;
+
+    remote_track_meta_t * new_table = NULL;
+    if (count > 0) {
+        new_table = malloc(sizeof(remote_track_meta_t) * (size_t) count);
+        if (!new_table) return false;
+        char key[256];
+        for (int i = 0; i < count; i++) {
+            /* All or nothing, like remote_track_meta_set_all(). */
+            if (!fill(ctx, i, &new_table[i]) ||
+                !remote_track_make_key(new_table[i].provider, new_table[i].track_id, key, sizeof(key))) {
+                free(new_table);
+                return false;
+            }
+        }
+    }
+
+    pthread_mutex_lock(&remote_track_mutex);
+    remote_track_meta_t * old_table = remote_track_table;
+    remote_track_table = new_table;
+    remote_track_table_count = new_table ? count : 0;
+    pthread_mutex_unlock(&remote_track_mutex);
+    /* After the swap, outside the lock: see remote_track_meta_set_all(). */
+    free(old_table);
+    return true;
+}
+
 static bool key_kept(const char * key, const char * const * keep_keys, int keep_count) {
     for (int i = 0; i < keep_count; i++) {
         if (keep_keys[i] && strcmp(keep_keys[i], key) == 0) return true;

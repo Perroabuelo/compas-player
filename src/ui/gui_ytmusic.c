@@ -391,22 +391,24 @@ static void row_decorator(lv_obj_t * list, lv_obj_t * row, lv_obj_t * image, int
     lv_obj_remove_flag(image, LV_OBJ_FLAG_HIDDEN);
 }
 
+/* Entry i of the queue for play_from(): result from + i. */
+static bool fill_queue_entry(void * ctx, int i, remote_track_meta_t * out) {
+    size_t from = (size_t) (uintptr_t) ctx;
+    return yt_results_song_to_track(&ytm_results.songs[from + (size_t) i], out);
+}
+
 /* Tap: the queue becomes the loaded results from this one to the last,
- * and this one plays (D6). No page is asked for. */
+ * and this one plays (D6). No page is asked for. The entries (a few KB
+ * each) go straight into the player's table: with 200 results a separate
+ * array doubled the peak on the R1 (task 6.3). */
 static void play_from(int index) {
-    size_t n = ytm_results.count - (size_t) index;
-    /* A few KB per entry: on the heap only until the player has copied it. */
-    remote_track_meta_t * tracks = malloc(sizeof(*tracks) * n);
-    size_t built = tracks ? yt_results_to_queue(&ytm_results, (size_t) index, tracks, n) : 0;
-    if (built == 0) {
-        free(tracks);
-        stream_log_ytm_ui("play_from", 0, tracks ? "invalid" : "no_memory");
-        show_search_failure(tracks ? "invalid" : "no_memory");
+    int n = (int) ytm_results.count - index;
+    if (!gui_plugin_play_remote_tracks_from(n, 0, fill_queue_entry, (void *) (uintptr_t) index)) {
+        stream_log_ytm_ui("play_from", 0, "no_memory");
+        show_search_failure("no_memory");
         return;
     }
-    gui_plugin_play_remote_tracks(tracks, (int) built, 0);
-    free(tracks);
-    stream_log_ytm_ui("play_from", (int) built, "ok");
+    stream_log_ytm_ui("play_from", n, "ok");
 }
 
 /* The row menu (D6), built once on the top layer. */

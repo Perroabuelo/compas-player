@@ -84,6 +84,16 @@ bool remote_track_path_is_remote(const char * path);
  * access from other threads is fine regardless. */
 bool remote_track_meta_set_all(const remote_track_meta_t * entries, int count);
 
+/* Writes entry index of a table being built; false aborts the build. */
+typedef bool (*remote_track_fill_fn)(void * ctx, int index, remote_track_meta_t * out);
+
+/* remote_track_meta_set_all() for entries produced one at a time (hiby-yt,
+ * youtube-music-screen): fill writes each entry straight into the new
+ * table, so a caller never holds a second copy of a large queue. Same
+ * all-or-nothing rule: when fill fails or an entry makes no valid key, the
+ * table stays as it was. Same cap and threading rules. */
+bool remote_track_meta_set_all_from(int count, remote_track_fill_fn fill, void * ctx);
+
 typedef enum {
     REMOTE_TRACK_APPEND_OK,
     REMOTE_TRACK_APPEND_INVALID,   /* provider/track_id make no valid key */

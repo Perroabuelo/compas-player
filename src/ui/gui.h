@@ -128,6 +128,11 @@ void gui_plugin_play_paths(const char * const * paths, int count, int start_inde
  * ReplayGain, artwork) is published for gui.c/audio.c to look up by that
  * key. Copies tracks itself; caller retains ownership of its own array. */
 void gui_plugin_play_remote_tracks(const remote_track_meta_t * tracks, int count, int start_index);
+/* hiby-yt: the same for entries produced one at a time by fill (see
+ * remote_track_meta_set_all_from()), so the caller holds no array of the
+ * whole queue. Returns false, with the queue unchanged, when fill fails, an
+ * entry is invalid or memory runs out. */
+bool gui_plugin_play_remote_tracks_from(int count, int start_index, remote_track_fill_fn fill, void * ctx);
 
 /* Shows the same transient toast used elsewhere in the app (e.g. "Added to
  * queue"). */

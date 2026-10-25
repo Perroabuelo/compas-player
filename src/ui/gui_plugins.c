@@ -645,6 +645,39 @@ void gui_plugin_play_remote_tracks(const remote_track_meta_t * tracks, int count
     on_file_selected(new_playlist, count, start_index);
 }
 
+/* hiby-yt (youtube-music-screen): gui_plugin_play_remote_tracks() without
+ * the caller's array. Each entry is filled once into a scratch entry for
+ * its playlist key and once into the remote-track table, so a large queue
+ * is never held twice. */
+bool gui_plugin_play_remote_tracks_from(int count, int start_index, remote_track_fill_fn fill, void * ctx) {
+    if (count <= 0 || !fill) return false;
+    if (count > REMOTE_TRACK_MAX_ENTRIES) count = REMOTE_TRACK_MAX_ENTRIES;
+    if (start_index < 0) start_index = 0;
+    if (start_index >= count) start_index = count - 1;
+
+    char ** new_playlist = calloc((size_t) count, sizeof(char *));
+    remote_track_meta_t * scratch = malloc(sizeof(*scratch));
+    bool ok = new_playlist && scratch;
+    for (int i = 0; ok && i < count; i++) {
+        char key[256];
+        ok = fill(ctx, i, scratch) && remote_track_make_key(scratch->provider, scratch->track_id, key, sizeof(key)) &&
+             (new_playlist[i] = strdup(key)) != NULL;
+    }
+    free(scratch);
+    if (ok) {
+        yt_queue_clear(); /* hiby-yt: no URL of the old queue is kept */
+        ok = remote_track_meta_set_all_from(count, fill, ctx);
+    }
+    if (!ok) {
+        for (int i = 0; new_playlist && i < count; i++) free(new_playlist[i]);
+        free(new_playlist);
+        return false;
+    }
+    clear_player_source();
+    on_file_selected(new_playlist, count, start_index);
+    return true;
+}
+
 void gui_plugin_show_toast(const char * msg, uint32_t duration_ms) {
     show_info_toast_for(msg, duration_ms);
 }
