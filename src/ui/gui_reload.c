@@ -97,6 +97,7 @@
 #include "gui_text_input.h"
 #include "gui_text_view.h"
 #include "gui_subsonic.h"
+#include "gui_ytmusic.h"
 #include "gui_library.h"
 #include "gui_network.h"
 #include "gui_settings.h"
@@ -176,6 +177,8 @@ static void gui_soft_reload_with_artwork(bool preserve_artwork,
     gui_text_view_teardown();
     reload_diag("gui_subsonic_teardown: before");
     gui_subsonic_teardown();
+    reload_diag("gui_ytmusic_teardown: before");
+    gui_ytmusic_teardown();
     reload_diag("gui_library_teardown: before");
     gui_library_teardown();
     reload_diag("gui_network_teardown: before");
@@ -238,6 +241,8 @@ static void gui_soft_reload_with_artwork(bool preserve_artwork,
     gui_stream_media_rebuild();
     reload_diag("gui_subsonic_init: before");
     gui_subsonic_init();
+    reload_diag("gui_ytmusic_init: before");
+    gui_ytmusic_init();
     reload_diag("gui_library_init: before");
     gui_library_init();
     reload_diag("gui_network_init: before");

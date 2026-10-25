@@ -25,6 +25,7 @@
 #include "gui_lyrics.h"
 #include "gui_track_info.h"
 #include "gui_subsonic.h"
+#include "gui_ytmusic.h"
 #include "assets.h"
 #include "backlight.h"
 #include "debug_log.h"
@@ -1450,6 +1451,7 @@ static void update_timer_cb(lv_timer_t * timer) {
     poll_dlna_control();
     poll_subsonic_connect();
     poll_subsonic_browse();
+    poll_ytmusic();
     poll_wifi_scan();
     poll_wifi_connect();
     poll_wifi_connect_saved();
@@ -2060,6 +2062,7 @@ void gui_init(uint32_t screen_width, uint32_t screen_height) {
      * Subsonic artist/album row has no local playlist_index to highlight
      * against. */
     gui_subsonic_init();
+    gui_ytmusic_init();
 
     /* Artists/Albums, unlike the rest of this file's ~25 build_subsonic_
      * list_screen() screens, can genuinely scale with library size --
