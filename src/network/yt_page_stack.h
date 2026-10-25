@@ -64,6 +64,8 @@ typedef struct {
     yt_page_view_t view; /* empty while loading, after an error, or released */
     bool released;       /* its page was freed for the limit: ask again */
     uint32_t ticket;     /* the request it waits for (yt_mailbox), 0 for none */
+    bool more;           /* that request is the next page of a playlist */
+    char error[24];      /* the class of its last failed request, "" for none */
     int32_t scroll;      /* scroll position saved when covered */
     void * ui;           /* the screen's objects for this page */
 } yt_page_entry_t;
