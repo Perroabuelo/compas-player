@@ -23,7 +23,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-24 22:22-0300\n"
+"POT-Creation-Date: 2026-10-25 18:31-0300\n"
 "PO-Revision-Date: 2026-10-01 00:00+0000\n"
 "Last-Translator: Machine draft\n"
 "Language-Team: Spanish\n"
@@ -2066,6 +2066,10 @@ msgstr "Apaga el DAC Bluetooth para reproducir música en este equipo"
 msgid "Exit USB DAC mode to play music on this device"
 msgstr "Sal del modo DAC USB para reproducir música en este equipo"
 
+#, c-format
+msgid "Radio unavailable (%s)"
+msgstr "Radio no disponible (%s)"
+
 msgid "Playback error: audio output failed"
 msgstr "Error de reproducción: falló la salida de audio"
 
@@ -3661,6 +3665,12 @@ msgstr "Inicio"
 msgid "Explore"
 msgstr "Explorar"
 
+msgid "Searching…"
+msgstr "Buscando…"
+
+msgid "Loading…"
+msgstr "Cargando…"
+
 msgid "Try again in a moment"
 msgstr "Intenta de nuevo en un momento"
 
@@ -3686,11 +3696,46 @@ msgstr "Reproducir a continuación"
 msgid "Add to queue"
 msgstr "Agregar a la cola"
 
+msgid "Start radio"
+msgstr "Iniciar radio"
+
+msgid "Go to artist"
+msgstr "Ir al artista"
+
+msgid "Go to album"
+msgstr "Ir al álbum"
+
 msgid "Search YouTube Music"
 msgstr "Buscar en YouTube Music"
 
 msgid "No results"
 msgstr "Sin resultados"
+
+#, c-format
+msgid "Could not load: %s"
+msgstr "No se pudo cargar: %s"
+
+msgid "Album"
+msgstr "Álbum"
+
+msgid "Playlist"
+msgstr "Playlist"
+
+msgid "Artist"
+msgstr "Artista"
+
+msgid "Category"
+msgstr "Categoría"
+
+#, c-format
+msgid "Could not load (%s). Tap to try again"
+msgstr "No se pudo cargar (%s). Toca para reintentar"
+
+msgid "Play"
+msgstr "Reproducir"
+
+msgid "Shuffle"
+msgstr "Aleatorio"
 
 msgid "Coming soon"
 msgstr "Próximamente"
@@ -3701,8 +3746,17 @@ msgstr "Buscar"
 msgid "Back to tab"
 msgstr "Volver a la pestaña"
 
-msgid "Searching…"
-msgstr "Buscando…"
+msgid "Radio on"
+msgstr "Radio activada"
+
+msgid "Radio off"
+msgstr "Radio desactivada"
+
+msgid "Radio when the queue ends: on"
+msgstr "Radio al terminar la cola: activada"
+
+msgid "Radio when the queue ends: off"
+msgstr "Radio al terminar la cola: desactivada"
 
 msgid "No items"
 msgstr "No hay elementos"

@@ -376,6 +376,8 @@ static void update_status(void) {
     if (!ytm_status) return;
     if (ytm_searching || ytm_browsing) {
         lv_label_set_text(ytm_status, ytm_searching ? TR("Searching…") : TR("Loading…"));
+        /* Under a page's header, not over it. */
+        lv_obj_align(ytm_status, LV_ALIGN_TOP_MID, 0, content_top() + page_header_height() + BOARD_SCALE_PX(4));
         lv_obj_remove_flag(ytm_status, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(ytm_status);
     } else {
@@ -1232,6 +1234,10 @@ static void refresh_shelf_list(bool keep_scroll) {
     ytm_shelf_subtitles = NULL;
     ytm_row_count = 0;
     ytm_shelf_shown = v;
+    /* While a view loads with nothing to show yet, the pill says so: the
+     * list would say it has no items. */
+    bool loading = (tab && tab->state == YTM_LOAD_LOADING) || (entry && entry->ticket && !entry->more);
+    set_hidden(ytm_shelf_list, loading && (!v || yt_page_view_rows(v) == 0) && tab != &ytm_home);
     if (!v) return;
 
     bool home = tab == &ytm_home;

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: compas-player\n"
 "Report-Msgid-Bugs-To: none\n"
-"POT-Creation-Date: 2026-10-24 22:22-0300\n"
+"POT-Creation-Date: 2026-10-25 18:31-0300\n"
 "PO-Revision-Date: 2026-10-11 13:10-0600\n"
 "Last-Translator: Machine draft; pending native review\n"
 "Language-Team: Dutch\n"
@@ -2000,6 +2000,10 @@ msgstr "Schakel Bluetooth-DAC uit om muziek op dit apparaat af te spelen"
 msgid "Exit USB DAC mode to play music on this device"
 msgstr "Verlaat de USB-DAC-modus om muziek op dit apparaat af te spelen"
 
+#, c-format
+msgid "Radio unavailable (%s)"
+msgstr ""
+
 msgid "Playback error: audio output failed"
 msgstr "Afspeelfout: audio-uitvoer mislukt"
 
@@ -3585,6 +3589,12 @@ msgstr ""
 msgid "Explore"
 msgstr ""
 
+msgid "Searching…"
+msgstr ""
+
+msgid "Loading…"
+msgstr ""
+
 msgid "Try again in a moment"
 msgstr ""
 
@@ -3615,10 +3625,45 @@ msgstr "Hierna afspelen"
 msgid "Add to queue"
 msgstr "Toevoegen aan wachtrij"
 
+msgid "Start radio"
+msgstr ""
+
+msgid "Go to artist"
+msgstr ""
+
+msgid "Go to album"
+msgstr ""
+
 msgid "Search YouTube Music"
 msgstr ""
 
 msgid "No results"
+msgstr ""
+
+#, c-format
+msgid "Could not load: %s"
+msgstr ""
+
+msgid "Album"
+msgstr ""
+
+msgid "Playlist"
+msgstr ""
+
+msgid "Artist"
+msgstr ""
+
+msgid "Category"
+msgstr ""
+
+#, c-format
+msgid "Could not load (%s). Tap to try again"
+msgstr ""
+
+msgid "Play"
+msgstr ""
+
+msgid "Shuffle"
 msgstr ""
 
 msgid "Coming soon"
@@ -3631,7 +3676,16 @@ msgstr "maart"
 msgid "Back to tab"
 msgstr ""
 
-msgid "Searching…"
+msgid "Radio on"
+msgstr ""
+
+msgid "Radio off"
+msgstr ""
+
+msgid "Radio when the queue ends: on"
+msgstr ""
+
+msgid "Radio when the queue ends: off"
 msgstr ""
 
 msgid "No items"
