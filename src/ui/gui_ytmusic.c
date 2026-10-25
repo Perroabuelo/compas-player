@@ -1658,6 +1658,9 @@ static void options_click_cb(lv_event_t * e) {
     ytm_options = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])), options_cancel_cb,
                                    &ytm_options_backdrop);
     if (!ytm_options || !ytm_options_backdrop) return;
+    /* The popup comes hidden (build_popup_surface()). */
+    lv_obj_remove_flag(ytm_options_backdrop, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(ytm_options, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(ytm_options_backdrop);
     lv_obj_move_foreground(ytm_options);
 }
