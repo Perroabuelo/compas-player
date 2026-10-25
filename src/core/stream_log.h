@@ -53,4 +53,16 @@ unsigned stream_log_next_sid(void);
 void stream_log_event(unsigned sid, const char * event, const char * fmt, ...)
     __attribute__((format(printf, 3, 4)));
 
+/* The fields of an action on the YouTube Music screen (hiby-yt, design D10
+ * of youtube-music-screen): "action=<action> count=<count> result=<result>".
+ * Only fixed words get in: action and result must be 1-23 characters of
+ * [a-z_] (an action such as play_from, a result such as ok or queue_full);
+ * anything else is written as "invalid", so a query, a title or a URL can
+ * never reach the line. A negative count is written as 0. Returns the
+ * length. */
+size_t stream_log_ytm_ui_fields(char * out, size_t size, const char * action, int count, const char * result);
+
+/* Writes the event=ytm_ui line with the fields above, with a new sid. */
+void stream_log_ytm_ui(const char * action, int count, const char * result);
+
 #endif /* STREAM_LOG_H */

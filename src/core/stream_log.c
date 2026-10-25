@@ -128,3 +128,29 @@ void stream_log_event(unsigned sid, const char * event, const char * fmt, ...) {
 out:
     pthread_mutex_unlock(&stream_log_mutex);
 }
+
+static const char * ytm_ui_word(const char * w) {
+    size_t n = 0;
+    if (!w) return "invalid";
+    for (; w[n]; n++) {
+        if (!((w[n] >= 'a' && w[n] <= 'z') || w[n] == '_') || n >= 23) return "invalid";
+    }
+    return n ? w : "invalid";
+}
+
+size_t stream_log_ytm_ui_fields(char * out, size_t size, const char * action, int count, const char * result) {
+    if (!out || size == 0) return 0;
+    int n = snprintf(out, size, "action=%s count=%d result=%s", ytm_ui_word(action), count > 0 ? count : 0,
+                     ytm_ui_word(result));
+    if (n < 0) {
+        out[0] = '\0';
+        return 0;
+    }
+    return (size_t) n < size ? (size_t) n : size - 1;
+}
+
+void stream_log_ytm_ui(const char * action, int count, const char * result) {
+    char fields[96];
+    stream_log_ytm_ui_fields(fields, sizeof(fields), action, count, result);
+    stream_log_event(stream_log_next_sid(), "ytm_ui", "%s", fields);
+}
