@@ -33,38 +33,44 @@ typedef struct {
     yt_owner_t owner;
     int cancel_pipe[2]; /* [1] written by yt_resolver_cancel() */
     atomic_bool cancelled;
-    bool preempted; /* cancelled by a search */
+    bool preempted;           /* cancelled by preempted_by, which goes first */
+    yt_owner_t preempted_by;
 
     /* Set before the thread starts. */
     char video_id[YT_RESOLVER_VIDEO_ID_LEN + 1];
     bool retry;
     yt_resolver_done_fn done;
     void * done_arg;
-    /* A search: its request line (heap, wiped and freed by the worker). */
+    /* A search or a content page (a line job): its request line (heap,
+     * wiped and freed by the worker), and the page's kind. */
     char * request;
     size_t request_len;
-    yt_search_done_fn search_done;
+    yt_browse_kind_t kind;
+    yt_search_done_fn line_done;
 
     /* Worker only, until done returns. */
     yt_resolver_result_t result;
 } resolve_job_t;
 
-/* A search waiting for the prefetch it cancelled to be reaped (under
- * lock). It counts as a running search for every other request. */
+/* A search or a content page waiting for the prefetch or radio it
+ * cancelled to be reaped (under lock). It counts as running for every
+ * other request. */
 typedef struct {
     bool active;
     bool cancelled;
     uint16_t generation;
+    yt_owner_t owner;
+    yt_browse_kind_t kind;
     char * request;
     size_t request_len;
     yt_search_done_fn done;
     void * done_arg;
-} pending_search_t;
+} pending_line_t;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ended = PTHREAD_COND_INITIALIZER;
 static resolve_job_t job = { .cancel_pipe = { -1, -1 } };
-static pending_search_t pending;
+static pending_line_t pending;
 static uint16_t generations;
 /* The last finished resolution, under lock, for the requests waiting on
  * it (a new start replaces job, not this). */
@@ -73,6 +79,7 @@ static yt_resolver_result_t last;
 static const char * resolver_path = YT_RESOLVER_PATH;
 static int timeout_ms = YT_RESOLVER_TIMEOUT_MS;
 static int search_timeout_ms = YT_SEARCH_PROC_TIMEOUT_MS;
+static int browse_timeout_ms = YT_BROWSE_PROC_TIMEOUT_MS;
 
 #ifdef HOST_BUILD
 void yt_resolver_set_test_overrides(const char * path, int ms) {
@@ -82,6 +89,10 @@ void yt_resolver_set_test_overrides(const char * path, int ms) {
 
 void yt_resolver_set_search_test_timeout(int ms) {
     search_timeout_ms = ms > 0 ? ms : YT_SEARCH_PROC_TIMEOUT_MS;
+}
+
+void yt_resolver_set_browse_test_timeout(int ms) {
+    browse_timeout_ms = ms > 0 ? ms : YT_BROWSE_PROC_TIMEOUT_MS;
 }
 #endif
 
@@ -254,22 +265,39 @@ static const char * owner_name(yt_owner_t owner) {
         case YT_OWNER_PREFETCH: return "prefetch";
         case YT_OWNER_REFRESH: return "refresh";
         case YT_OWNER_SEARCH: return "search";
+        case YT_OWNER_BROWSE: return "browse";
+        case YT_OWNER_RADIO: return "radio";
         default: return "-";
     }
 }
 
-static uint16_t start_search_locked(uint16_t generation, char * request, size_t request_len, yt_search_done_fn done,
-                                    void * arg);
+/* The event=search or event=browse line of a line job. */
+static void log_line_job(yt_owner_t owner, yt_browse_kind_t kind, const char * cls, unsigned long long ms,
+                         const char * exit_desc) {
+    if (owner == YT_OWNER_SEARCH) {
+        stream_log_event(stream_log_next_sid(), "search", "class=%s ms=%llu exit=%s", cls, ms, exit_desc);
+    } else {
+        const char * name = yt_browse_kind_name(kind);
+        stream_log_event(stream_log_next_sid(), "browse", "kind=%s class=%s ms=%llu exit=%s", name ? name : "-", cls,
+                         ms, exit_desc);
+    }
+}
 
-/* Under lock, after a job ended: starts the search that was waiting for
- * it. A search cancelled while it waited never starts: its done call runs
- * here, before the waiters of its generation wake up, so it cannot land on
- * a later job of the caller. done callbacks do not take this lock. */
+static uint16_t start_line_locked(uint16_t generation, yt_owner_t owner, yt_browse_kind_t kind, char * request,
+                                  size_t request_len, yt_search_done_fn done, void * arg);
+
+/* Under lock, after a job ended: starts the search or page that was
+ * waiting for it. One cancelled while it waited never starts: its done call
+ * runs here, before the waiters of its generation wake up, so it cannot
+ * land on a later job of the caller. done callbacks do not take this
+ * lock. */
 static void start_pending_locked(void) {
     if (!pending.active) return;
-    pending_search_t p = pending;
+    pending_line_t p = pending;
     memset(&pending, 0, sizeof(pending));
-    if (!p.cancelled && start_search_locked(p.generation, p.request, p.request_len, p.done, p.done_arg)) return;
+    if (!p.cancelled &&
+        start_line_locked(p.generation, p.owner, p.kind, p.request, p.request_len, p.done, p.done_arg))
+        return;
     wipe_free(p.request, p.request_len);
     yt_search_result_t res = { .cancelled = p.cancelled, .output = "", .output_len = 0 };
     if (!p.cancelled) {
@@ -277,7 +305,7 @@ static void start_pending_locked(void) {
         res.fail_detail = "spawn_failed";
     }
     set_log_class(res.cls, sizeof(res.cls), res.cancelled, res.fail_class, "");
-    stream_log_event(stream_log_next_sid(), "search", "class=%s ms=0 exit=-", res.cls);
+    log_line_job(p.owner, p.kind, res.cls, 0, "-");
     if (p.done) p.done(&res, p.done_arg);
 }
 
@@ -307,9 +335,10 @@ static void * resolve_worker(void * arg) {
     res->preempted = res->cancelled && j->preempted;
     pthread_mutex_unlock(&lock);
     set_log_class(res->cls, sizeof(res->cls), res->cancelled, res->fail_class, res->output);
-    stream_log_event(stream_log_next_sid(), "resolve", "video_id=%s stage=%s cache=miss%s class=%s%s ms=%llu exit=%s",
+    stream_log_event(stream_log_next_sid(), "resolve", "video_id=%s stage=%s cache=miss%s class=%s%s%s ms=%llu exit=%s",
                      j->video_id, owner_name(j->owner), j->retry ? " retry=1" : "", res->cls,
-                     res->preempted ? " reason=search" : "", (unsigned long long) (now_ms() - start), exit_desc);
+                     res->preempted ? " reason=" : "", res->preempted ? owner_name(j->preempted_by) : "",
+                     (unsigned long long) (now_ms() - start), exit_desc);
     if (j->done) j->done(res, j->done_arg);
 
     pthread_mutex_lock(&lock);
@@ -320,22 +349,28 @@ static void * resolve_worker(void * arg) {
     return NULL;
 }
 
-static void * search_worker(void * arg) {
+/* A search (--search) or a content page (--browse): the request on stdin,
+ * one line back in a buffer taken here and freed after done. */
+static void * line_worker(void * arg) {
     resolve_job_t * j = arg;
     uint64_t start = now_ms();
     char exit_buf[24];
     const char * exit_desc = "-";
+    bool search = j->owner == YT_OWNER_SEARCH;
+    size_t out_max = search ? YT_SEARCH_PROC_OUTPUT_MAX : YT_BROWSE_PROC_OUTPUT_MAX;
+    int limit_ms = search ? search_timeout_ms : browse_timeout_ms;
     yt_search_result_t res = { 0 };
-    child_io_t io = { .out = malloc(YT_SEARCH_PROC_OUTPUT_MAX + 1), .out_max = YT_SEARCH_PROC_OUTPUT_MAX };
+    child_io_t io = { .out = malloc(out_max + 1), .out_max = out_max };
     if (io.out) {
-        char * argv[] = { (char *) resolver_path, (char *) "--search", NULL };
-        exit_desc = run_child(j, argv, j->request, j->request_len, start + (uint64_t) search_timeout_ms, &io, exit_buf,
+        char * argv[] = { (char *) resolver_path, (char *) (search ? "--search" : "--browse"), NULL };
+        exit_desc = run_child(j, argv, j->request, j->request_len, start + (uint64_t) limit_ms, &io, exit_buf,
                               sizeof(exit_buf));
     } else {
         io.fail_class = "internal";
         io.fail_detail = "oom";
     }
-    /* The query and the token go no further than the child's stdin. */
+    /* The query, the ids and the token go no further than the child's
+     * stdin. */
     wipe_free(j->request, j->request_len);
     j->request = NULL;
     res.output = io.out ? io.out : "";
@@ -343,10 +378,12 @@ static void * search_worker(void * arg) {
     res.fail_class = io.fail_class;
     res.fail_detail = io.fail_detail;
     res.cancelled = atomic_load(&j->cancelled);
+    pthread_mutex_lock(&lock);
+    res.preempted = res.cancelled && j->preempted;
+    pthread_mutex_unlock(&lock);
     set_log_class(res.cls, sizeof(res.cls), res.cancelled, res.fail_class, res.output);
-    stream_log_event(stream_log_next_sid(), "search", "class=%s ms=%llu exit=%s", res.cls,
-                     (unsigned long long) (now_ms() - start), exit_desc);
-    if (j->search_done) j->search_done(&res, j->done_arg);
+    log_line_job(j->owner, j->kind, res.cls, (unsigned long long) (now_ms() - start), exit_desc);
+    if (j->line_done) j->line_done(&res, j->done_arg);
     free(io.out);
 
     pthread_mutex_lock(&lock);
@@ -402,29 +439,35 @@ static uint16_t start_locked(yt_owner_t owner, const char * video_id, bool retry
 }
 
 /* Under lock, with nothing running. On failure the caller keeps request. */
-static uint16_t start_search_locked(uint16_t generation, char * request, size_t request_len, yt_search_done_fn done,
-                                    void * arg) {
+static uint16_t start_line_locked(uint16_t generation, yt_owner_t owner, yt_browse_kind_t kind, char * request,
+                                  size_t request_len, yt_search_done_fn done, void * arg) {
     memset(&job, 0, sizeof(job));
     job.generation = generation;
-    job.owner = YT_OWNER_SEARCH;
+    job.owner = owner;
+    job.kind = kind;
     job.request = request;
     job.request_len = request_len;
-    job.search_done = done;
+    job.line_done = done;
     job.done_arg = arg;
-    if (spawn_job_locked(search_worker)) return generation;
+    if (spawn_job_locked(line_worker)) return generation;
     job.request = NULL;
     return 0;
 }
 
-/* Under lock: the owner that requests are decided against. A search
- * waiting for its prefetch to be reaped already counts as running. */
+/* Under lock: the owner that requests are decided against. A search or a
+ * page waiting for its prefetch or radio to be reaped already counts as
+ * running. */
 static yt_owner_t running_owner_locked(void) {
-    if (pending.active) return YT_OWNER_SEARCH;
+    if (pending.active) return pending.owner;
     return job.running ? job.owner : YT_OWNER_NONE;
 }
 
+static bool is_line_owner(yt_owner_t owner) {
+    return owner == YT_OWNER_SEARCH || owner == YT_OWNER_BROWSE || owner == YT_OWNER_RADIO;
+}
+
 uint16_t yt_resolver_start(yt_owner_t owner, const char * video_id, yt_resolver_done_fn done, void * arg) {
-    if (!yt_resolver_video_id_valid(video_id) || owner == YT_OWNER_SEARCH) return 0;
+    if (!yt_resolver_video_id_valid(video_id) || is_line_owner(owner)) return 0;
     pthread_mutex_lock(&lock);
     uint16_t generation = running_owner_locked() != YT_OWNER_NONE ? 0 : start_locked(owner, video_id, false, done, arg);
     pthread_mutex_unlock(&lock);
@@ -453,6 +496,44 @@ bool yt_resolver_cancel(uint16_t generation) {
     return cancelled;
 }
 
+/* Admits a line job (a search, a page or the radio) whose request line is
+ * in line (len bytes, wiped here), under yt_job_admit(). */
+static uint16_t start_line_job(yt_owner_t owner, yt_browse_kind_t kind, char * line, size_t len,
+                               yt_search_done_fn done, void * arg, const char ** why) {
+    char * request = malloc(len);
+    if (request) memcpy(request, line, len);
+    memset(line, 0, len);
+    if (!request) {
+        *why = "internal";
+        return 0;
+    }
+
+    uint16_t generation = 0;
+    pthread_mutex_lock(&lock);
+    switch (yt_job_admit(running_owner_locked(), job.video_id, owner, NULL)) {
+        case YT_REQ_START:
+            generation = start_line_locked(next_generation_locked(), owner, kind, request, len, done, arg);
+            if (!generation) *why = "internal";
+            break;
+        case YT_REQ_CANCEL_AND_START:
+            /* The prefetch's or the radio's worker starts this one once
+             * the running job is reaped (start_pending_locked()). */
+            job.preempted = true;
+            job.preempted_by = owner;
+            cancel_locked(job.generation);
+            generation = next_generation_locked();
+            pending = (pending_line_t) { .active = true, .generation = generation, .owner = owner, .kind = kind,
+                                         .request = request, .request_len = len, .done = done, .done_arg = arg };
+            break;
+        default:
+            *why = "busy";
+            break;
+    }
+    pthread_mutex_unlock(&lock);
+    if (!generation) wipe_free(request, len);
+    return generation;
+}
+
 uint16_t yt_resolver_start_search(const char * query, const char * token, yt_search_done_fn done, void * arg,
                                   const char ** why) {
     static const char * unused;
@@ -463,37 +544,22 @@ uint16_t yt_resolver_start_search(const char * query, const char * token, yt_sea
         *why = "bad_input";
         return 0;
     }
-    char * request = malloc(len);
-    if (request) memcpy(request, line, len);
-    memset(line, 0, sizeof(line));
-    if (!request) {
-        *why = "internal";
+    return start_line_job(YT_OWNER_SEARCH, YT_BROWSE_KIND_COUNT, line, len, done, arg, why);
+}
+
+uint16_t yt_resolver_start_browse(yt_owner_t owner, yt_browse_kind_t kind, const char * id, const char * params,
+                                  const char * token, yt_browse_done_fn done, void * arg, const char ** why) {
+    static const char * unused;
+    if (!why) why = &unused;
+    char line[YT_BROWSE_INPUT_MAX + 1];
+    size_t len = owner == YT_OWNER_BROWSE || (owner == YT_OWNER_RADIO && kind == YT_BROWSE_RELATED)
+                     ? yt_browse_input_line(line, sizeof(line), kind, id, params, token)
+                     : 0;
+    if (len == 0) {
+        *why = "bad_input";
         return 0;
     }
-
-    uint16_t generation = 0;
-    pthread_mutex_lock(&lock);
-    switch (yt_job_admit(running_owner_locked(), job.video_id, YT_OWNER_SEARCH, NULL)) {
-        case YT_REQ_START:
-            generation = start_search_locked(next_generation_locked(), request, len, done, arg);
-            if (!generation) *why = "internal";
-            break;
-        case YT_REQ_CANCEL_AND_START:
-            /* The prefetch's worker starts this search once the prefetch
-             * is reaped (start_pending_locked()). */
-            job.preempted = true;
-            cancel_locked(job.generation);
-            generation = next_generation_locked();
-            pending = (pending_search_t) { .active = true, .generation = generation, .request = request,
-                                           .request_len = len, .done = done, .done_arg = arg };
-            break;
-        default:
-            *why = "busy";
-            break;
-    }
-    pthread_mutex_unlock(&lock);
-    if (!generation) wipe_free(request, len);
-    return generation;
+    return start_line_job(owner, kind, line, len, done, arg, why);
 }
 
 /* Under lock: waits up to YT_RESOLVER_POLL_MS for a resolution to end. */
@@ -556,6 +622,12 @@ yt_resolver_outcome_t yt_resolver_request(yt_owner_t owner, const char * video_i
                 waiting_for = job.generation;
                 break;
             case YT_REQ_CANCEL_AND_START:
+                /* The radio gives way to the track that plays, and asks
+                 * again later without counting a try. */
+                if (job.owner == YT_OWNER_RADIO) {
+                    job.preempted = true;
+                    job.preempted_by = owner;
+                }
                 cancel_locked(job.generation);
                 wait_tick_locked();
                 break;

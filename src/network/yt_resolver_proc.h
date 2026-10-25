@@ -18,8 +18,17 @@
  * resolution leaves an event=resolve line in the stream log, with the
  * owner as stage (plugin, open, prefetch or refresh) and cache=miss; a
  * prefetch cancelled by a search adds reason=search. Every search leaves
- * an event=search line with its class, time and exit, never the query. */
+ * an event=search line with its class, time and exit, never the query.
+ *
+ * A content page (youtube-music-browse D4) runs the program with --browse
+ * and its checked request on stdin (yt_browse_input.h), for the user
+ * (YT_OWNER_BROWSE) or for the radio (YT_OWNER_RADIO, kind related). It
+ * leaves an event=browse line with its kind, class, time and exit, never an
+ * identifier. A prefetch or a radio stopped by a search or a page is
+ * preempted (reason=search or reason=browse in the log) and not counted as
+ * a try. */
 
+#include "yt_browse_input.h"
 #include "yt_resolve_policy.h"
 #include "yt_search_input.h"
 
@@ -42,6 +51,11 @@
  * which the program bounds to 68 KiB (search-youtube-music D2). */
 #define YT_SEARCH_PROC_TIMEOUT_MS 45000
 #define YT_SEARCH_PROC_OUTPUT_MAX (68 * 1024)
+/* A content page (spec youtube/content-browse): the same time limit, and
+ * its output line, which the program bounds to 256 KiB
+ * (youtube-music-browse D3). */
+#define YT_BROWSE_PROC_TIMEOUT_MS 45000
+#define YT_BROWSE_PROC_OUTPUT_MAX (256 * 1024)
 
 typedef struct {
     /* Set when there is no usable output to decode (fixed strings). */
@@ -106,6 +120,9 @@ typedef struct {
     const char * fail_class;
     const char * fail_detail;
     bool cancelled;
+    /* A radio request cancelled to make way for a search, a page, or the
+     * open of a track: it is asked again and not counted as a try. */
+    bool preempted;
     /* The class written to the log, as for a resolution. */
     char cls[24];
     /* The program's line (NUL-terminated), valid during the done call. */
@@ -127,11 +144,29 @@ typedef void (*yt_search_done_fn)(const yt_search_result_t * result, void * arg)
 uint16_t yt_resolver_start_search(const char * query, const char * token, yt_search_done_fn done, void * arg,
                                   const char ** why);
 
+/* A content page's result: the same as a search's, with the program's
+ * --browse line as output. */
+typedef yt_search_result_t yt_browse_result_t;
+typedef void (*yt_browse_done_fn)(const yt_browse_result_t * result, void * arg);
+
+/* Starts a content request of kind for owner (YT_OWNER_BROWSE, or
+ * YT_OWNER_RADIO for related) without waiting, under yt_job_admit(): a
+ * page the user asks for starts at once, or cancels a running prefetch or
+ * radio and starts as soon as that has been reaped; the radio starts only
+ * when nothing runs. id, params and token (NULL or "" for none) are what
+ * kind takes (yt_browse_fields_valid()). Returns its generation, or 0 with
+ * *why set to "bad_input" (nothing starts), "busy" (for the radio: try
+ * again later) or "internal". Thread-safe; never blocks on the child. */
+uint16_t yt_resolver_start_browse(yt_owner_t owner, yt_browse_kind_t kind, const char * id, const char * params,
+                                  const char * token, yt_browse_done_fn done, void * arg, const char ** why);
+
 #ifdef HOST_BUILD
 /* PC tests only: another resolver program and time limit (NULL/0: default). */
 void yt_resolver_set_test_overrides(const char * resolver_path, int timeout_ms);
 /* PC tests only: the search time limit (0: default). */
 void yt_resolver_set_search_test_timeout(int timeout_ms);
+/* PC tests only: the content time limit (0: default). */
+void yt_resolver_set_browse_test_timeout(int timeout_ms);
 #endif
 
 #endif /* YT_RESOLVER_PROC_H */
