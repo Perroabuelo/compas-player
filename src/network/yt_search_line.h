@@ -10,13 +10,14 @@
  * youtube/track-search):
  *
  *   {"ok":true,"results":[{"video_id","title","artist","album"?,
- *    "duration_s"},...],"continuation":"<token>"|null}
+ *    "duration_s","artist_id"?,"album_id"?},...],"continuation":"<token>"|null}
  *   {"ok":false,"class":"<class>","detail":"<detail>"}
  *
  * Anything else, or a line that breaks the limits the program keeps
  * (YT_SEARCH_LINE_MAX_SONGS songs, YT_SONG_TEXT_MAX bytes of text, a valid
  * token), is malformed. */
 
+#include "yt_browse_input.h"
 #include "yt_search_input.h"
 
 #include <stdbool.h>
@@ -39,6 +40,10 @@ typedef struct {
     char artist[YT_SONG_TEXT_MAX + 1];
     char album[YT_SONG_TEXT_MAX + 1]; /* "" when the result has none */
     uint32_t duration_ms;             /* 0 when unknown */
+    /* Pages of the artist and the album, for «Ir al artista» and «Ir al
+     * álbum» (youtube-music-browse D5); "" when the result has none. */
+    char artist_id[YT_BROWSE_ID_MAX + 1];
+    char album_id[YT_BROWSE_ID_MAX + 1];
 } yt_song_t;
 
 typedef struct {

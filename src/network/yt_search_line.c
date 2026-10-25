@@ -39,6 +39,15 @@ static bool copy_text(char * dst, const cJSON * item, bool may_be_empty) {
     return true;
 }
 
+/* An optional browse id: absent leaves dst "", anything but a valid id is
+ * malformed. */
+static bool copy_id(char * dst, const cJSON * item) {
+    if (!item) return true;
+    if (!cJSON_IsString(item) || !yt_browse_id_valid(item->valuestring)) return false;
+    strcpy(dst, item->valuestring);
+    return true;
+}
+
 static bool parse_song(const cJSON * r, yt_song_t * song) {
     if (!cJSON_IsObject(r)) return false;
     const cJSON * id = cJSON_GetObjectItemCaseSensitive(r, "video_id");
@@ -53,7 +62,8 @@ static bool parse_song(const cJSON * r, yt_song_t * song) {
     double d = dur->valuedouble;
     if (!(d >= 0 && d <= YT_SONG_DURATION_MAX_S) || d != (double) (uint32_t) d) return false;
     song->duration_ms = (uint32_t) d * 1000u;
-    return true;
+    return copy_id(song->artist_id, cJSON_GetObjectItemCaseSensitive(r, "artist_id")) &&
+           copy_id(song->album_id, cJSON_GetObjectItemCaseSensitive(r, "album_id"));
 }
 
 static yt_search_line_status_t parse_ok(const cJSON * root, yt_search_line_page_t * page) {
