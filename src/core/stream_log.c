@@ -154,3 +154,39 @@ void stream_log_ytm_ui(const char * action, int count, const char * result) {
     stream_log_ytm_ui_fields(fields, sizeof(fields), action, count, result);
     stream_log_event(stream_log_next_sid(), "ytm_ui", "%s", fields);
 }
+
+/* snprintf's length, cut to what fits in size. */
+static size_t fitted(char * out, size_t size, int n) {
+    if (n < 0) {
+        out[0] = '\0';
+        return 0;
+    }
+    return (size_t) n < size ? (size_t) n : size - 1;
+}
+
+size_t stream_log_ytm_ui_kind_fields(char * out, size_t size, const char * action, const char * kind, int count,
+                                     const char * result) {
+    if (!out || size == 0) return 0;
+    return fitted(out, size,
+                  snprintf(out, size, "action=%s kind=%s count=%d result=%s", ytm_ui_word(action), ytm_ui_word(kind),
+                           count > 0 ? count : 0, ytm_ui_word(result)));
+}
+
+void stream_log_ytm_ui_kind(const char * action, const char * kind, int count, const char * result) {
+    char fields[128];
+    stream_log_ytm_ui_kind_fields(fields, sizeof(fields), action, kind, count, result);
+    stream_log_event(stream_log_next_sid(), "ytm_ui", "%s", fields);
+}
+
+size_t stream_log_radio_fields(char * out, size_t size, const char * reason, int count, const char * result) {
+    if (!out || size == 0) return 0;
+    return fitted(out, size,
+                  snprintf(out, size, "reason=%s count=%d result=%s", ytm_ui_word(reason), count > 0 ? count : 0,
+                           ytm_ui_word(result)));
+}
+
+void stream_log_radio(const char * reason, int count, const char * result) {
+    char fields[96];
+    stream_log_radio_fields(fields, sizeof(fields), reason, count, result);
+    stream_log_event(stream_log_next_sid(), "radio", "%s", fields);
+}

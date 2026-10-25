@@ -65,4 +65,19 @@ size_t stream_log_ytm_ui_fields(char * out, size_t size, const char * action, in
 /* Writes the event=ytm_ui line with the fields above, with a new sid. */
 void stream_log_ytm_ui(const char * action, int count, const char * result);
 
+/* The same with the kind of page an action opened (youtube-music-browse
+ * D8: open_page with kind album, playlist, artist or category), checked
+ * like action: "action=<action> kind=<kind> count=<count> result=<result>". */
+size_t stream_log_ytm_ui_kind_fields(char * out, size_t size, const char * action, const char * kind, int count,
+                                     const char * result);
+void stream_log_ytm_ui_kind(const char * action, const char * kind, int count, const char * result);
+
+/* The fields of a radio request (spec youtube/radio-queue): "reason=<reason>
+ * count=<count> result=<result>", reason queue_end or start, count the
+ * tracks added, result ok or the class. Fixed words only, as above. */
+size_t stream_log_radio_fields(char * out, size_t size, const char * reason, int count, const char * result);
+
+/* Writes the event=radio line with those fields, with a new sid. */
+void stream_log_radio(const char * reason, int count, const char * result);
+
 #endif /* STREAM_LOG_H */
