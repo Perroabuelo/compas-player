@@ -656,3 +656,10 @@ bool yt_resolver_busy(void) {
     pthread_mutex_unlock(&lock);
     return running;
 }
+
+yt_owner_t yt_resolver_running_owner(void) {
+    pthread_mutex_lock(&lock);
+    yt_owner_t owner = running_owner_locked();
+    pthread_mutex_unlock(&lock);
+    return owner;
+}

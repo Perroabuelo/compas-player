@@ -115,6 +115,10 @@ void yt_resolver_wait_ended(uint16_t generation);
 /* True while a resolution or a search runs (or waits to start). */
 bool yt_resolver_busy(void);
 
+/* The owner of the job that runs or waits to start, YT_OWNER_NONE when
+ * the service is free («Iniciar radio» checks for a search or a page). */
+yt_owner_t yt_resolver_running_owner(void);
+
 typedef struct {
     /* Set when there is no usable output to decode (fixed strings). */
     const char * fail_class;

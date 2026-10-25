@@ -12,6 +12,7 @@
 #include "gui_theme.h"
 #include "i18n.h"
 #include "screen_builders.h"
+#include "settings.h"
 #include "stream_log.h"
 #include "yt_browse_line.h"
 #include "yt_mailbox.h"
@@ -547,7 +548,9 @@ static void play_from(int index) {
     stream_log_ytm_ui("play_from", n, "ok");
 }
 
-/* The row menu (D6), built once on the top layer. */
+/* The row menu (D6), on the top layer, built each time it opens: «Go to
+ * artist» and «Go to album» show only for a song with those pages
+ * (youtube-music-browse D6). */
 static lv_obj_t * ytm_menu;
 static lv_obj_t * ytm_menu_backdrop;
 static int ytm_menu_index = -1;
@@ -579,10 +582,30 @@ static bool menu_track(remote_track_meta_t * out) {
     return yt_results_song_to_track(&ytm_results.songs[ytm_menu_index], out);
 }
 
-static void open_row_menu(int index) {
-    if (!ytm_menu || !ytm_menu_backdrop) return;
+/* The artist's and the album's pages of the menu's song ("" for none). */
+static void menu_song_pages(const char ** artist_id, const char ** album_id) {
+    *artist_id = *album_id = "";
+    if (ytm_menu_page) {
+        if (!page_shown(ytm_menu_page) || ytm_menu_item >= ytm_menu_page->item_count) return;
+        const yt_page_item_t * it = &ytm_menu_page->items[ytm_menu_item];
+        *artist_id = yt_page_str(ytm_menu_page, it->artist_id);
+        *album_id = yt_page_str(ytm_menu_page, it->album_id);
+        return;
+    }
+    if (ytm_menu_index < 0 || ytm_menu_index >= (int) ytm_results.count) return;
+    *artist_id = ytm_results.songs[ytm_menu_index].artist_id;
+    *album_id = ytm_results.songs[ytm_menu_index].album_id;
+}
+
+static void build_row_menu(void);
+
+/* Opens the menu of result index, or of a shelf's song (page, item). */
+static void open_row_menu(int index, const yt_page_t * page, size_t item) {
     ytm_menu_index = index;
-    ytm_menu_page = NULL;
+    ytm_menu_page = page;
+    ytm_menu_item = item;
+    build_row_menu();
+    if (!ytm_menu || !ytm_menu_backdrop) return;
     lv_obj_remove_flag(ytm_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(ytm_menu, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(ytm_menu_backdrop);
@@ -627,13 +650,78 @@ static void menu_cancel_cb(lv_event_t * e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) hide_row_menu();
 }
 
+/* The queue of «Start radio»: the one song. */
+static bool fill_one_track(void * ctx, int i, remote_track_meta_t * out) {
+    if (i != 0) return false;
+    *out = *(const remote_track_meta_t *) ctx;
+    return true;
+}
+
+/* «Start radio» (spec youtube/radio-queue): busy while the user's search or
+ * a page runs, the queue unchanged; otherwise the song becomes the queue
+ * and plays, and the player asks for its related songs once it opened. */
+static void menu_radio_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_row_menu();
+    yt_owner_t running = yt_resolver_running_owner();
+    if (running == YT_OWNER_SEARCH || running == YT_OWNER_BROWSE) {
+        stream_log_ytm_ui("start_radio", 0, "busy");
+        show_info_toast(TR("Try again in a moment"));
+        return;
+    }
+    static remote_track_meta_t track; /* a few KB: kept off the LVGL stack */
+    if (!menu_track(&track)) {
+        stream_log_ytm_ui("start_radio", 0, "invalid");
+        return;
+    }
+    if (!gui_plugin_play_remote_tracks_from(1, 0, fill_one_track, &track)) {
+        stream_log_ytm_ui("start_radio", 0, "no_memory");
+        show_search_failure("no_memory");
+        return;
+    }
+    gui_player_youtube_radio_start(track.track_id);
+    stream_log_ytm_ui("start_radio", 1, "ok");
+}
+
+static void open_page(yt_browse_kind_t kind, const char * id, const char * params);
+
+/* «Go to artist» and «Go to album»: that page, on top of what shows. */
+static void menu_go_to(bool artist) {
+    hide_row_menu();
+    const char * artist_id, * album_id;
+    menu_song_pages(&artist_id, &album_id);
+    char id[YT_BROWSE_ID_MAX + 1];
+    snprintf(id, sizeof(id), "%s", artist ? artist_id : album_id);
+    if (id[0]) open_page(artist ? YT_BROWSE_ARTIST : YT_BROWSE_ALBUM, id, NULL);
+}
+
+static void menu_artist_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) menu_go_to(true);
+}
+
+static void menu_album_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) menu_go_to(false);
+}
+
+static void delete_row_menu(void) {
+    if (ytm_menu) lv_obj_delete(ytm_menu);
+    if (ytm_menu_backdrop) lv_obj_delete(ytm_menu_backdrop);
+    ytm_menu = ytm_menu_backdrop = NULL;
+}
+
 static void build_row_menu(void) {
-    const menu_popup_row_t rows[] = {
-        { TR("Play next"), menu_play_next_cb, false },
-        { TR("Add to queue"), menu_append_cb, false },
-        { TR("Cancel"), menu_cancel_cb, false, true },
-    };
-    ytm_menu = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])), menu_cancel_cb, &ytm_menu_backdrop);
+    delete_row_menu();
+    const char * artist_id, * album_id;
+    menu_song_pages(&artist_id, &album_id);
+    menu_popup_row_t rows[6];
+    int n = 0;
+    rows[n++] = (menu_popup_row_t) { TR("Play next"), menu_play_next_cb, false, false, NULL };
+    rows[n++] = (menu_popup_row_t) { TR("Add to queue"), menu_append_cb, false, false, NULL };
+    rows[n++] = (menu_popup_row_t) { TR("Start radio"), menu_radio_cb, false, false, NULL };
+    if (artist_id[0]) rows[n++] = (menu_popup_row_t) { TR("Go to artist"), menu_artist_cb, false, false, NULL };
+    if (album_id[0]) rows[n++] = (menu_popup_row_t) { TR("Go to album"), menu_album_cb, false, false, NULL };
+    rows[n++] = (menu_popup_row_t) { TR("Cancel"), menu_cancel_cb, false, true, NULL };
+    ytm_menu = build_menu_popup(rows, n, menu_cancel_cb, &ytm_menu_backdrop);
     hide_row_menu();
 }
 
@@ -646,7 +734,7 @@ static void row_click_cb(int index) {
 }
 
 static void row_menu_cb(int index) {
-    if (index >= 0 && index < (int) ytm_results.count) open_row_menu(index);
+    if (index >= 0 && index < (int) ytm_results.count) open_row_menu(index, NULL, 0);
 }
 
 /* On the search service's worker thread: decodes the line off the UI
@@ -1325,10 +1413,8 @@ static void shelf_click_cb(int index) {
 static void shelf_menu_cb(int index) {
     size_t item;
     const yt_page_t * page = row_item(index, &item);
-    if (!page || page->items[item].type != YT_ITEM_SONG || !ytm_menu || !ytm_menu_backdrop) return;
-    open_row_menu(-1);
-    ytm_menu_page = page;
-    ytm_menu_item = item;
+    if (!page || page->items[item].type != YT_ITEM_SONG) return;
+    open_row_menu(-1, page, item);
 }
 
 static void search_click_cb(lv_event_t * e) {
@@ -1521,12 +1607,65 @@ static lv_obj_t * build_results_view(lv_obj_t * parent) {
     return view;
 }
 
+/* The options (youtube-music-browse D6): the radio switch, saved with the
+ * settings. */
+static lv_obj_t * ytm_options;
+static lv_obj_t * ytm_options_backdrop;
+
+static void delete_options(void) {
+    if (ytm_options) lv_obj_delete(ytm_options);
+    if (ytm_options_backdrop) lv_obj_delete(ytm_options_backdrop);
+    ytm_options = ytm_options_backdrop = NULL;
+}
+
+static void hide_options(void) {
+    if (ytm_options) lv_obj_add_flag(ytm_options, LV_OBJ_FLAG_HIDDEN);
+    if (ytm_options_backdrop) lv_obj_add_flag(ytm_options_backdrop, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void options_cancel_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) hide_options();
+}
+
+static void options_radio_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    hide_options();
+    current_settings.ytm_radio_enabled = !current_settings.ytm_radio_enabled;
+    settings_save_async(&current_settings);
+    show_info_toast(current_settings.ytm_radio_enabled ? TR("Radio on") : TR("Radio off"));
+}
+
+static void options_click_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    delete_options();
+    const menu_popup_row_t rows[] = {
+        { current_settings.ytm_radio_enabled ? TR("Radio when the queue ends: on")
+                                             : TR("Radio when the queue ends: off"),
+          options_radio_cb, false, false, NULL },
+        { TR("Cancel"), options_cancel_cb, false, true, NULL },
+    };
+    ytm_options = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])), options_cancel_cb,
+                                   &ytm_options_backdrop);
+    if (!ytm_options || !ytm_options_backdrop) return;
+    lv_obj_move_foreground(ytm_options_backdrop);
+    lv_obj_move_foreground(ytm_options);
+}
+
 static lv_obj_t * build_ytmusic_screen(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_theme_screen_bg, 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-    build_screen_header(scr, TR("YouTube Music"), generic_back_cb, asset_path("navigation/search.png"),
-                        search_click_cb);
+    lv_obj_t * title = build_screen_header(scr, TR("YouTube Music"), generic_back_cb,
+                                           asset_path("navigation/search.png"), search_click_cb);
+    /* The options button, left of the search button. */
+    lv_obj_t * options = build_top_right_icon_button(scr, asset_path("navigation/more.png"), options_click_cb);
+    lv_obj_align(options, LV_ALIGN_TOP_RIGHT, -HEADER_BUTTON_WIDTH,
+                 STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
+    if (title) {
+        lv_obj_set_width(title, lv_display_get_horizontal_resolution(lv_display_get_default()) - 76 -
+                                    2 * HEADER_BUTTON_WIDTH - 12);
+        screen_title_fit(title);
+    }
     build_tabs(scr);
 
     ytm_content = lv_obj_create(scr);
@@ -1580,7 +1719,6 @@ void gui_ytmusic_init(void) {
     ytm_tab = 0;
     ytm_view = YTM_VIEW_TAB;
     ytm_screen = build_ytmusic_screen();
-    build_row_menu();
     show_view();
 }
 
@@ -1610,6 +1748,7 @@ void gui_ytmusic_teardown(void) {
     if (ytm_menu_backdrop) lv_obj_delete(ytm_menu_backdrop);
     ytm_menu = ytm_menu_backdrop = NULL;
     ytm_menu_index = -1;
+    delete_options();
     /* The list (and its copy of the items) goes with the screen, before the
      * strings it points at. */
     if (ytm_screen) lv_obj_delete(ytm_screen);
