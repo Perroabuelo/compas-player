@@ -183,12 +183,91 @@ static void row_decorator(lv_obj_t * list, lv_obj_t * row, lv_obj_t * image, int
     lv_obj_remove_flag(image, LV_OBJ_FLAG_HIDDEN);
 }
 
-static void open_row_menu(int index) {
-    (void) index;
+/* Tap: the queue becomes the loaded results from this one to the last,
+ * and this one plays (D6). No page is asked for. */
+static void play_from(int index) {
+    size_t n = ytm_results.count - (size_t) index;
+    /* A few KB per entry: on the heap only until the player has copied it. */
+    remote_track_meta_t * tracks = malloc(sizeof(*tracks) * n);
+    size_t built = tracks ? yt_results_to_queue(&ytm_results, (size_t) index, tracks, n) : 0;
+    if (built == 0) {
+        free(tracks);
+        stream_log_ytm_ui("play_from", 0, tracks ? "invalid" : "no_memory");
+        show_search_failure(tracks ? "invalid" : "no_memory");
+        return;
+    }
+    gui_plugin_play_remote_tracks(tracks, (int) built, 0);
+    free(tracks);
+    stream_log_ytm_ui("play_from", (int) built, "ok");
 }
 
-static void play_from(int index) {
-    (void) index;
+/* The row menu (D6), built once on the top layer. */
+static lv_obj_t * ytm_menu;
+static lv_obj_t * ytm_menu_backdrop;
+static int ytm_menu_index = -1;
+
+static void hide_row_menu(void) {
+    if (ytm_menu) lv_obj_add_flag(ytm_menu, LV_OBJ_FLAG_HIDDEN);
+    if (ytm_menu_backdrop) lv_obj_add_flag(ytm_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void open_row_menu(int index) {
+    if (!ytm_menu || !ytm_menu_backdrop) return;
+    ytm_menu_index = index;
+    lv_obj_remove_flag(ytm_menu_backdrop, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(ytm_menu, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(ytm_menu_backdrop);
+    lv_obj_move_foreground(ytm_menu);
+}
+
+/* The class of gui_player_queue_append_remote()'s messages. */
+static const char * append_class(const char * err) {
+    if (!err) return "ok";
+    if (strcmp(err, "queue_full") == 0) return "queue_full";
+    if (strcmp(err, "invalid track") == 0) return "invalid";
+    return "no_memory";
+}
+
+/* "Play next" or "Add to queue" on the menu's row: the playing track goes
+ * on, and a toast confirms or says why not. */
+static void queue_menu_row(bool next) {
+    int index = ytm_menu_index;
+    hide_row_menu();
+    if (index < 0 || index >= (int) ytm_results.count) return;
+    remote_track_meta_t * track = malloc(sizeof(*track));
+    const char * cls = "no_memory";
+    if (track) {
+        if (!yt_results_song_to_track(&ytm_results.songs[index], track)) cls = "invalid";
+        else if (next) cls = append_class(gui_player_queue_play_next_remote(track));
+        else cls = append_class(gui_player_queue_append_remote(track));
+        free(track);
+    }
+    stream_log_ytm_ui(next ? "play_next" : "append", strcmp(cls, "ok") == 0 ? 1 : 0, cls);
+    if (strcmp(cls, "ok") == 0) show_info_toast(next ? TR("Playing next") : TR("Added to queue"));
+    else if (strcmp(cls, "queue_full") == 0) show_info_toast(TR("Queue is full"));
+    else show_search_failure(cls);
+}
+
+static void menu_play_next_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) queue_menu_row(true);
+}
+
+static void menu_append_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) queue_menu_row(false);
+}
+
+static void menu_cancel_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) hide_row_menu();
+}
+
+static void build_row_menu(void) {
+    const menu_popup_row_t rows[] = {
+        { TR("Play next"), menu_play_next_cb, false },
+        { TR("Add to queue"), menu_append_cb, false },
+        { TR("Cancel"), menu_cancel_cb, false, true },
+    };
+    ytm_menu = build_menu_popup(rows, (int) (sizeof(rows) / sizeof(rows[0])), menu_cancel_cb, &ytm_menu_backdrop);
+    hide_row_menu();
 }
 
 static void row_click_cb(int index) {
@@ -456,6 +535,7 @@ void gui_ytmusic_init(void) {
     ytm_tab = 0;
     ytm_view = YTM_VIEW_TAB;
     ytm_screen = build_ytmusic_screen();
+    build_row_menu();
     show_view();
 }
 
@@ -468,6 +548,11 @@ void gui_ytmusic_teardown(void) {
     }
     ytm_searching = false;
     if (ytm_mailbox_ready) yt_search_mailbox_close(&ytm_mailbox);
+    /* The menu lives on the top layer, not on the screen. */
+    if (ytm_menu) lv_obj_delete(ytm_menu);
+    if (ytm_menu_backdrop) lv_obj_delete(ytm_menu_backdrop);
+    ytm_menu = ytm_menu_backdrop = NULL;
+    ytm_menu_index = -1;
     /* The list (and its copy of the items) goes with the screen, before the
      * strings it points at. */
     if (ytm_screen) lv_obj_delete(ytm_screen);
