@@ -456,6 +456,14 @@ void queue_add_song(const char * path);
  * "invalid track", "no memory" (queue and table unchanged on the first
  * two). Logs event=queue_append. UI thread only. */
 const char * gui_player_queue_append_remote(const remote_track_meta_t * track);
+/* hiby-yt: "Play next" for a remote track (youtube-music-screen D6). Same
+ * checks and table update as gui_player_queue_append_remote(), but the
+ * track goes right after the playing one, before the tracks added or
+ * inserted earlier, also with shuffle. NULL on success, or "queue_full",
+ * "invalid", "no_memory" (queue and table unchanged on the first two).
+ * Without an active track the track becomes the queue, not playing. UI
+ * thread only. */
+const char * gui_player_queue_play_next_remote(const remote_track_meta_t * track);
 void play_track_at(int target);
 void get_display_names(const char * path, char * out_title, size_t title_sz, char * out_folder, size_t folder_sz);
 void row_label_enable_marquee(lv_obj_t * label);

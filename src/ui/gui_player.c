@@ -8317,6 +8317,36 @@ void gui_player_queue_play_next(const char * path) {
     else queue_next_insert_index = playlist_index + 1 + queued_pending_count;
 }
 
+/* hiby-yt (youtube-music-screen D6): the remote-track table first, as in
+ * gui_player_queue_append_remote(), then the position of
+ * gui_player_queue_play_next(): right after the playing track, before the
+ * tracks added or inserted earlier. Without an active track the track
+ * becomes the queue, ready but not playing. */
+const char * gui_player_queue_play_next_remote(const remote_track_meta_t * track) {
+    char key[256];
+    if (!track || !remote_track_make_key(track->provider, track->track_id, key, sizeof(key))) return "invalid";
+    if (audio_consume_track_advanced()) gui_player_handle_auto_advance();
+    bool active = gui_player_has_active_track();
+    if (active && playlist_count >= REMOTE_TRACK_MAX_ENTRIES) return "queue_full";
+    switch (remote_track_meta_append(track, active ? (const char * const *) playlist : NULL,
+                                     active ? playlist_count : 0)) {
+        case REMOTE_TRACK_APPEND_OK: break;
+        case REMOTE_TRACK_APPEND_FULL: return "queue_full";
+        case REMOTE_TRACK_APPEND_INVALID: return "invalid";
+        default: return "no_memory";
+    }
+    const char * path = key;
+    if (!active) return gui_player_queue_try_add_many(&path, 1) ? NULL : "no_memory";
+    int old_insert = queue_next_insert_index;
+    queue_next_insert_index = playlist_index + 1;
+    if (!gui_player_queue_try_add_many(&path, 1)) {
+        queue_next_insert_index = old_insert;
+        return "no_memory";
+    }
+    queue_next_insert_index = playlist_index + 1 + queued_pending_count;
+    return NULL;
+}
+
 typedef struct {
     int *order, *ranks;
     char **explicit_paths;
