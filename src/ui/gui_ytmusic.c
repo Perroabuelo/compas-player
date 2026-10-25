@@ -270,6 +270,60 @@ static void show_search_failure(const char * cls) {
     show_info_toast(msg);
 }
 
+/* Room for the second line: the row minus the cover slot and the right
+ * padding the compact list gives a row with a trailing button. */
+#define YTM_TRAILING_PAD 70
+#define YTM_ELLIPSIS "\xE2\x80\xA6"
+
+static int32_t text_width(const char * s, const lv_font_t * font) {
+    lv_point_t size;
+    lv_text_get_size(&size, s, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    return size.x;
+}
+
+/* The bytes of the first n characters' worth of text, cut back to a
+ * character boundary. */
+static size_t utf8_floor(const char * s, size_t n) {
+    while (n > 0 && ((unsigned char) s[n] & 0xC0) == 0x80) n--;
+    return n;
+}
+
+/* Writes the second line with the first keep bytes of the shortened part
+ * (album when shorten_album, else artist) plus "…"; the other part whole
+ * (or, for the artist pass, no album). */
+static void compose_subtitle(char * out, size_t size, const yt_song_t * s, bool shorten_album, size_t keep) {
+    char part[YT_SONG_TEXT_MAX + sizeof(YTM_ELLIPSIS)];
+    const char * src = shorten_album ? s->album : s->artist;
+    if (keep > 0) snprintf(part, sizeof(part), "%.*s" YTM_ELLIPSIS, (int) keep, src);
+    else part[0] = '\0';
+    if (shorten_album) yt_row_subtitle(out, size, s->artist, part, s->duration_ms);
+    else yt_row_subtitle(out, size, part, "", s->duration_ms);
+}
+
+/* The second line as it fits on screen: yt_row_subtitle()'s text, with the
+ * album and then the artist shortened (ending in "…") until it fits width,
+ * so the duration always shows (spec «Fila completa»). Binary search on the
+ * bytes kept, at character boundaries. */
+static void fit_subtitle(char * out, size_t size, const yt_song_t * s, const lv_font_t * font, int32_t width) {
+    yt_row_subtitle(out, size, s->artist, s->album, s->duration_ms);
+    if (text_width(out, font) <= width) return;
+    for (int pass = 0; pass < 2; pass++) {
+        bool album = pass == 0;
+        size_t len = strlen(album ? s->album : s->artist);
+        if (len == 0) continue;
+        size_t lo = 0, hi = len; /* lo always fits (0: the part dropped) */
+        while (lo < hi) {
+            size_t mid = utf8_floor(album ? s->album : s->artist, (lo + hi + 1) / 2);
+            if (mid <= lo) break;
+            compose_subtitle(out, size, s, album, mid);
+            if (text_width(out, font) <= width) lo = mid;
+            else hi = mid - 1;
+        }
+        compose_subtitle(out, size, s, album, utf8_floor(album ? s->album : s->artist, lo));
+        if (lo > 0 || text_width(out, font) <= width) return;
+    }
+}
+
 static void clear_results_list(void) {
     if (ytm_list) compact_list_set_items(ytm_list, NULL, 0);
 }
@@ -294,9 +348,11 @@ static void update_results_list(bool keep_scroll) {
         show_search_failure("internal");
         return;
     }
+    const lv_font_t * font = gui_theme_font(GUI_FONT_ROLE_SUBTEXT);
+    int32_t width = LIST_ROW_WIDTH_WIDE - (YTM_ART_INSET + YTM_ART_PX + YTM_ART_INSET) - YTM_TRAILING_PAD;
     for (int i = 0; i < n; i++) {
         const yt_song_t * s = &ytm_results.songs[i];
-        yt_row_subtitle(ytm_subtitles[i], YT_ROW_SUBTITLE_MAX, s->artist, s->album, s->duration_ms);
+        fit_subtitle(ytm_subtitles[i], YT_ROW_SUBTITLE_MAX, s, font, width);
         items[i].label = s->title;
         items[i].subtitle = ytm_subtitles[i];
         items[i].trailing_asset = YTM_MORE_ICON;
