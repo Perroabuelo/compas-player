@@ -567,7 +567,9 @@ static lv_obj_t * build_tabs(lv_obj_t * scr) {
         lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(btn, lv_color_hex(GUI_COLOR_PANEL), 0);
-        lv_obj_add_style(btn, gui_theme_accent_style(), LV_STATE_CHECKED);
+        /* The selected tab: an accent outline, readable with any accent. */
+        lv_obj_set_style_border_width(btn, BOARD_SCALE_PX(2), LV_STATE_CHECKED);
+        lv_obj_add_style(btn, gui_theme_accent_outline_style(), LV_STATE_CHECKED);
         lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(btn, tab_click_cb, LV_EVENT_CLICKED, (void *) (intptr_t) i);
@@ -601,7 +603,11 @@ static lv_obj_t * build_coming_soon_panel(lv_obj_t * parent) {
     lv_obj_set_size(btn, LV_SIZE_CONTENT, BOARD_SCALE_PX(56));
     lv_obj_set_style_pad_hor(btn, BOARD_SCALE_PX(32), 0);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-    lv_obj_add_style(btn, gui_theme_accent_style(), 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(GUI_COLOR_PANEL), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(GUI_COLOR_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn, BOARD_SCALE_PX(2), 0);
+    lv_obj_add_style(btn, gui_theme_accent_outline_style(), 0);
     lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(btn, search_click_cb, LV_EVENT_CLICKED, NULL);
