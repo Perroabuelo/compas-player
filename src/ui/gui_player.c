@@ -8519,6 +8519,14 @@ void gui_player_step_manual(int direction) {
     else plugin_manager_notify_queue_exhausted(direction);
 }
 
+/* hiby-yt (youtube-music-screen D7): gui_player_step_manual() without
+ * opening the player screen, like on_file_selected_stay(). */
+void gui_player_step_manual_stay(int direction) {
+    stay_on_screen_once = true;
+    gui_player_step_manual(direction);
+    stay_on_screen_once = false;
+}
+
 void gui_player_set_transport_skip(const char * directory, int seconds) {
     snprintf(transport_skip_directory, sizeof(transport_skip_directory), "%s", directory ? directory : "");
     size_t n = strlen(transport_skip_directory);

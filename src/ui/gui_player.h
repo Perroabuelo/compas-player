@@ -126,6 +126,9 @@ void gui_player_queue_flush(void);
 void gui_player_play_at(int index);
 void gui_player_play_at_from(int index, double start_seconds);
 void gui_player_step_manual(int direction);
+/* hiby-yt: the same step, staying on the current screen (the YouTube Music
+ * mini player). */
+void gui_player_step_manual_stay(int direction);
 /* Time skipping applies only to manual transport within this directory. */
 void gui_player_set_transport_skip(const char * directory, int seconds);
 /* Apply physical seek steps in either direction, reusing touch seeking's

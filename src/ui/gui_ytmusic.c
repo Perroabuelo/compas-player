@@ -3,8 +3,10 @@
 #include "gui_ytmusic.h"
 
 #include "assets.h"
+#include "audio.h"
 #include "gui.h"
 #include "gui_navigation.h"
+#include "gui_player.h"
 #include "gui_notifications.h"
 #include "gui_text_input.h"
 #include "gui_theme.h"
@@ -31,6 +33,10 @@
 #define YTM_ART_INSET 14 /* the list's own leading image offset */
 #define YTM_ART_ICON "launcher/music.png"
 #define YTM_MORE_ICON "navigation/more.png"
+/* The mini player (D7). */
+#define YTM_MINI_H BOARD_SCALE_PX(80)
+#define YTM_MINI_BTN_PX BOARD_SCALE_PX(56)
+#define YTM_MINI_POLL_MS 500
 
 typedef enum {
     YTM_VIEW_TAB,     /* the selected tab's panel */
@@ -74,6 +80,152 @@ static int32_t content_top(void) {
 
 static int32_t content_height(void) {
     return screen_height() - content_top() - HOME_INDICATOR_CONTENT_INSET;
+}
+
+/* The mini player: shown only with an active track, and then the content
+ * above it is shortened so the last row is never under it. */
+static lv_obj_t * ytm_mini;
+static lv_obj_t * ytm_mini_title;
+static lv_obj_t * ytm_mini_artist;
+static lv_obj_t * ytm_mini_play;
+static lv_timer_t * ytm_mini_timer;
+static bool ytm_mini_shown;
+static bool ytm_mini_playing;
+static char ytm_mini_text[2][128]; /* title and artist shown */
+
+static void layout_content(void) {
+    int32_t h = content_height() - (ytm_mini_shown ? YTM_MINI_H : 0);
+    if (ytm_content) lv_obj_set_height(ytm_content, h);
+    if (ytm_list) lv_obj_set_height(ytm_list, h - YTM_BACK_ROW_H);
+}
+
+/* Reads the player and updates the bar only where something changed, so
+ * the 500 ms timer costs nothing while nothing happens. */
+static void refresh_mini_player(void) {
+    if (!ytm_mini) return;
+    bool active = gui_player_has_active_track();
+    if (active != ytm_mini_shown) {
+        ytm_mini_shown = active;
+        if (active) lv_obj_remove_flag(ytm_mini, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(ytm_mini, LV_OBJ_FLAG_HIDDEN);
+        layout_content();
+    }
+    if (!active) return;
+    /* The player's own now-playing text, set when a track starts, also when
+     * the player screen has never been shown. */
+    char text[2][128];
+    snprintf(text[0], sizeof(text[0]), "%s", gui_player_get_now_playing_title());
+    snprintf(text[1], sizeof(text[1]), "%s", gui_player_get_now_playing_folder());
+    for (int i = 0; i < 2; i++) {
+        if (strcmp(text[i], ytm_mini_text[i]) != 0) {
+            memcpy(ytm_mini_text[i], text[i], sizeof(text[i]));
+            lv_label_set_text(i == 0 ? ytm_mini_title : ytm_mini_artist, text[i]);
+        }
+    }
+    bool playing = audio_is_playing() && !audio_is_paused();
+    if (playing != ytm_mini_playing) {
+        ytm_mini_playing = playing;
+        lv_image_set_src(ytm_mini_play,
+                         asset_path(playing ? "playing_plane/btn_pause.png" : "playing_plane/btn_play.png"));
+    }
+}
+
+static void mini_timer_cb(lv_timer_t * t) {
+    (void) t;
+    refresh_mini_player();
+}
+
+/* From poll_ytmusic(): the timer runs only while the screen is the active
+ * one, whatever transition brought it there or took it away. */
+static void sync_mini_timer(void) {
+    if (!ytm_mini_timer) return;
+    bool visible = lv_screen_active() == ytm_screen;
+    if (visible && lv_timer_get_paused(ytm_mini_timer)) {
+        refresh_mini_player();
+        lv_timer_resume(ytm_mini_timer);
+    } else if (!visible && !lv_timer_get_paused(ytm_mini_timer)) {
+        lv_timer_pause(ytm_mini_timer);
+    }
+}
+
+static void mini_open_player_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    if (gui_player_has_active_track()) nav_push(gui_player_get_screen());
+}
+
+static void mini_play_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_plugin_toggle_pause();
+    refresh_mini_player();
+}
+
+/* Next stays on this screen: the mini player shows the new track. */
+static void mini_next_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    gui_player_step_manual_stay(1);
+    refresh_mini_player();
+}
+
+static lv_obj_t * mini_button(lv_obj_t * parent, const char * icon, lv_event_cb_t cb) {
+    lv_obj_t * img = lv_image_create(parent);
+    lv_image_set_src(img, asset_path(icon));
+    lv_obj_set_size(img, YTM_MINI_BTN_PX, YTM_MINI_BTN_PX);
+    lv_image_set_inner_align(img, LV_IMAGE_ALIGN_CONTAIN);
+    lv_obj_add_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_style(img, &icon_press_style, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(img, cb, LV_EVENT_CLICKED, NULL);
+    return img;
+}
+
+/* Cover slot, title and artist (tap: Now Playing), Play/Pause and Next. */
+static void build_mini_player(lv_obj_t * scr) {
+    ytm_mini = lv_obj_create(scr);
+    lv_obj_remove_style_all(ytm_mini);
+    lv_obj_set_size(ytm_mini, LIST_ROW_WIDTH_WIDE, YTM_MINI_H - BOARD_SCALE_PX(8));
+    lv_obj_align(ytm_mini, LV_ALIGN_BOTTOM_MID, 0, -HOME_INDICATOR_CONTENT_INSET);
+    lv_obj_set_style_bg_opa(ytm_mini, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(ytm_mini, lv_color_hex(GUI_COLOR_PANEL), 0);
+    lv_obj_set_style_radius(ytm_mini, LIST_ROW_RADIUS, 0);
+    lv_obj_set_style_pad_hor(ytm_mini, YTM_ART_INSET, 0);
+    lv_obj_set_flex_flow(ytm_mini, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ytm_mini, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(ytm_mini, BOARD_SCALE_PX(8), 0);
+    lv_obj_remove_flag(ytm_mini, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t * art = lv_image_create(ytm_mini);
+    lv_image_set_src(art, asset_path(YTM_ART_ICON));
+    lv_obj_set_size(art, YTM_ART_PX, YTM_ART_PX);
+    lv_image_set_inner_align(art, LV_IMAGE_ALIGN_CONTAIN);
+
+    lv_obj_t * text = lv_obj_create(ytm_mini);
+    lv_obj_remove_style_all(text);
+    lv_obj_set_height(text, lv_pct(100));
+    lv_obj_set_flex_grow(text, 1);
+    lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(text, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_add_flag(text, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(text, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(text, mini_open_player_cb, LV_EVENT_CLICKED, NULL);
+    ytm_mini_title = lv_label_create(text);
+    ytm_mini_artist = lv_label_create(text);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t * label = i == 0 ? ytm_mini_title : ytm_mini_artist;
+        lv_obj_set_width(label, lv_pct(100));
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_label_set_text(label, "");
+        lv_obj_add_style(label, i == 0 ? &style_theme_text_primary : &style_theme_text_muted, 0);
+        lv_obj_set_style_text_font(label, gui_theme_font(i == 0 ? GUI_FONT_ROLE_BODY : GUI_FONT_ROLE_SUBTEXT), 0);
+        lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    ytm_mini_play = mini_button(ytm_mini, "playing_plane/btn_play.png", mini_play_cb);
+    mini_button(ytm_mini, "playing_plane/btn_next.png", mini_next_cb);
+
+    lv_obj_add_flag(ytm_mini, LV_OBJ_FLAG_HIDDEN);
+    ytm_mini_shown = ytm_mini_playing = false;
+    memset(ytm_mini_text, 0, sizeof(ytm_mini_text));
+    ytm_mini_timer = lv_timer_create(mini_timer_cb, YTM_MINI_POLL_MS, NULL);
+    lv_timer_pause(ytm_mini_timer);
 }
 
 /* Shows the panel of the selected tab or the results, and marks the tab. */
@@ -518,6 +670,7 @@ static lv_obj_t * build_ytmusic_screen(void) {
     lv_obj_align(ytm_status, LV_ALIGN_TOP_MID, 0, content_top() + BOARD_SCALE_PX(4));
     lv_obj_add_flag(ytm_status, LV_OBJ_FLAG_HIDDEN);
 
+    build_mini_player(scr);
     finalize_screen_navigation(scr);
     return scr;
 }
@@ -548,6 +701,10 @@ void gui_ytmusic_teardown(void) {
     }
     ytm_searching = false;
     if (ytm_mailbox_ready) yt_search_mailbox_close(&ytm_mailbox);
+    if (ytm_mini_timer) lv_timer_delete(ytm_mini_timer);
+    ytm_mini_timer = NULL;
+    ytm_mini = ytm_mini_title = ytm_mini_artist = ytm_mini_play = NULL;
+    ytm_mini_shown = false;
     /* The menu lives on the top layer, not on the screen. */
     if (ytm_menu) lv_obj_delete(ytm_menu);
     if (ytm_menu_backdrop) lv_obj_delete(ytm_menu_backdrop);
@@ -580,6 +737,7 @@ void ytmusic_tile_cb(lv_event_t * e) {
 /* Runs whether or not the screen is visible: a result that arrives while
  * the user is elsewhere is shown when the screen opens again. */
 void poll_ytmusic(void) {
-    if (!ytm_screen || !ytm_searching) return;
-    take_search_result();
+    if (!ytm_screen) return;
+    sync_mini_timer();
+    if (ytm_searching) take_search_result();
 }
