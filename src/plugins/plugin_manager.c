@@ -2646,7 +2646,7 @@ static int32_t check_int32_field(lua_State * L, lua_Integer value, const char * 
  * `tiles`: array of tables, one per tile being restyled -- { key, bg_color,
  * text_color, radius, height, width, align, accessory, text_size, icon }.
  * `key` is one of the native names ("music"/"stream_media"/"wireless"/
- * "books"/"settings"/"dac"/"subsonic") or a plugin.register_home_tile() id -- unlike
+ * "books"/"settings"/"dac"/"youtube_music"/"subsonic") or a plugin.register_home_tile() id -- unlike
  * before API 7, an unrecognized-looking key is NOT rejected here: it may
  * name a plugin tile that hasn't registered yet (plugin_manager_init()
  * loads plugins in filename order, so a theme plugin can run before the
@@ -2673,7 +2673,7 @@ static int32_t check_int32_field(lua_State * L, lua_Integer value, const char * 
  * position -- position IS order. Each entry is a native key or a plugin
  * tile id, same "resolved later" deferral as `tiles`' own `key` above.
  * Omitted entirely (order left empty) means "unconfigured", falling back to
- * today's exact fixed 6-native-tile order. A native key simply not
+ * today's exact fixed 7-native-tile order. A native key simply not
  * mentioned in `order` is not shown at all -- this is how a theme drops a
  * tile, not just reorders one. Duplicate entries are rejected immediately
  * (unlike unresolved-key names, a literal repeat is unambiguously a

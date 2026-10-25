@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include "gui_subsonic.h"
+#include "gui_ytmusic.h"
 #include "gui_books.h"
 #include "gui_network.h"
 #include "idle_shutdown.h"
@@ -5241,7 +5242,7 @@ static void dac_home_tile_cb(lv_event_t * e) {
  * validates a Lua `key` string against this same array rather than keeping
  * its own copy that could drift out of sync. */
 const char * const home_layout_tile_keys[HOME_LAYOUT_TILE_COUNT] = {
-    "music", "stream_media", "wireless", "books", "settings", "dac", "subsonic",
+    "music", "stream_media", "wireless", "books", "settings", "dac", "youtube_music", "subsonic",
 };
 
 /* Native per-tile metadata, same fixed order as home_layout_tile_keys[]
@@ -5263,6 +5264,8 @@ static const home_native_tile_t home_native_tiles[HOME_LAYOUT_TILE_COUNT] = {
     { "launcher/book.png", "launcher/book_s.png", N_("Books"), gui_books_home_tile_cb, 0xF5B457 },
     { "launcher/sys_set.png", "launcher/sys_set_s.png", N_("Settings"), settings_tile_cb, 0x909EB5 },
     { "launcher/dac.png", "launcher/dac_s.png", N_("More"), dac_home_tile_cb, 0xA36BE4 },
+    /* hiby-yt (youtube-music-screen D8): a generic icon of the base, never the YouTube logo. */
+    { "launcher/stream_media.png", "launcher/stream_media_s.png", N_("YouTube Music"), ytmusic_tile_cb, 0xE5484D },
     { "stream_media/subsonic.png", "stream_media/subsonic_s.png", N_("Subsonic"), subsonic_tile_cb, 0 },
 };
 
@@ -5301,7 +5304,7 @@ static const home_tile_override_t * find_home_tile_override(const char * key) {
 }
 
 /* Resolves home_layout_config.order[] (or, when unconfigured, today's fixed
- * 6-native-tile order) into `out`, which must have room for
+ * 7-native-tile order) into `out`, which must have room for
  * HOME_LAYOUT_MAX_TILES entries. Returns how many entries were actually
  * filled -- can be less than the order length when an entry names neither a
  * native key nor a currently-registered plugin tile id (that plugin failed

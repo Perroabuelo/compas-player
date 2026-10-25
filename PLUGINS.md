@@ -269,7 +269,7 @@ doesn't show it: it appears once a layout's `order` lists its `id`.
 
 - `id`: 1 to 39 letters, digits, `.`, `_` or `-`, unique among all Home tiles,
   and not a native key (`music`, `stream_media`, `wireless`, `books`,
-  `settings`, `dac`, `subsonic`).
+  `settings`, `dac`, `youtube_music`, `subsonic`).
 - `icon`: required, a theme image path of at most 79 characters.
 - Up to 6 plugin tiles.
 
@@ -671,7 +671,8 @@ restart). Each call replaces the whole previous layout.
 ```
 
 Native keys: `music`, `stream_media`, `wireless`, `books`, `settings`, `dac`,
-and `subsonic` (opt-in, opens Subsonic directly).
+`youtube_music` (opens the YouTube Music screen) and `subsonic` (opt-in,
+opens Subsonic directly).
 
 Home measurements use the R1's 480×800 screen as a reference. Widths,
 radii and gaps scale to the active board. In list mode, heights express

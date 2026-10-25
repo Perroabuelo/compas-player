@@ -11,7 +11,7 @@
  * plain struct passed across the plugin_manager.c/gui.c-family boundary,
  * like remote_track_meta_t is for plugin.play_remote().
  *
- * Home has 7 addressable native tiles, published as home_layout_tile_keys[]
+ * Home has 8 addressable native tiles, published as home_layout_tile_keys[]
  * (defined in gui_settings.c, the file that owns their native order) so
  * plugin_manager.c
  * can validate a Lua `key` string against it without a second, potentially-
@@ -19,8 +19,10 @@
  * tile (plugin.register_home_tile(), PLUGINS.md) and a theme can reorder,
  * drop, or interleave any of these via set_home_layout()'s `options.order`
  * -- see home_layout_config_t's own comment below. */
-#define HOME_LAYOUT_TILE_COUNT 7
-#define HOME_LAYOUT_DEFAULT_TILE_COUNT 6
+#define HOME_LAYOUT_TILE_COUNT 8
+/* The first keys of home_layout_tile_keys[] shown by default: every native
+ * tile but subsonic (opt-in). hiby-yt: youtube_music is shown. */
+#define HOME_LAYOUT_DEFAULT_TILE_COUNT 7
 extern const char * const home_layout_tile_keys[HOME_LAYOUT_TILE_COUNT];
 
 /* Upper bound on how many tiles Home can display at once (native + plugin-
@@ -100,7 +102,7 @@ typedef struct {
      * skipped by build_home_screen(), logged, not a crash.
      *
      * order_count == 0 means "unconfigured" -- build_home_screen() falls
-     * back to exactly today's fixed 6-native-tile order, so every existing
+     * back to exactly today's fixed 7-native-tile order, so every existing
      * plugin/theme that never sets this keeps working unchanged. */
     char order[HOME_LAYOUT_MAX_TILES][40];
     int order_count;

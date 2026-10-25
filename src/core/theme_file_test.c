@@ -7,7 +7,7 @@
 #include <dirent.h>
 
 const char * const home_layout_tile_keys[HOME_LAYOUT_TILE_COUNT] = {
-    "music", "stream_media", "wireless", "books", "settings", "dac", "subsonic"
+    "music", "stream_media", "wireless", "books", "settings", "dac", "youtube_music", "subsonic"
 };
 
 static const char *get_scratch_dir(void) {
