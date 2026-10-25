@@ -855,8 +855,12 @@ lv_obj_t * build_icon_grid_screen(const char * title, lv_event_cb_t back_btn_cb,
     int32_t header_h = STATUS_BAR_CLEARANCE + (title ? TITLE_ROW_HEIGHT : 0);
 
     /* Rows use fixed pixel height based on ICON_GRID_REFERENCE_ROWS rather than
-     * fractional shares, so cell heights remain consistent regardless of row count. */
-    int32_t row_h = (scr_h - header_h) / ICON_GRID_REFERENCE_ROWS;
+     * fractional shares, so cell heights remain consistent regardless of row count.
+     * hiby-yt (youtube-music-screen D8): Home (no title) does not scroll, so
+     * with more rows than the reference (its default 7 tiles with YouTube
+     * Music) they share the screen instead of running past its bottom edge. */
+    int32_t fit_rows = (!title && row_count > ICON_GRID_REFERENCE_ROWS) ? row_count : ICON_GRID_REFERENCE_ROWS;
+    int32_t row_h = (scr_h - header_h) / fit_rows;
 
     int32_t * row_dsc = grid_dsc->rows;
     for (int r = 0; r < row_count && r < ICON_GRID_MAX_ROWS; r++) row_dsc[r] = row_h;
