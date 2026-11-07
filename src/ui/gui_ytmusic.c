@@ -300,7 +300,10 @@ static void build_mini_player(lv_obj_t * scr) {
     }
 
     ytm_mini_play = mini_button(ytm_mini, "playing_plane/btn_play.png", mini_play_cb);
-    mini_button(ytm_mini, "playing_plane/btn_next.png", mini_next_cb);
+    lv_obj_t * mini_next = mini_button(ytm_mini, "playing_plane/btn_next.png", mini_next_cb);
+    /* Names for the device runner's UI dump (automate-device-tests D6). */
+    lv_obj_set_name_static(ytm_mini_play, "ytm_mini_play");
+    lv_obj_set_name_static(mini_next, "ytm_mini_next");
 
     lv_obj_add_flag(ytm_mini, LV_OBJ_FLAG_HIDDEN);
     ytm_mini_shown = ytm_mini_playing = false;
@@ -517,6 +520,14 @@ static void row_decorator(lv_obj_t * list, lv_obj_t * row, lv_obj_t * image, int
     (void) identity;
     (void) artwork_name;
     (void) ctx;
+    /* The row's "…" (compact_list's clickable trailing image), named for
+     * the device runner's UI dump (automate-device-tests D6). */
+    for (uint32_t i = 0; i < lv_obj_get_child_count(row); i++) {
+        lv_obj_t * child = lv_obj_get_child(row, (int32_t) i);
+        if (child != image && lv_obj_check_type(child, &lv_image_class) &&
+            lv_obj_has_flag(child, LV_OBJ_FLAG_CLICKABLE) && !lv_obj_get_name(child))
+            lv_obj_set_name_static(child, "ytm_row_menu");
+    }
     if (artwork_key == 0) {
         lv_obj_set_style_pad_left(row, LIST_ROW_LABEL_INSET, 0);
         lv_obj_add_flag(image, LV_OBJ_FLAG_HIDDEN);
@@ -1518,6 +1529,8 @@ static lv_obj_t * build_shelf_panel(lv_obj_t * parent) {
     compact_list_set_trailing_click(ytm_shelf_list, shelf_menu_cb);
     lv_obj_set_size(ytm_shelf_list, lv_pct(100), content_height());
     lv_obj_align(ytm_shelf_list, LV_ALIGN_TOP_MID, 0, 0);
+    /* Shared with the results list: only one of the two is ever shown. */
+    lv_obj_set_name_static(ytm_shelf_list, "ytm_list");
     return panel;
 }
 
@@ -1615,6 +1628,7 @@ static lv_obj_t * build_results_view(lv_obj_t * parent) {
     compact_list_set_trailing_click(ytm_list, row_menu_cb);
     lv_obj_set_size(ytm_list, lv_pct(100), content_height() - YTM_BACK_ROW_H);
     lv_obj_align(ytm_list, LV_ALIGN_TOP_MID, 0, YTM_BACK_ROW_H);
+    lv_obj_set_name_static(ytm_list, "ytm_list");
     return view;
 }
 
@@ -1665,14 +1679,32 @@ static void options_click_cb(lv_event_t * e) {
     lv_obj_move_foreground(ytm_options);
 }
 
+/* Names the first direct child of parent with a handler `cb`. */
+static void name_child_by_cb(lv_obj_t * parent, lv_event_cb_t cb, const char * name) {
+    for (uint32_t i = 0; i < lv_obj_get_child_count(parent); i++) {
+        lv_obj_t * child = lv_obj_get_child(parent, (int32_t) i);
+        for (uint32_t k = 0; k < lv_obj_get_event_count(child); k++) {
+            if (lv_event_dsc_get_cb(lv_obj_get_event_dsc(child, k)) == cb) {
+                lv_obj_set_name_static(child, name);
+                return;
+            }
+        }
+    }
+}
+
 static lv_obj_t * build_ytmusic_screen(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_theme_screen_bg, 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t * title = build_screen_header(scr, TR("YouTube Music"), generic_back_cb,
                                            asset_path("navigation/search.png"), search_click_cb);
+    /* The shared header's back and search buttons have no text; name them
+     * for the device runner's UI dump (automate-device-tests D6). */
+    name_child_by_cb(scr, generic_back_cb, "ytm_back");
+    name_child_by_cb(scr, search_click_cb, "ytm_search");
     /* The options button, left of the search button. */
     lv_obj_t * options = build_top_right_icon_button(scr, asset_path("navigation/more.png"), options_click_cb);
+    lv_obj_set_name_static(options, "ytm_options");
     lv_obj_align(options, LV_ALIGN_TOP_RIGHT, -HEADER_BUTTON_WIDTH,
                  STATUS_BAR_CLEARANCE + (TITLE_ROW_HEIGHT - HEADER_BUTTON_WIDTH) / 2);
     if (title) {
