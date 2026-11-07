@@ -28,10 +28,10 @@ typedef struct {
 } walk_t;
 
 static const char * obj_text(walk_t * w, lv_obj_t * obj) {
-    if (lv_obj_check_type(obj, &lv_label_class)) return lv_label_get_text(obj);
-    if (lv_obj_check_type(obj, &lv_textarea_class)) return lv_textarea_get_text(obj);
-    if (lv_obj_check_type(obj, &lv_checkbox_class)) return lv_checkbox_get_text(obj);
-    if (lv_obj_check_type(obj, &lv_dropdown_class)) {
+    if (lv_obj_has_class(obj, &lv_label_class)) return lv_label_get_text(obj);
+    if (lv_obj_has_class(obj, &lv_textarea_class)) return lv_textarea_get_text(obj);
+    if (lv_obj_has_class(obj, &lv_checkbox_class)) return lv_checkbox_get_text(obj);
+    if (lv_obj_has_class(obj, &lv_dropdown_class)) {
         lv_dropdown_get_selected_str(obj, w->dropdown, sizeof(w->dropdown));
         return w->dropdown;
     }
@@ -109,7 +109,7 @@ static int write_obj(walk_t * w, lv_obj_t * obj, int parent_idx, int layer, cons
     self->next = 0;
     self->visible = o.visible;
     self->visible_empty = o.visible_empty;
-    if (lv_obj_check_type(obj, &lv_buttonmatrix_class)) return write_buttons(w, obj, o.idx, layer, self);
+    if (lv_obj_has_class(obj, &lv_buttonmatrix_class)) return write_buttons(w, obj, o.idx, layer, self);
     return 0;
 }
 
