@@ -59,6 +59,7 @@
 #include "bluetooth_control.h"
 #include "hiby_sys_server.h"
 #include "track_metadata_worker.h"
+#include "ui_inspect.h"
 #ifndef HOST_BUILD
 #include "bt_media_player.h"
 #include "bt_cover_art.h"
@@ -890,6 +891,9 @@ static void player_ui_timer_cb(lv_timer_t * timer) {
 
 static void update_timer_cb(lv_timer_t * timer) {
     (void) timer;
+    /* hiby-yt: UI tree dump for the device runner; only an access() check
+     * unless /tmp/hiby-yt-ui/request exists. */
+    ui_inspect_poll();
 #ifdef UI_PERF_TRACE
     update_perf_begin();
 #endif
